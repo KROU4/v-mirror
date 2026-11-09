@@ -4,6 +4,7 @@
 import { getIndex, type Gender, type Option, type Variant } from '../model/catalog';
 import { MORPH_SLOTS, morphInfo } from '../model/descriptors';
 import { hairDescription } from '../model/hair';
+import { browDescription } from '../model/brows';
 import type { PhotoAnalysis } from './analyze';
 import { colorKey, type Suggestion } from './match';
 
@@ -63,6 +64,8 @@ export function buildPrompt(gender: Gender, a?: PhotoAnalysis | null): PromptPac
   if (hs) add('hairstyle', 'hairstyle', list(hs.options, (o) => `[${o.tags[0] ?? 'none'}] ${hairDescription(gender, o).en}`));
   const hc = variantOf(gender, 'hair_color');
   if (hc) add('hair_color', 'hair colour', list(hc.options, (o) => `${o.label.en} (${o.hex})`));
+  const br = variantOf(gender, 'eyebrows');
+  if (br) add('eyebrows', 'eyebrow shape (thickness, density, arch)', list(br.options, (o) => browDescription(o)?.en ?? o.label.en));
 
   if (gender === 'male') {
     const beard = variantOf(gender, 'beard');

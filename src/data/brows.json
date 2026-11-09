@@ -1,0 +1,16 @@
+{
+  "_source": "Описано по текстурам формы бровей игры (character_customisation_items/eyebrows/textures/heb__base_dNN): вариант N в редакторе использует текстуру dNN.",
+  "1": { "ru": "густые и плотные по всей длине, хвост плавно сужается", "en": "thick and dense along the whole length, gently tapering tail" },
+  "2": { "ru": "средние: плотное начало, длинный тонкий хвост, лёгкий подъём", "en": "medium: dense head, long thin tail, slight upward angle" },
+  "3": { "ru": "тонкие и редкие, узкая линия", "en": "thin and sparse, narrow line" },
+  "4": { "ru": "плотное начало, хвост рассыпается в редкие волоски", "en": "dense head, tail fading into sparse hairs" },
+  "5": { "ru": "очень густые, кустистые", "en": "very thick and bushy" },
+  "6": { "ru": "средние, светлые и редкие, прямые", "en": "medium, light and sparse, straight" },
+  "7": { "ru": "широкие, но редкие, растрёпанные", "en": "wide but sparse, unkempt hairs" },
+  "8": { "ru": "короткие, средней густоты, мягкий изгиб", "en": "short, medium density, soft arch" },
+  "9": { "ru": "широкие, редкие, растрёпанные, длиннее 7-х", "en": "wide, sparse, unkempt, longer than style 7" },
+  "10": { "ru": "ухоженные с чётким изгибом: широкое начало, тонкий длинный хвост", "en": "groomed with a defined arch: wide head, long thin tail" },
+  "11": { "ru": "короткие: густое начало, хвоста почти нет", "en": "short: thick head, tail almost absent" },
+  "12": { "ru": "прямые и плотные, квадратное начало, сужаются к хвосту", "en": "straight and dense, squared head, tapering tail" },
+  "13": { "ru": "очень густые, прямые и длинные, тяжёлые", "en": "very thick, straight and long, heavy" }
+}

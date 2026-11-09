@@ -16,6 +16,7 @@ import { LINES, LINE_OF_SLOT } from './ui/lines';
 import Portrait from './ui/Portrait';
 import ScanPanel, { type ScanProvenance } from './scan/ScanPanel';
 import { hairLabel } from './model/hair';
+import { browDescription } from './model/brows';
 import { IconCheck, IconCopy, IconLeft, IconLink, IconReset, IconRight, IconScan, IconShuffle } from './ui/Icons';
 
 const store = {
@@ -175,14 +176,14 @@ export default function App() {
             </button>
           ))}
         </div>
-        <button className="btn ghost" onClick={() => { update(randomize(gender, 3)); setProv({}); }} title="Случайная внешность (обыденная)">
-          <IconShuffle /> Случайно
+        <button className="btn ghost" onClick={() => { update(randomize(gender, 3)); setProv({}); }} title="Случайная внешность (обыденная)" aria-label="Случайно">
+          <IconShuffle /> <span className="btn-label">Случайно</span>
         </button>
-        <button className="btn ghost" onClick={() => { update(defaultState(gender)); setProv({}); setDone({}); }} title="Сбросить к значениям игры по умолчанию">
-          <IconReset /> Сброс
+        <button className="btn ghost" onClick={() => { update(defaultState(gender)); setProv({}); setDone({}); }} title="Сбросить к значениям игры по умолчанию" aria-label="Сброс">
+          <IconReset /> <span className="btn-label">Сброс</span>
         </button>
-        <button className="btn ghost" onClick={share}>
-          <IconLink /> Ссылка
+        <button className="btn ghost" onClick={share} title="Скопировать ссылку на эту V" aria-label="Ссылка">
+          <IconLink /> <span className="btn-label">Ссылка</span>
         </button>
         <button className={`btn ${mode === 'scan' ? '' : 'primary'}`} onClick={() => setMode(mode === 'scan' ? 'edit' : 'scan')}>
           <IconScan /> {mode === 'scan' ? 'К редактору' : 'Скан фото'}
@@ -209,7 +210,14 @@ export default function App() {
                         <button
                           className="station"
                           aria-current={mode === 'edit' && cur?.slot.id === vs.slot.id}
-                          onClick={() => { setCurrent(vs.slot.id); setMode('edit'); }}
+                          onClick={() => {
+                            setCurrent(vs.slot.id);
+                            setMode('edit');
+                            // На телефоне редактор стоит над схемой — поднимаем к нему
+                            if (window.matchMedia('(max-width: 760px)').matches) {
+                              document.querySelector('.stage')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                          }}
                         >
                           {pv && <span className="scan-dot" style={{ width: 4 + pv.conf * 6, height: 4 + pv.conf * 6 }} title={`Подобрано (${pv.src})`} />}
                           <span>{vs.slot.label.ru}</span>
@@ -289,6 +297,7 @@ export default function App() {
 function optionCaption(slotId: string, o: Option | undefined, gender: Gender): string {
   if (!o) return '';
   if (slotId === 'hairstyle') return hairLabel(o, gender);
+  if (slotId === 'eyebrows') return browDescription(o)?.ru ?? '';
   if (isMorph(slotId)) return morphInfo(gender, slotId).options.find((m) => m.i === o.i)?.text.ru ?? '';
   const l = o.label.ru;
   return /^\d+$/.test(l) ? '' : l;

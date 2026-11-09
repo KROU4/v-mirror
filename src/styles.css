@@ -242,10 +242,17 @@ a { color: var(--signal); text-underline-offset: 3px; }
   .workspace { min-height: 0; }
 }
 @media (max-width: 760px) {
-  .topbar { flex-wrap: wrap; padding: 10px 16px; }
+  .topbar { flex-wrap: wrap; padding: 10px 16px; gap: 8px 6px; }
   .wordmark small { display: none; }
+  .wordmark { flex: 1 0 auto; }
+  .topbar .btn.ghost { padding: 9px 10px; }
+  .topbar .btn.ghost .btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .topbar .btn.primary, .topbar .btn:last-child { margin-left: auto; }
   .workspace { grid-template-columns: 1fr; }
-  .map { border-right: 0; border-bottom: 1px solid var(--rail); max-height: 46vh; }
+  /* На телефоне сначала редактор выбранного слота, схема линий — под ним */
+  .stage { order: 1; }
+  .map { order: 2; border-right: 0; border-top: 1px solid var(--rail); max-height: none; }
+  .sheet { order: 3; }
   .stage { padding: 18px 16px 40px; }
   .stage-head { grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
   .portrait { width: 120px; height: 144px; }
