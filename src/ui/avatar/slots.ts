@@ -22,7 +22,13 @@ export interface CameraShot {
 
 /** Игровые слоты (prefab empty_room_char_creation_*.ent): (X, Y, Z) игры → (x, z, −y) glTF. */
 const HEAD: Record<Gender, [number, number, number]> = { female: [-0.03, 1.62, 0], male: [-0.03, 1.67, 0] };
-const NAILS: Record<Gender, [number, number, number]> = { female: [0, 1.45, 0], male: [-0.03, 1.45, 0] };
+/**
+ * Ногти: в игре (0, 1,45) и 2,2 м — «грудь и поднятая кисть», макушка у самого края кадра.
+ * У нас сверху кадр закрывает плашка заголовка: макушка мужчины срезана, волосы женщины
+ * уходят под плашку. Кадр чуть дальше и выше — голова целиком, кисть и грудь в кадре.
+ */
+const NAILS: Record<Gender, [number, number, number]> = { female: [0, 1.5, 0], male: [-0.03, 1.53, 0] };
+const NAILS_DISTANCE = 2.6;
 const FULL: Record<Gender, [number, number, number]> = { female: [0, 0.9, 0], male: [0, 0.95, 0] };
 
 export function cameraShot(slot: CameraSlot, gender: Gender): CameraShot {
@@ -31,7 +37,7 @@ export function cameraShot(slot: CameraSlot, gender: Gender): CameraShot {
     case 'UI_Skin':
       return { target: HEAD[gender], distance: 2.0 };
     case 'UI_FingerNails':
-      return { target: NAILS[gender], distance: 2.2 };
+      return { target: NAILS[gender], distance: NAILS_DISTANCE };
     case 'UI_Preview':
       return { target: FULL[gender], distance: 8.3 };
     default:
@@ -88,36 +94,28 @@ export function bodyModeFor(slot: CameraSlot): BodyMode {
   return 'closeup';
 }
 
-/** Однократный «показ» части лица при заходе в раздел (ui_closeup_shot_<part>), затем цикл. */
-export function showcaseClipFor(slot: CameraSlot): string | null {
-  switch (slot) {
-    case 'UI_Eyes':
-      return 'ui_closeup_shot_eyes';
-    case 'UI_Nose':
-      return 'ui_closeup_shot_nose';
-    case 'UI_Lips':
-      return 'ui_closeup_shot_lips';
-    case 'UI_Jaw':
-      return 'ui_closeup_shot_chin';
-    case 'UI_Hairs':
-      return 'ui_closeup_shot_hair';
-    default:
-      return null;
-  }
-}
-
 export interface ClipStep {
   clip: string;
   loop: boolean;
+  /** скорость проигрывания (1 — как в игре) */
+  speed?: number;
 }
 
 /**
- * Очередь клипов тела при переходе из позы `from` в позу `to` (§2.2): переходы
- * closeup↔fullbody, вход/выход «руки» для ногтей, однократный показ части лица.
+ * Выход из позы ногтей ускорен: клип 2,6 с, и всё это время голова опущена, а взгляд
+ * исподлобья — улыбка строки «Зубы» после него запаздывает больше чем на 3 с.
  */
-export function clipPlan(from: BodyMode | null, to: BodyMode, showcase: string | null): ClipStep[] {
+export const HAND_END_SPEED = 1.6;
+
+/**
+ * Очередь клипов тела при переходе из позы `from` в позу `to` (§2.2): переходы
+ * closeup↔fullbody, вход/выход «руки» для ногтей. На всех строках головы тело играет
+ * только цикл ui_closeup_shot: клипы ui_closeup_shot_<часть> в игре — аддитивные клипы
+ * ЛИЦА (§2.3), а на теле они поднимают руку к лицу и уводят голову из кадра.
+ */
+export function clipPlan(from: BodyMode | null, to: BodyMode): ClipStep[] {
   const steps: ClipStep[] = [];
-  if (from === 'hand' && to !== 'hand') steps.push({ clip: 'ui_expose_hand_end', loop: false });
+  if (from === 'hand' && to !== 'hand') steps.push({ clip: 'ui_expose_hand_end', loop: false, speed: HAND_END_SPEED });
   const base = from === 'hand' ? 'closeup' : from;
   if (to === 'fullbody') {
     if (base !== 'fullbody' && base !== null) steps.push({ clip: 'ui_closeup_to_fullbody', loop: false });
@@ -128,7 +126,6 @@ export function clipPlan(from: BodyMode | null, to: BodyMode, showcase: string |
     steps.push({ clip: 'ui_expose_hand_loop', loop: true });
   } else {
     if (base === 'fullbody') steps.push({ clip: 'ui_fullbody_to_closeup', loop: false });
-    if (showcase) steps.push({ clip: showcase, loop: false });
     steps.push({ clip: 'ui_closeup_shot', loop: true });
   }
   return steps;

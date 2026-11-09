@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bodyModeFor, cameraShot, cameraSlotFor, clipPlan, showcaseClipFor } from './slots';
+import { bodyModeFor, cameraShot, cameraSlotFor, clipPlan, HAND_END_SPEED, type BodyMode } from './slots';
 
 describe('cameraSlotFor', () => {
   it('без строки — кадр кожи', () => {
@@ -52,6 +52,27 @@ describe('cameraShot', () => {
   });
 });
 
+describe('кадр ногтей', () => {
+  // высота кадра 2·d·tan(7,5°); сверху ~10 % кадра закрывает плашка заголовка
+  const top = (g: 'female' | 'male') => {
+    const s = cameraShot('UI_FingerNails', g);
+    const half = s.distance * Math.tan((7.5 * Math.PI) / 180);
+    return s.target[1] + half - 0.2 * half;
+  };
+
+  it('макушка (≈ 1,76 м у мужчины, 1,70 м у женщины в позе руки) не уходит под заголовок', () => {
+    expect(top('male')).toBeGreaterThan(1.76);
+    expect(top('female')).toBeGreaterThan(1.7);
+  });
+
+  it('опущенная кисть (≈ 1,3 м) остаётся в кадре', () => {
+    for (const g of ['female', 'male'] as const) {
+      const s = cameraShot('UI_FingerNails', g);
+      expect(s.target[1] - s.distance * Math.tan((7.5 * Math.PI) / 180)).toBeLessThan(1.25);
+    }
+  });
+});
+
 describe('позы и клипы', () => {
   it('режим тела по слоту', () => {
     expect(bodyModeFor('UI_Preview')).toBe('fullbody');
@@ -59,34 +80,42 @@ describe('позы и клипы', () => {
     expect(bodyModeFor('UI_Teeth')).toBe('closeup');
   });
 
-  it('показ части лица только для своих слотов', () => {
-    expect(showcaseClipFor('UI_Eyes')).toBe('ui_closeup_shot_eyes');
-    expect(showcaseClipFor('UI_Jaw')).toBe('ui_closeup_shot_chin');
-    expect(showcaseClipFor('UI_Skin')).toBeNull();
-  });
-
   const names = (s: { clip: string }[]) => s.map((x) => x.clip);
 
   it('первый показ — сразу цикл крупного плана', () => {
-    expect(names(clipPlan(null, 'closeup', null))).toEqual(['ui_closeup_shot']);
-    expect(clipPlan(null, 'closeup', null).at(-1)?.loop).toBe(true);
+    expect(names(clipPlan(null, 'closeup'))).toEqual(['ui_closeup_shot']);
+    expect(clipPlan(null, 'closeup').at(-1)?.loop).toBe(true);
   });
 
   it('крупный план → рост и обратно', () => {
-    expect(names(clipPlan('closeup', 'fullbody', null))).toEqual(['ui_closeup_to_fullbody', 'ui_fullbody_shot']);
-    expect(names(clipPlan('fullbody', 'closeup', 'ui_closeup_shot_eyes'))).toEqual(['ui_fullbody_to_closeup', 'ui_closeup_shot_eyes', 'ui_closeup_shot']);
+    expect(names(clipPlan('closeup', 'fullbody'))).toEqual(['ui_closeup_to_fullbody', 'ui_fullbody_shot']);
+    expect(names(clipPlan('fullbody', 'closeup'))).toEqual(['ui_fullbody_to_closeup', 'ui_closeup_shot']);
   });
 
   it('рука: вход, цикл и выход', () => {
-    expect(names(clipPlan('closeup', 'hand', null))).toEqual(['ui_expose_hand_start', 'ui_expose_hand_loop']);
-    expect(names(clipPlan('hand', 'hand', null))).toEqual(['ui_expose_hand_loop']);
-    expect(names(clipPlan('hand', 'fullbody', null))).toEqual(['ui_expose_hand_end', 'ui_closeup_to_fullbody', 'ui_fullbody_shot']);
-    expect(names(clipPlan('fullbody', 'hand', null))).toEqual(['ui_fullbody_to_closeup', 'ui_expose_hand_start', 'ui_expose_hand_loop']);
+    expect(names(clipPlan('closeup', 'hand'))).toEqual(['ui_expose_hand_start', 'ui_expose_hand_loop']);
+    expect(names(clipPlan('hand', 'hand'))).toEqual(['ui_expose_hand_loop']);
+    expect(names(clipPlan('hand', 'fullbody'))).toEqual(['ui_expose_hand_end', 'ui_closeup_to_fullbody', 'ui_fullbody_shot']);
+    expect(names(clipPlan('fullbody', 'hand'))).toEqual(['ui_fullbody_to_closeup', 'ui_expose_hand_start', 'ui_expose_hand_loop']);
+  });
+
+  it('выход из позы ногтей ускорен, остальные клипы — с родной скоростью', () => {
+    const plan = clipPlan('hand', 'closeup');
+    expect(plan[0]).toMatchObject({ clip: 'ui_expose_hand_end', speed: HAND_END_SPEED });
+    expect(HAND_END_SPEED).toBeGreaterThan(1);
+    expect(plan.slice(1).every((s) => s.speed === undefined)).toBe(true);
   });
 
   it('однократные клипы не зациклены, последний — цикл', () => {
-    const plan = clipPlan('hand', 'closeup', 'ui_closeup_shot_lips');
+    const plan = clipPlan('hand', 'closeup');
     expect(plan.slice(0, -1).every((s) => !s.loop)).toBe(true);
     expect(plan.at(-1)).toEqual({ clip: 'ui_closeup_shot', loop: true });
+  });
+
+  it('тело никогда не играет «показы» лица ui_closeup_shot_<часть> (§2.2–2.3)', () => {
+    const modes: (BodyMode | null)[] = [null, 'closeup', 'fullbody', 'hand'];
+    for (const from of modes)
+      for (const to of ['closeup', 'fullbody', 'hand'] as BodyMode[])
+        expect(names(clipPlan(from, to)).filter((c) => c.startsWith('ui_closeup_shot_'))).toEqual([]);
   });
 });

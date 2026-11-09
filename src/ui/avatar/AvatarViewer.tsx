@@ -11,11 +11,19 @@ type Status = 'probe' | 'loading' | 'ready' | 'missing';
 /** Как в игре: V стоит вполоборота в сторону списка настроек */
 export const DEFAULT_YAW = 14;
 
+/** Угол «по умолчанию», ближайший к текущему: сброс после нескольких оборотов не крутит V назад. */
+export function nearestDefaultYaw(yaw: number): number {
+  return DEFAULT_YAW + 360 * Math.round((yaw - DEFAULT_YAW) / 360);
+}
+
 let probePromise: Promise<boolean> | null = null;
-/** Есть ли выгрузка игры: без неё 3D не грузим вовсе (three.js остаётся в отдельном чанке). */
+/**
+ * Есть ли выгрузка игры: без неё 3D не грузим вовсе (three.js остаётся в отдельном чанке).
+ * GET с чтением тела (файл ~8 КБ): HEAD-запрос Chromium помечал как net::ERR_ABORTED.
+ */
 const probe = () =>
-  (probePromise ??= fetch('/game/hair/hint_meshes.json', { method: 'HEAD' })
-    .then((r) => r.ok && (r.headers.get('content-type') ?? '').includes('json'))
+  (probePromise ??= fetch('/game/hair/hint_meshes.json')
+    .then(async (r) => r.ok && (r.headers.get('content-type') ?? '').includes('json') && (await r.json()) !== null)
     .catch(() => false));
 
 export default function AvatarViewer({
@@ -23,13 +31,17 @@ export default function AvatarViewer({
   focus,
   yaw,
   onYaw,
+  spin = 0,
   fallback,
 }: {
   state: CharacterState;
   /** выбранная строка каталога — от неё кадр камеры и поза V */
   focus: SlotFocus;
+  /** угол поворота V, °, без ограничений (полный оборот) */
   yaw: number;
   onYaw: (deg: number) => void;
+  /** −1 / 1 — V вращается, пока зажата Q или E; 0 — стоит */
+  spin?: number;
   fallback: ReactNode;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -81,10 +93,15 @@ export default function AvatarViewer({
           const stacked = window.matchMedia('(max-width: 900px)').matches;
           const gl = !stacked && left ? Math.max(0, left.right - c.left) : 0;
           const gr = !stacked && list ? Math.min(w, list.left - c.left) : w;
-          engine?.resize(w, h, gl, gr > gl ? gr : w);
+          // На телефоне плашка описания лежит поверх низа сцены — кадр поднимается над ней
+          const info = stacked ? document.querySelector('.cc-stage .info')?.getBoundingClientRect() : undefined;
+          const inset = info && info.height > 0 ? Math.max(0, c.bottom - info.top) : 0;
+          engine?.resize(w, h, gl, gr > gl ? gr : w, inset);
         };
         ro = new ResizeObserver(fit);
         ro.observe(canvas);
+        const infoEl = document.querySelector('.cc-stage .info');
+        if (infoEl) ro.observe(infoEl);
         window.addEventListener('resize', fit);
         offResize = () => window.removeEventListener('resize', fit);
         fit();
@@ -122,6 +139,16 @@ export default function AvatarViewer({
     engineRef.current?.setYaw(yaw);
   }, [yaw]);
 
+  // Вращение клавишами считает движок; когда клавишу отпустили, угол возвращается в состояние
+  const onYawRef = useRef(onYaw);
+  onYawRef.current = onYaw;
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.setSpin(spin);
+    if (!spin) onYawRef.current(engine.yawDeg);
+  }, [spin]);
+
   if (status === 'missing') return <>{fallback}</>;
 
   return (
@@ -138,11 +165,11 @@ export default function AvatarViewer({
         onPointerMove={(e) => {
           const d = drag.current;
           if (!d || d.id !== e.pointerId) return;
-          onYaw(Math.max(-170, Math.min(170, d.yaw + (e.clientX - d.x) * 0.45)));
+          onYaw(d.yaw + (e.clientX - d.x) * 0.45);
         }}
         onPointerUp={() => (drag.current = null)}
         onPointerCancel={() => (drag.current = null)}
-        onDoubleClick={() => onYaw(DEFAULT_YAW)}
+        onDoubleClick={() => onYaw(nearestDefaultYaw(yaw))}
       />
       {status !== 'ready' && (
         <div className="head-loading" role="status">

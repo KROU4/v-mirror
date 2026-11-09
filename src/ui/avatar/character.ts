@@ -16,16 +16,17 @@ import { loadJson } from './assets';
 import { FaceRig } from './face';
 import { morphTargetMatches, type AvatarLook } from './look';
 import type { Materials } from './materials';
-import { BodyAnimator } from './motion';
+import { BodyAnimator, HandGuard } from './motion';
 import { weldSeams } from './seams';
 import { MasterSkeleton } from './skeleton';
+import { HEAD_LAYER } from './stage';
 
 const CODE: Record<Gender, 'pwa' | 'pma'> = { female: 'pwa', male: 'pma' };
 
 type MorphMesh = THREE.SkinnedMesh & { morphTargetDictionary: Record<string, number>; morphTargetInfluences: number[] };
 
 /** Порядок прозрачных слоёв поверх кожи. */
-const ORDER = { brows: 2, wet: 3, cap: 4, decal: 4, hairFringe: 6 };
+const ORDER = { brows: 2, wet: 3, tear: 3, cap: 4, decal: 4, hairFringe: 6 };
 
 function meshesOf(root: THREE.Object3D): THREE.SkinnedMesh[] {
   const out: THREE.SkinnedMesh[] = [];
@@ -34,6 +35,19 @@ function meshesOf(root: THREE.Object3D): THREE.SkinnedMesh[] {
     if (m.isSkinnedMesh) out.push(m);
   });
   return out;
+}
+
+/**
+ * Нижний ряд ресниц: атрибут lashLow = 1 у вершин ниже центра глаза (позиции меша — в
+ * осях привязки). Шейдер ресниц делает этот ряд короче и прозрачнее (Materials.lashes).
+ */
+export function markLowerLashes(g: THREE.BufferGeometry, eyeCenter: { l: number[]; r: number[] }) {
+  const pos = g.getAttribute('position');
+  if (!pos || g.getAttribute('lashLow')) return;
+  const y0 = (eyeCenter.l[1] + eyeCenter.r[1]) / 2 - 0.001;
+  const low = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) low[i] = pos.getY(i) < y0 ? 1 : 0;
+  g.setAttribute('lashLow', new THREE.Float32BufferAttribute(low, 1));
 }
 
 const chunkOf = (name: string) => Number(/submesh_(\d+)/.exec(name)?.[1] ?? -1);
@@ -118,10 +132,13 @@ export class Character {
   readonly sk: MasterSkeleton;
   readonly face: FaceRig;
   readonly anim: BodyAnimator;
+  private handGuard: HandGuard;
   private morphMeshes: MorphMesh[] = [];
   private head: THREE.SkinnedMesh[] = [];
   private eyeballs: THREE.SkinnedMesh[] = [];
   private wet: THREE.SkinnedMesh[] = [];
+  /** копии меша eye_wetness для блика слёзной кромки (тень и блик смешиваются по-разному) */
+  private tear: THREE.SkinnedMesh[] = [];
   private lashes: THREE.SkinnedMesh[] = [];
   private brows: THREE.SkinnedMesh[] = [];
   private bodySkin: { mesh: THREE.SkinnedMesh; part: 'body' | 'arms' }[] = [];
@@ -149,6 +166,7 @@ export class Character {
     this.root.add(this.sk.root);
     this.face = new FaceRig(this.sk, bodyM.faceRig[this.code]);
     this.anim = new BodyAnimator(this.root);
+    this.handGuard = new HandGuard(this.sk);
     this.hairManifest = loadJson<HairManifest>('tex/hair/manifest.json');
   }
 
@@ -200,17 +218,29 @@ export class Character {
 
     for (const m of meshesOf(head.scene)) {
       this.add(m);
+      m.layers.enable(HEAD_LAYER);
       this.head.push(m);
     }
     for (const m of meshesOf(eyes.scene)) {
       const role = fm.eyes.parts[m.name]?.role;
       if (role === 'eyelashes') {
         this.add(m, { cast: false });
+        markLowerLashes(m.geometry, this.bodyM.faceRig[c].eyelids.eyeCenter);
         this.lashes.push(m);
       } else if (role === 'eye_wetness') {
         this.add(m, { cast: false, receive: false });
         m.renderOrder = ORDER.wet;
         this.wet.push(m);
+        const t = new THREE.SkinnedMesh(m.geometry, m.material);
+        t.name = m.name + '_tearline';
+        t.bind(m.skeleton, m.bindMatrix);
+        t.frustumCulled = false;
+        t.renderOrder = ORDER.tear;
+        t.visible = false;
+        this.root.add(t);
+        this.tear.push(t);
+        const tm = t as MorphMesh;
+        if (tm.morphTargetDictionary && tm.morphTargetInfluences) this.morphMeshes.push(tm);
       } else {
         this.add(m, { cast: false });
         this.eyeballs.push(m);
@@ -268,7 +298,7 @@ export class Character {
           m.material = await this.mats.decal(d);
         } else {
           this.add(m);
-          m.material = d ? await this.mats.standard('underwear', d.baseColor, d.orm, d.normal, false) : new THREE.MeshStandardMaterial({ color: '#2a1228', roughness: 0.6 });
+          m.material = d ? await this.mats.standard('underwear', d.baseColor, d.orm, d.normal, false, true) : new THREE.MeshStandardMaterial({ color: '#2a1228', roughness: 0.6 });
         }
       }
     }
@@ -342,12 +372,13 @@ export class Character {
     const nailE = (look.nailsApp && this.bodyM.materials.nails.byGender[this.code][look.nailsApp]) || Object.values(this.bodyM.materials.nails.byGender[this.code])[0];
     const texSets = this.bodyM.textures;
 
-    const [headMat, bodyMat, armsMat, eyeMat, wetMat, lashMat, browMat, teethMat, nailMat] = await Promise.all([
+    const [headMat, bodyMat, armsMat, eyeMat, wetMat, tearMat, lashMat, browMat, teethMat, nailMat] = await Promise.all([
       this.mats.headSkin(skinG, g, look.skinApp, look.skinType),
       this.mats.bodySkin(texSets[`${this.code}_body`], `${this.code}_body`, tone),
       this.mats.bodySkin(texSets[`${this.code}_arms`], `${this.code}_arms`, tone),
       eye ? this.mats.eyeball(eye) : null,
-      eye ? this.mats.eyeWetness(eye) : null,
+      eye ? this.mats.eyeShadow(eye) : null,
+      eye ? this.mats.eyeTearline(eye).catch(() => null) : null,
       lash ? this.mats.lashes(lash, true) : null,
       browStyle && browCol ? this.mats.brows(browStyle, browCol, exception?.gradientMapPng ?? browCol.gradientMapPng) : null,
       teethE ? this.mats.teeth(teethE).catch(() => null) : null,
@@ -361,6 +392,10 @@ export class Character {
       for (const m of this.wet) {
         m.visible = !!wetMat;
         if (wetMat) m.material = wetMat;
+      }
+      for (const m of this.tear) {
+        m.visible = !!tearMat;
+        if (tearMat) m.material = tearMat;
       }
       for (const m of this.lashes) if (lashMat) m.material = lashMat;
       for (const m of this.brows) {
@@ -417,6 +452,7 @@ export class Character {
           m.removeFromParent();
           this.sk.bind(m);
           m.receiveShadow = true;
+          m.layers.enable(HEAD_LAYER);
           group.add(m);
           const part: HairBuilt['parts'][number] = { core: m, kind: sub.kind, doubleSided: sub.doubleSided, index };
           if (sub.kind === 'cards') {
@@ -509,8 +545,40 @@ export class Character {
 
   update(dt: number, camera: THREE.Vector3) {
     this.anim.update(dt);
+    // клип поднимает кисть к лицу выше, чем в игре, — опускаем её до кадра лица
+    this.handGuard.apply(this.root);
     this.face.update(dt, camera);
+    // Свет внутри рта: чем плотнее сомкнуты губы, тем темнее зубы и язык
+    const k = 0.3 + 0.7 * this.face.mouthOpen;
+    for (const m of this.teeth) {
+      const u = (m.material as THREE.Material).userData.skin as { uMouthLight?: { value: number } } | undefined;
+      if (u?.uMouthLight) u.uMouthLight.value = k;
+    }
+    // Рельеф карты нормалей у кромки губ гаснет, пока рот открыт (SKIN_LIP_FADE)
+    for (const m of this.head) {
+      const u = (m.material as THREE.Material).userData.skin as { uMouthOpen?: { value: number } } | undefined;
+      if (u?.uMouthOpen) u.uMouthOpen.value = this.face.mouthOpen;
+    }
+    // Затенение у кромки век гаснет, пока веки сомкнуты
+    const open = 1 - THREE.MathUtils.smoothstep(this.face.eyesClosed, 0.4, 0.9);
+    for (const m of this.wet) {
+      const u = (m.material as THREE.Material).userData.eyeShadow as { uEyesOpen?: { value: number } } | undefined;
+      if (u?.uEyesOpen) u.uEyesOpen.value = open;
+    }
   }
+
+  /**
+   * Насколько клип увёл голову от позы привязки (мировые оси, м). Камера крупных планов
+   * мягко следует за этим сдвигом, чтобы лицо не уезжало из кадра.
+   */
+  headDrift(out: THREE.Vector3): THREE.Vector3 {
+    const head = this.sk.get('Head');
+    const bind = this.sk.bindWorld.get('Head');
+    if (!head || !bind) return out.set(0, 0, 0);
+    head.getWorldPosition(out);
+    return out.sub(this.headBind.setFromMatrixPosition(bind).applyMatrix4(this.root.matrixWorld));
+  }
+  private headBind = new THREE.Vector3();
 
   dispose() {
     this.anim.dispose();

@@ -20,18 +20,106 @@ import type {
 
 type Shader = THREE.WebGLProgramParametersWithUniforms;
 
-/** Мягкое освещение кожи: красный канал «заворачивает» свет за терминатор (свет под кожей). */
-const SKIN_LIGHTS = THREE.ShaderChunk.lights_physical_pars_fragment.replace(
-  'reflectedLight.directDiffuse += irradiance * diffuseBRDF * ( 1.0 - F );',
-  `#ifdef SKIN_SSS
-	float wrapNL = saturate( ( dot( geometryNormal, directLight.direction ) + 0.45 ) / 1.45 );
-	vec3 sssIrr = mix( vec3( dotNL ), vec3( wrapNL ), uScatter ) * directLight.color;
+/**
+ * Контровой свет (всё в осях камеры). lightBehind: 1 — лампа за спиной V (направление на
+ * неё смотрит от камеры, L.z < 0). rimMask: такая лампа освещает только грани у силуэта
+ * (N.z < ~0,1); обращённые к камере стенки носа, складки век, ноздри и ушная раковина ей
+ * закрыты самой головой.
+ */
+const RIM_MASK_GLSL = `
+float lightBehind( float lightZ ) {
+	return 1.0 - smoothstep( -0.35, 0.05, lightZ );
+}
+float rimMask( float lightZ, float normalZ ) {
+	return 1.0 - lightBehind( lightZ ) * smoothstep( -0.12, 0.15, normalZ );
+}
+`;
+
+/**
+ * Мягкое освещение кожи: красный канал «заворачивает» свет за терминатор (свет под кожей).
+ * MOUTH_OCCLUSION (зубы и язык): свет внутри рта гасится по глубине рта и по тому,
+ * насколько разомкнуты губы; лампы из-за спины V (контровые) в рот не попадают вовсе.
+ * Контровой свет (лампа дальше от камеры, чем V) кожу освещает только у силуэта: на
+ * обращённых к камере участках (ноздри, складка века, уголки губ) его закрывает сама голова.
+ * Одной тени контровой лампы для этого мало: на «завёрнутом» свете у обращённых к камере
+ * участков её граница режет лицо полосой (висок — щека — челюсть). Блик от контровых ламп
+ * ослаблен: скользящий GGX на почти боковых гранях (стенка носа при повороте головы) даёт
+ * белую с голубым полосу, а в игре контровой на коже — мягкая цветная кайма.
+ */
+const SKIN_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_fragment)
+  .replace(
+    'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
+    `#ifdef SKIN_SSS
+	reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * mix( 1.0, 0.2, lightBehind( directLight.direction.z ) );
+#else
+	reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;
+#endif`,
+  )
+  .replace(
+    'vec3 irradiance = dotNL * directLight.color;',
+    `float mouthK = 1.0;
+	vec3 lightCol = directLight.color;
+#ifdef SKIN_SSS
+	mouthK *= rimMask( directLight.direction.z, geometryNormal.z );
+#endif
+#ifdef SKIN_EAR
+	// тонкие завитки уха смотрят назад, на контровые лампы, и горят точками
+	mouthK *= 1.0 - 0.75 * gEarMask * lightBehind( directLight.direction.z );
+#endif
+#ifdef MOUTH_OCCLUSION
+	mouthK *= uMouthLight * mix( 1.0, 0.2, gMouthDepth ) * smoothstep( -0.25, 0.35, directLight.direction.z );
+	// Во рту остаётся рассеянный свет без оттенка ламп: голубой Fill иначе красит зубы в серо-зелёный
+	lightCol = mix( vec3( dot( lightCol, vec3( 0.2126, 0.7152, 0.0722 ) ) ) * vec3( 1.0, 0.94, 0.86 ), lightCol, 0.25 );
+#endif
+	lightCol *= mouthK;
+	vec3 irradiance = dotNL * lightCol;`,
+  )
+  .replace(
+    'reflectedLight.directDiffuse += irradiance * diffuseBRDF * ( 1.0 - F );',
+    `#ifdef SKIN_SSS
+	float wrapNL = saturate( ( dot( geometryNormal, directLight.direction ) + 0.4 ) / 1.4 );
+	vec3 sssIrr = mix( vec3( dotNL ), vec3( wrapNL ), uScatter ) * lightCol;
 	reflectedLight.directDiffuse += sssIrr * diffuseBRDF * ( 1.0 - F );
 #else
 	reflectedLight.directDiffuse += irradiance * diffuseBRDF * ( 1.0 - F );
 #endif`,
+  );
+if (!SKIN_LIGHTS.includes('sssIrr') || !SKIN_LIGHTS.includes('mouthK *= uMouthLight') || !SKIN_LIGHTS.includes('mix( 1.0, 0.2, lightBehind')) console.warn('avatar: шейдер кожи не пропатчен (изменился three.js)');
+
+/**
+ * Блик прядей: от ламп из-за спины (контровые, холодный циан-белый) — слабый и в цвет
+ * пряди. Белый скользящий блик GGX на тёмно-каштановых прядях читается серебристой сединой.
+ */
+const HAIR_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_fragment).replace(
+  'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
+  `vec3 hairSpecK = mix( vec3( 1.0 ), 0.2 * gHairTint, lightBehind( directLight.direction.z ) );
+	reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * hairSpecK;`,
 );
-if (!SKIN_LIGHTS.includes('SKIN_SSS')) console.warn('avatar: шейдер кожи не пропатчен (изменился three.js)');
+if (!HAIR_LIGHTS.includes('hairSpecK')) console.warn('avatar: шейдер волос не пропатчен (изменился three.js)');
+
+/**
+ * Ткань белья: в игре бельё матовое, а ORM даёт ему шероховатость латекса — на чашках
+ * крупные белые пятна блика. Контровые лампы (из-за спины V) на ткани — слабая кайма,
+ * а не неоновая полоса по краю чашки.
+ */
+const CLOTH_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_fragment)
+  .replace(
+    'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
+    'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * mix( 1.0, 0.15, lightBehind( directLight.direction.z ) );',
+  )
+  .replace('vec3 irradiance = dotNL * directLight.color;', 'vec3 irradiance = dotNL * directLight.color * mix( 1.0, 0.35, lightBehind( directLight.direction.z ) );');
+if (!CLOTH_LIGHTS.includes('mix( 1.0, 0.35, lightBehind')) console.warn('avatar: шейдер ткани не пропатчен (изменился three.js)');
+const CLOTH_ROUGH_MIN = 0.68;
+
+/**
+ * Брови: блик контровых ламп (холодный циан-белый, скользящий) на тонких волосках читается
+ * серебристо-белым хвостом брови — как у кожи и волос, от ламп из-за спины он почти гаснет.
+ */
+const BROW_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_fragment).replace(
+  'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
+  'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * mix( 1.0, 0.1, lightBehind( directLight.direction.z ) );',
+);
+if (!BROW_LIGHTS.includes('mix( 1.0, 0.1, lightBehind')) console.warn('avatar: шейдер бровей не пропатчен (изменился three.js)');
 
 /** Оттенок кожи skin.mt в линейном пространстве: multiply, при отрицательной шкале — overlay. */
 const TINT_GLSL = `
@@ -43,15 +131,40 @@ const TINT_GLSL = `
 	vec3 tinted = uTintScale >= 0.0 ? c * t : ov;
 	float f = abs( uTintScale );
 	#ifdef SKIN_TINT_MASK
-		f *= texture2D( uTintMask, vMapUv ).r;
+		float tm = texture2D( uTintMask, vMapUv ).r;
+		f *= tm;
+		#ifdef MOUTH_OCCLUSION
+			gMouthDepth = tm;
+		#endif
 	#endif
 	diffuseColor.rgb = mix( c, tinted, f );
 }
 #endif
+#ifdef SKIN_EAR
+{
+	// уши в UV головы (одинаково у обоих полов): центры (0,205; 0,34) и (0,795; 0,34)
+	vec2 eq = vec2( abs( vMapUv.x - 0.5 ) - 0.295, vMapUv.y - 0.34 ) / vec2( 0.065, 0.1 );
+	gEarMask = 1.0 - smoothstep( 0.8, 1.0, length( eq ) );
+}
+#endif
 `;
 
-/** Детальная нормаль (UV головы) и тайловые поры, по маске детализации из roughness.R. */
+/**
+ * Детальная нормаль (UV головы) и тайловые поры, по маске детализации из roughness.R.
+ * SKIN_LIP_FADE: карты запечены с сомкнутыми губами, и у кромки губ нормали круто уходят
+ * внутрь рта. Когда губы размыкаются (улыбка «Зубы»), эта кромка выходит наружу и ложится
+ * по контуру нижней губы и в уголках бурой «крошащейся» полосой — у губ рельеф карты гасим
+ * по мере открытия рта (эллипс губ в UV головы, одинаковый у обоих полов).
+ */
 const DETAIL_GLSL = `mapN.xy *= normalScale;
+float lipFade = 1.0;
+#ifdef SKIN_LIP_FADE
+{
+	vec2 lq = ( vNormalMapUv - vec2( 0.498, 0.394 ) ) / vec2( 0.092, 0.043 );
+	lipFade = 1.0 - 0.85 * uMouthOpen * ( 1.0 - smoothstep( 0.7, 1.0, length( lq ) ) );
+	mapN.xy *= lipFade;
+}
+#endif
 #ifdef SKIN_DETAIL
 {
 	vec3 dN = texture2D( uDetailNormal, vNormalMapUv ).xyz * 2.0 - 1.0;
@@ -59,7 +172,7 @@ const DETAIL_GLSL = `mapN.xy *= normalScale;
 	#ifdef USE_ROUGHNESSMAP
 		dMask = texture2D( roughnessMap, vRoughnessMapUv ).r;
 	#endif
-	vec2 add = uDetailW * dN.xy;
+	vec2 add = uDetailW * dN.xy * sign( normalScale );
 	#ifdef SKIN_MICRO
 		vec2 muv = vNormalMapUv * uMicroScale;
 		vec2 gx = dFdx( muv ) * vec2( 0.5, 1.0 );
@@ -67,9 +180,39 @@ const DETAIL_GLSL = `mapN.xy *= normalScale;
 		vec3 mN = textureGrad( uMicro, fract( muv ) * vec2( 0.5, 1.0 ), gx, gy ).xyz * 2.0 - 1.0;
 		add += mN.xy * uMicroW * dMask;
 	#endif
-	mapN = normalize( vec3( mapN.xy + add, mapN.z ) );
+	mapN = normalize( vec3( mapN.xy + add * lipFade, mapN.z ) );
 }
 #endif`;
+
+/**
+ * Яркость прядей: рампы профиля в среднем по карточкам дают ≈ 1,5× светлее образца цвета
+ * из каталога (brown_liquorice: #3e3933 против #322c28) — приводим к образцу. Чуть теплее
+ * по каналам: под циановыми Fill-лампами каштановые пряди иначе выходят нейтрально-серыми.
+ */
+const HAIR_ALBEDO = new THREE.Vector3(0.8, 0.74, 0.7);
+
+/** Доля непрозрачности нижнего ряда ресниц. */
+const LOWER_LASH_ALPHA = 0.55;
+
+/** Покрытие ресниц (см. Materials.lashes). */
+const LASH_ALPHA = `
+#ifdef USE_ALPHAMAP
+{
+	vec2 tuv = vAlphaMapUv * vec2( textureSize( alphaMap, 0 ) );
+	vec2 ddx = dFdx( tuv );
+	vec2 ddy = dFdy( tuv );
+	float lod = max( 0.0, 0.5 * log2( max( dot( ddx, ddx ), dot( ddy, ddy ) ) ) );
+	float a = texture2D( alphaMap, vAlphaMapUv ).g;
+	float sharp = saturate( ( a - 0.3 ) / max( fwidth( a ), 1e-4 ) + 0.5 );
+	float soft = saturate( a * ( 1.25 + 0.5 * lod ) );
+	a = mix( sharp, soft, saturate( lod - 0.5 ) );
+	// нижний ряд: в игре ресницы там короткие и едва заметные (у карточки корень — v = 0)
+	a *= mix( 1.0, uLowAlpha * ( 1.0 - uLowTip * smoothstep( 0.3, 0.62, vAlphaMapUv.y ) ), vLashLow );
+	if ( a < 0.02 ) discard;
+	diffuseColor.a *= a;
+}
+#endif
+`;
 
 interface SkinPatch {
   tint?: { color: THREE.Color; scale: number; mask?: THREE.Texture | null };
@@ -78,6 +221,12 @@ interface SkinPatch {
   scatter: THREE.Vector3;
   /** нижняя граница шероховатости */
   roughMin?: number;
+  /** зубы и язык: свет гасится внутри рта (MOUTH_OCCLUSION) */
+  mouth?: boolean;
+  /** голова: рельеф у кромки губ гаснет, пока рот открыт (SKIN_LIP_FADE, uniform uMouthOpen) */
+  lipFade?: boolean;
+  /** голова: контровые лампы на ушной раковине приглушены (SKIN_EAR) */
+  ears?: boolean;
 }
 
 function patchSkin(mat: THREE.MeshPhysicalMaterial, p: SkinPatch, key: string) {
@@ -92,6 +241,8 @@ function patchSkin(mat: THREE.MeshPhysicalMaterial, p: SkinPatch, key: string) {
     uMicroScale: { value: p.detail?.microScale ?? 1 },
     uScatter: { value: p.scatter },
     uRoughMin: { value: p.roughMin ?? 0.45 },
+    uMouthLight: { value: 1 },
+    uMouthOpen: { value: 0 },
   };
   mat.userData.skin = uniforms;
   mat.defines = { ...(mat.defines ?? {}), SKIN_SSS: '' };
@@ -99,6 +250,9 @@ function patchSkin(mat: THREE.MeshPhysicalMaterial, p: SkinPatch, key: string) {
   if (p.tint?.mask) mat.defines.SKIN_TINT_MASK = '';
   if (p.detail) mat.defines.SKIN_DETAIL = '';
   if (p.detail?.micro) mat.defines.SKIN_MICRO = '';
+  if (p.mouth) mat.defines.MOUTH_OCCLUSION = '';
+  if (p.lipFade) mat.defines.SKIN_LIP_FADE = '';
+  if (p.ears) mat.defines.SKIN_EAR = '';
   mat.onBeforeCompile = (s: Shader) => {
     Object.assign(s.uniforms, uniforms);
     s.fragmentShader = s.fragmentShader
@@ -108,7 +262,9 @@ function patchSkin(mat: THREE.MeshPhysicalMaterial, p: SkinPatch, key: string) {
 uniform vec3 uTint; uniform float uTintScale; uniform sampler2D uTintMask;
 uniform sampler2D uDetailNormal; uniform float uDetailW;
 uniform sampler2D uMicro; uniform float uMicroW; uniform float uMicroScale;
-uniform vec3 uScatter; uniform float uRoughMin;`,
+uniform vec3 uScatter; uniform float uRoughMin; uniform float uMouthLight; uniform float uMouthOpen;
+float gMouthDepth = 0.0;
+float gEarMask = 0.0;`,
       )
       .replace('#include <lights_physical_pars_fragment>', SKIN_LIGHTS)
       // губы и веки в карте почти зеркальные — в кадре игры они лишь влажно блестят
@@ -126,6 +282,15 @@ const lin = (hex: string) => new THREE.Color(hex); // three переводит s
  * доля «завёрнутого» света по RGB — красный уходит за терминатор дальше всех.
  */
 const SKIN = { roughness: 1.0, specular: 0.5, scatter: new THREE.Vector3(0.45, 0.2, 0.12) };
+
+/**
+ * Знак каналов карты нормалей кожи головы. Касательные в glb идут по +u, но красный канал
+ * карты игры направлен навстречу (геометрия выгружена зеркально): с X = +1 рельеф по
+ * горизонтали инвертирован, верхняя губа и нижние веки «смотрят» вниз и ложатся бурой
+ * полосой («усы», синяки под глазами), а на спинке носа горит ложный блик. Сверено с
+ * рендером без карты нормалей: с X = −1 светотень совпадает, поры и складки остаются.
+ */
+export const HEAD_NORMAL_SCALE: [number, number] = [-1, 1];
 
 /** Фабрика материалов одного движка: всё кешируется по ключу, текстуры — через AssetStore. */
 export class Materials {
@@ -166,6 +331,7 @@ export class Materials {
         name: 'head_skin',
         map,
         normalMap: normal,
+        normalScale: new THREE.Vector2(...HEAD_NORMAL_SCALE),
         roughnessMap: rough,
         roughness: SKIN.roughness,
         metalness: 0,
@@ -181,6 +347,10 @@ export class Materials {
             ? { map: detail, weight: g.params.DetailNormalInfluence * 0.6, micro, microWeight: g.params.MicroDetailInfluence * 0.35, microScale: g.params.MicroDetailUVScale01 * 1.4 }
             : undefined,
           scatter: SKIN.scatter.clone(),
+          // губы и веки в карте почти зеркальные; в кадре игры губы матово-мягкие
+          roughMin: 0.6,
+          lipFade: true,
+          ears: true,
         },
         'head',
       );
@@ -208,7 +378,8 @@ export class Materials {
         envMap: this.env,
         envMapIntensity: 0.12,
       });
-      patchSkin(mat, { scatter: SKIN.scatter.clone() }, 'body');
+      // Как у головы: с более гладкой кожей ключицы и грудь блестят белыми полосами
+      patchSkin(mat, { scatter: SKIN.scatter.clone(), roughMin: 0.6 }, 'body');
       return mat;
     });
   }
@@ -241,43 +412,129 @@ export class Materials {
     });
   }
 
-  eyeWetness(e: EyeEntry): Promise<THREE.Material | null> {
+  /**
+   * eye_shadow_wetness игры — не блестящая плёнка, а затенение у кромки век: цвет кадра
+   * умножается на mix(1, ShadowColor, A^Exponent · Intensity). Неосвещённый слой с
+   * умножающим смешиванием, поэтому на закрытом веке нет ни бликов, ни «подводки».
+   */
+  eyeShadow(e: EyeEntry): Promise<THREE.Material | null> {
     const w = e.eye_wetness;
     if (!w) return Promise.resolve(null);
-    return this.once('wet:' + w.maps.maskA + w.params.ShadowColor, async () => {
-      const mask = await this.store.texture(w.maps.maskA, 'data');
-      return new THREE.MeshPhysicalMaterial({
-        name: 'eye_wetness',
-        color: lin(w.params.ShadowColor),
-        alphaMap: mask,
-        opacity: w.params.Intensity,
+    const rel = w.maps.maskRGBA ?? w.maps.maskA;
+    return this.once(`eyeshadow:${rel}:${w.params.ShadowColor}:${w.params.Intensity}:${w.params.Exponent}`, async () => {
+      const mask = await this.store.texture(rel, 'data');
+      const mat = new THREE.MeshBasicMaterial({
+        name: 'eye_shadow',
+        map: mask,
         transparent: true,
         depthWrite: false,
-        roughness: 0.22,
-        metalness: 0,
-        envMap: this.env,
-        envMapIntensity: 0.3,
+        toneMapped: false,
+        blending: THREE.CustomBlending,
+        blendEquation: THREE.AddEquation,
+        blendSrc: THREE.DstColorFactor,
+        blendDst: THREE.ZeroFactor,
         polygonOffset: true,
         polygonOffsetFactor: -1,
         polygonOffsetUnits: -2,
       });
+      const u = {
+        uShadowColor: { value: lin(w.params.ShadowColor) },
+        uShadowInt: { value: w.params.Intensity },
+        uShadowExp: { value: w.params.Exponent },
+        // 1 — глаза открыты; при моргании слой гаснет, иначе он ложится пятном на закрытое веко
+        uEyesOpen: { value: 1 },
+      };
+      mat.userData.eyeShadow = u;
+      // В файле с RGBA маска — в альфе; отдельная маска A — в серых каналах
+      const ch = w.maps.maskRGBA ? 'a' : 'g';
+      mat.onBeforeCompile = (s: Shader) => {
+        Object.assign(s.uniforms, u);
+        s.fragmentShader = s.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform vec3 uShadowColor; uniform float uShadowInt; uniform float uShadowExp; uniform float uEyesOpen;')
+          .replace(
+            '#include <map_fragment>',
+            `{
+	float m = pow( texture2D( map, vMapUv ).${ch}, uShadowExp ) * uShadowInt * uEyesOpen;
+	diffuseColor = vec4( mix( vec3( 1.0 ), uShadowColor, saturate( m ) ), 1.0 );
+}`,
+          );
+      };
+      mat.customProgramCacheKey = () => 'eye_shadow:' + ch;
+      return mat;
     });
   }
 
-  lashes(e: LashEntry, doubled: boolean): Promise<THREE.MeshStandardMaterial> {
+  /** Влажная слёзная кромка нижнего века (канал B маски): только слабый блик, без диффузного цвета. */
+  eyeTearline(e: EyeEntry): Promise<THREE.Material | null> {
+    const w = e.eye_wetness;
+    if (!w?.maps.maskRGBA) return Promise.resolve(null);
+    const rel = w.maps.maskRGBA;
+    const k = Math.min(1, 0.15 * (w.params.WetnessStrength ?? 4));
+    return this.once(`tearline:${rel}:${k}`, async () => {
+      const mask = await this.store.texture(rel, 'data');
+      const mat = new THREE.MeshPhysicalMaterial({
+        name: 'eye_tearline',
+        color: 0x000000,
+        alphaMap: mask,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        roughness: 0.3,
+        metalness: 0,
+        specularIntensity: 0.6,
+        envMap: this.env,
+        envMapIntensity: 0.2,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -3,
+      });
+      const u = { uWet: { value: k } };
+      mat.onBeforeCompile = (s: Shader) => {
+        Object.assign(s.uniforms, u);
+        s.fragmentShader = s.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform float uWet;')
+          .replace('#include <alphamap_fragment>', 'diffuseColor.a *= saturate( texture2D( alphaMap, vAlphaMapUv ).b * 4.0 ) * uWet;');
+      };
+      mat.customProgramCacheKey = () => 'eye_tearline';
+      return mat;
+    });
+  }
+
+  /**
+   * Ресницы: одна тонкая ресница на карточку 32×128, на экране она уже пикселя. Обычный
+   * alphaTest на мипах рвёт её в точки, поэтому покрытие считаем сами: вблизи альфа
+   * заостряется по fwidth, издали мип-альфа усиливается по уровню мипа (как в «Anti-aliased
+   * Alpha Test», B. Golus) и идёт прямо в alpha-to-coverage MSAA.
+   */
+  lashes(e: LashEntry, doubled: boolean): Promise<THREE.MeshLambertMaterial> {
     const c = e.eyelashes.suggestedColor.product;
     return this.once('lash:' + e.eyelashes.maps.alpha + c, async () => {
       const alpha = await this.store.texture(e.eyelashes.maps.alpha, 'data', { repeat: true });
-      return new THREE.MeshStandardMaterial({
+      // Только диффузный свет: у PBR-материала тонкие ресницы ловят скользящий блик
+      // контровых ламп (Rim_Top, Rim_Right) и читаются серебристыми при любом цвете
+      const mat = new THREE.MeshLambertMaterial({
         name: 'lashes',
-        color: lin(c).multiplyScalar(0.6),
+        color: lin(c).multiplyScalar(0.45),
         alphaMap: alpha,
-        alphaTest: 0.25,
         alphaToCoverage: true,
         side: doubled ? THREE.DoubleSide : THREE.FrontSide,
-        roughness: 0.9,
-        metalness: 0,
       });
+      // одна ресница на высокую карточку (32×128) — нижний ряд ещё и укорачиваем
+      const img = alpha.image as { width?: number; height?: number } | undefined;
+      const single = !!img?.width && !!img.height && img.height >= img.width * 2;
+      mat.onBeforeCompile = (s: Shader) => {
+        s.uniforms.uLowAlpha = { value: LOWER_LASH_ALPHA };
+        s.uniforms.uLowTip = { value: single ? 1 : 0 };
+        s.vertexShader = s.vertexShader
+          .replace('#include <common>', '#include <common>\nattribute float lashLow;\nvarying float vLashLow;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLashLow = lashLow;');
+        s.fragmentShader = s.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform float uLowAlpha; uniform float uLowTip;\nvarying float vLashLow;')
+          .replace('#include <alphamap_fragment>', LASH_ALPHA);
+      };
+      if (import.meta.env.DEV && !THREE.ShaderLib.lambert.fragmentShader.includes('#include <alphamap_fragment>')) console.warn('avatar: шейдер ресниц не пропатчен');
+      mat.customProgramCacheKey = () => 'lashes:' + (single ? 1 : 0);
+      return mat;
     });
   }
 
@@ -313,6 +570,7 @@ export class Materials {
       mat.onBeforeCompile = (s: Shader) => {
         Object.assign(s.uniforms, u);
         s.fragmentShader = s.fragmentShader
+          .replace('#include <lights_physical_pars_fragment>', BROW_LIGHTS)
           .replace(
             '#include <common>',
             `#include <common>
@@ -347,6 +605,8 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
         this.store.maybeTexture(s.maps.tintColorMask, 'data'),
       ]);
       const ml = s.shader === 'multilayered_baked';
+      // Натуральные зубы — влажная эмаль без лака: без clearcoat и почти без отражения
+      // окружения, иначе боковые зубы в тени выглядят серебряными
       const mat = new THREE.MeshPhysicalMaterial({
         name: 'teeth',
         map,
@@ -355,14 +615,23 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
         metalnessMap: ml ? orm : null,
         roughness: ml ? 1 : 0.85,
         metalness: ml ? 1 : 0,
-        clearcoat: ml ? 0.3 : 0.15,
+        clearcoat: ml ? 0.3 : 0,
         clearcoatRoughness: 0.35,
+        specularIntensity: ml ? 1 : 0.6,
         envMap: this.env,
-        envMapIntensity: 0.5,
+        envMapIntensity: ml ? 0.35 : 0.1,
       });
-      if (!ml && s.params.TintColor && mask) {
-        patchSkin(mat, { tint: { color: lin(s.params.TintColor), scale: s.params.TintScale ?? 0, mask }, scatter: new THREE.Vector3(0.5, 0.2, 0.12), roughMin: 0.2 }, 'teeth');
-      }
+      // Свет внутри рта гасится и у металлических коронок (без маски глубины — только по губам)
+      patchSkin(
+        mat,
+        {
+          tint: !ml && s.params.TintColor && mask ? { color: lin(s.params.TintColor), scale: s.params.TintScale ?? 0, mask } : undefined,
+          scatter: new THREE.Vector3(0.5, 0.2, 0.12),
+          roughMin: ml ? 0.2 : 0.45,
+          mouth: true,
+        },
+        ml ? 'teeth_ml' : 'teeth',
+      );
       return mat;
     });
   }
@@ -391,14 +660,14 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
     });
   }
 
-  standard(name: string, base: string, orm: string | undefined, normal: string | undefined, metal = true): Promise<THREE.MeshStandardMaterial> {
-    return this.once('std:' + base, async () => {
+  standard(name: string, base: string, orm: string | undefined, normal: string | undefined, metal = true, cloth = false): Promise<THREE.MeshStandardMaterial> {
+    return this.once('std:' + base + (cloth ? ':cloth' : ''), async () => {
       const [map, o, n] = await Promise.all([
         this.store.texture(base, 'color'),
         this.store.maybeTexture(orm, 'data'),
         this.store.maybeTexture(normal, 'data'),
       ]);
-      return new THREE.MeshStandardMaterial({
+      const mat = new THREE.MeshStandardMaterial({
         name,
         map,
         roughnessMap: o,
@@ -409,6 +678,15 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
         envMap: this.env,
         envMapIntensity: 0.3,
       });
+      if (cloth) {
+        mat.onBeforeCompile = (sh: Shader) => {
+          sh.fragmentShader = sh.fragmentShader
+            .replace('#include <lights_physical_pars_fragment>', CLOTH_LIGHTS)
+            .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\nroughnessFactor = max( roughnessFactor, ${CLOTH_ROUGH_MIN.toFixed(2)} );`);
+        };
+        mat.customProgramCacheKey = () => 'cloth';
+      }
+      return mat;
     });
   }
 
@@ -454,7 +732,9 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
         this.store.texture(prof.ramp, 'color', { lut: true }),
         this.store.maybeTexture(alphaRel, 'data', { repeat: true }),
       ]);
-      const rough = THREE.MathUtils.clamp((m.roughnessBias ?? 0.15) + 0.5 * (m.roughnessScale ?? 0.15) + 0.25, 0.3, 0.6);
+      // Волосы в кадре игры матовые: блик слабый, широкий и окрашен в цвет пряди
+      // (у белого GGX с F0 0,04 тёмно-каштановые пряди выглядят седыми)
+      const rough = THREE.MathUtils.clamp((m.roughnessBias ?? 0.15) + 0.5 * (m.roughnessScale ?? 0.15) + 0.45, 0.65, 0.8);
       const core = pass === 'core';
       const mat = new THREE.MeshStandardMaterial({
         name: 'hair_' + pass,
@@ -467,13 +747,21 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
         alphaTest: alpha ? (core ? (sparse ? 0.4 : 0.5) : 0.02) : 0,
         depthWrite: core,
         envMap: this.env,
-        envMapIntensity: 0.2,
+        envMapIntensity: 0.04,
       });
-      const u = { uRamp: { value: ramp }, uShadow: { value: m.shadowStrength ?? 0.5 }, uIdGain: { value: 1.1 } };
+      const u = { uRamp: { value: ramp }, uShadow: { value: m.shadowStrength ?? 0.5 }, uIdGain: { value: 1.0 }, uSpec: { value: 0.4 }, uAlbedo: { value: HAIR_ALBEDO } };
       mat.onBeforeCompile = (s: Shader) => {
         Object.assign(s.uniforms, u);
         s.fragmentShader = s.fragmentShader
-          .replace('#include <common>', '#include <common>\nuniform sampler2D uRamp; uniform float uShadow; uniform float uIdGain;')
+          .replace('#include <common>', '#include <common>\nuniform sampler2D uRamp; uniform float uShadow; uniform float uIdGain; uniform float uSpec; uniform vec3 uAlbedo;\nvec3 gHairTint = vec3( 1.0 );')
+          .replace('#include <lights_physical_pars_fragment>', HAIR_LIGHTS)
+          .replace(
+            '#include <lights_physical_fragment>',
+            `#include <lights_physical_fragment>
+material.specularColor = 0.04 * uSpec * mix( vec3( 1.0 ), gHairTint, 0.75 );
+material.specularColorBlended = material.specularColor;
+material.specularF90 = 0.5 * uSpec;`,
+          )
           .replace(
             '#include <map_fragment>',
             `{
@@ -482,7 +770,8 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
 	vec3 id = texture2D( uRamp, vec2( pk.g, 0.75 ) ).rgb;
 	vec3 col = rt * min( id * uIdGain, vec3( 1.0 ) );
 	col *= mix( 1.0 - 0.5 * uShadow, 1.0, smoothstep( 0.0, 0.3, pk.r ) );
-	diffuseColor.rgb *= col;
+	diffuseColor.rgb *= col * uAlbedo;
+	gHairTint = col / max( max( col.r, max( col.g, col.b ) ), 1e-3 );
 }`,
           );
       };

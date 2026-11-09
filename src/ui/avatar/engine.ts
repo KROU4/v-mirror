@@ -7,10 +7,13 @@ import { AssetStore } from './assets';
 import { Character } from './character';
 import type { AvatarLook } from './look';
 import { Materials } from './materials';
-import { bodyModeFor, cameraShot, cameraSlotFor, showcaseClipFor, type CameraSlot } from './slots';
+import { bodyModeFor, cameraShot, cameraSlotFor, type CameraSlot } from './slots';
 import { CameraRig, LightRig } from './stage';
 
 export type { AvatarLook } from './look';
+
+/** Скорость поворота V при зажатой Q/E, °/с (в игре поворот идёт, пока клавиша нажата). */
+export const SPIN_DEG_PER_S = 150;
 
 export interface SlotFocus {
   slotId?: string;
@@ -35,6 +38,11 @@ export class AvatarEngine {
   private slot: CameraSlot = 'UI_Skin';
   private yawTarget = 0;
   private yaw = 0;
+  /** −1, 0, 1 — пока зажата Q или E */
+  private spin = 0;
+  private followW = 0;
+  private drift = new THREE.Vector3();
+  private follow = new THREE.Vector3();
   private raf = 0;
   private last = performance.now();
   private visible = !document.hidden;
@@ -82,13 +90,26 @@ export class AvatarEngine {
 
   private frame(dt: number) {
     this.rig.update(dt);
-    // Инерция поворота, как yawSpeed у куклы в игре
+    // Поворот: Q/E держат постоянную скорость, цель отслеживается с инерцией (yawSpeed куклы)
+    if (this.spin) this.yawTarget += this.spin * SPIN_DEG_PER_S * dt;
     this.yaw += (this.yawTarget - this.yaw) * (1 - Math.exp(-dt * 8));
     const ch = this.active;
     if (ch) {
       ch.root.rotation.y = THREE.MathUtils.degToRad(this.yaw);
       ch.root.updateMatrixWorld(true);
+      // Улыбка «Зубы» ждёт только выхода из позы ногтей: там рука ещё опускается, голова
+      // наклонена, и улыбка поверх этого выглядит оскалом исподлобья. Переезд «рост → крупный
+      // план» её не задерживает — лицевой граф игры от клипа тела не зависит
+      ch.face.teethTarget = this.slot === 'UI_Teeth' && !ch.anim.handUp ? 1 : 0;
       ch.update(dt, this.rig.camera.position);
+      // Крупные планы: прицел мягко идёт за головой по горизонтали и глубине
+      const want = bodyModeFor(this.slot) === 'closeup' ? 1 : 0;
+      this.followW += (want - this.followW) * (1 - Math.exp(-dt / 0.6));
+      ch.headDrift(this.drift);
+      this.drift.y = 0;
+      this.drift.multiplyScalar(this.followW);
+      this.follow.lerp(this.drift, 1 - Math.exp(-dt / 0.35));
+      this.rig.setFollow(this.follow);
     }
     this.renderer.render(this.scene, this.rig.camera);
   }
@@ -155,27 +176,42 @@ export class AvatarEngine {
     const ch = this.active;
     if (!ch) return;
     this.rig.setShot(cameraShot(this.slot, ch.gender), immediate);
-    ch.anim.request(bodyModeFor(this.slot), showcaseClipFor(this.slot));
-    ch.face.teethTarget = this.slot === 'UI_Teeth' ? 1 : 0;
+    ch.anim.request(bodyModeFor(this.slot));
   }
 
   setYaw(deg: number) {
     this.yawTarget = deg;
   }
 
+  /** Непрерывный поворот: dir = −1 / 1 пока клавиша зажата, 0 — стоп. Угол не ограничен. */
+  setSpin(dir: number) {
+    this.spin = Math.sign(dir);
+  }
+
+  /** Целевой угол поворота, ° (после вращения клавишами его забирает интерфейс). */
+  get yawDeg() {
+    return this.yawTarget;
+  }
+
   /**
    * gapLeft..gapRight — видимый промежуток холста между колонками интерфейса (в пикселях
    * холста). Персонаж встаёт в его середину и уменьшается, если промежуток узкий.
+   * insetBottom — сколько пикселей снизу закрыто плашкой описания (на телефоне): кадр
+   * ужимается в оставшуюся высоту и поднимается, чтобы рот и подбородок не уходили под неё.
    */
-  resize(w: number, h: number, gapLeft = 0, gapRight = w) {
+  resize(w: number, h: number, gapLeft = 0, gapRight = w, insetBottom = 0) {
     if (w < 1 || h < 1) return;
     this.renderer.setSize(w, h, false);
     const cam = this.rig.camera;
     cam.aspect = w / h;
     const gap = Math.max(1, gapRight - gapLeft);
-    cam.zoom = Math.min(1, (gap / h) * 1.3);
+    const inset = THREE.MathUtils.clamp(insetBottom, 0, h * 0.4);
+    // Почти квадратный холст (телефон): кадр слотов рассчитан на широкий экран, и на крупных
+    // планах макушка уходит за верхний край — отъезжаем чуть дальше
+    const narrow = w / h < 1.3 ? 0.86 : 1;
+    cam.zoom = Math.min(1, (gap / h) * 1.3) * ((h - inset) / h) * narrow;
     const center = (gapLeft + gapRight) / 2 / w;
-    cam.setViewOffset(w, h, (0.5 - center) * w, 0, w, h);
+    cam.setViewOffset(w, h, (0.5 - center) * w, inset / 2, w, h);
     cam.updateProjectionMatrix();
   }
 

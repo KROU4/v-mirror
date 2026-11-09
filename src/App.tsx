@@ -53,7 +53,9 @@ function initialStates(): Record<Gender, CharacterState> {
 }
 
 const isMorph = (id: string): id is MorphSlot => (MORPH_SLOTS as string[]).includes(id);
-const swatchOf = (o: Option | undefined) => o?.iris ?? o?.hex;
+/** Натуральные зубы (вариант 00) в каталоге без цвета: образец — цвет эмали, а не чёрный. */
+const NATURAL_TEETH = '#d9cfbd';
+const swatchOf = (o: Option | undefined) => o?.iris ?? o?.hex ?? (o?.app && /_ht_000__basehead$/.test(o.app) ? NATURAL_TEETH : undefined);
 const hasSwatches = (vs: VisibleSlot) => vs.variant.options.some((o) => o.hex || o.iris);
 const BODY_LABEL: Record<Gender, string> = { male: 'Тип тела 1', female: 'Тип тела 2' };
 
@@ -70,6 +72,8 @@ export default function App() {
   const [current, setCurrent] = useState('skin_color');
   const [picker, setPicker] = useState(false);
   const [yaw, setYaw] = useState(DEFAULT_YAW);
+  /** Q/E: V вращается, пока клавиша зажата (как в игре), без ограничения угла */
+  const [spin, setSpin] = useState(0);
   // Отметки «выставлено» и точки подбора по фото у каждого тела свои
   const [doneAll, setDoneAll] = useState<Record<Gender, Record<string, boolean>>>({ male: {}, female: {} });
   const [provAll, setProvAll] = useState<Record<Gender, Record<string, ScanProvenance>>>({ male: {}, female: {} });
@@ -282,8 +286,10 @@ export default function App() {
         else if (mode === 'scan') goMode('edit');
         return;
       }
-      if (k === 'q' || k === 'й') return setYaw((y) => Math.max(-170, y - 20));
-      if (k === 'e' || k === 'у') return setYaw((y) => Math.min(170, y + 20));
+      if (k === 'q' || k === 'й' || k === 'e' || k === 'у') {
+        e.preventDefault();
+        return setSpin(k === 'q' || k === 'й' ? -1 : 1);
+      }
       if (mode !== 'edit' || !cur) return;
       const inPicker = t instanceof Element && !!t.closest('.picker-grid');
       if (e.key === 'ArrowRight') { e.preventDefault(); stepRow(cur, 1); }
@@ -304,6 +310,21 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [mode, cur, picker, stepRow, moveRow, shuffle, copySheet, share, closePicker, goMode]);
+
+  useEffect(() => {
+    const onUp = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (k === 'q' || k === 'й') setSpin((s) => (s < 0 ? 0 : s));
+      else if (k === 'e' || k === 'у') setSpin((s) => (s > 0 ? 0 : s));
+    };
+    const stop = () => setSpin(0);
+    window.addEventListener('keyup', onUp);
+    window.addEventListener('blur', stop);
+    return () => {
+      window.removeEventListener('keyup', onUp);
+      window.removeEventListener('blur', stop);
+    };
+  }, []);
 
   const applyScan = (next: CharacterState, provenance: Record<string, ScanProvenance>) => {
     update(next);
@@ -367,6 +388,7 @@ export default function App() {
           focus={focus}
           yaw={yaw}
           onYaw={setYaw}
+          spin={spin}
           fallback={<Portrait state={state} className="portrait-fallback" />}
         />
         {scanMounted && (

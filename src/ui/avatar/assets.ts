@@ -29,7 +29,10 @@ export interface FacePart {
 }
 export interface EyeEntry {
   eyeball: { shader: string; maps: { albedo: string; normal?: string | null; orm?: string | null } };
-  eye_wetness?: { maps: { maskA: string }; params: { ShadowColor: string; Intensity: number; Exponent: number } };
+  eye_wetness?: {
+    maps: { maskA: string; maskRGBA?: string };
+    params: { ShadowColor: string; Intensity: number; Exponent: number; WetnessStrength?: number };
+  };
 }
 export interface LashEntry {
   eyelashes: { maps: { alpha: string }; suggestedColor: { product: string } };
