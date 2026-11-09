@@ -252,7 +252,9 @@ a { color: var(--signal); text-underline-offset: 3px; }
 .tabs button { border: 0; background: transparent; padding: 8px 12px; color: var(--ink-3); font: 600 15px/1 var(--font-sign); letter-spacing: 0.05em; text-transform: uppercase; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .tabs button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--signal); }
 
-.toast-host { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; max-width: calc(100vw - 32px); }
+/* Контейнер на всю ширину с полями 16px: тост не сжимается до половины экрана на телефоне */
+.toast-host { position: fixed; left: 16px; right: 16px; bottom: 24px; z-index: 10; display: flex; justify-content: center; pointer-events: none; }
+.toast-host > * { pointer-events: auto; }
 .toast {
   display: flex; align-items: center; gap: 14px; background: var(--ink); color: var(--ground);
   padding: 8px 8px 8px 16px; min-height: 44px; border-radius: var(--radius); font-weight: 600; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
