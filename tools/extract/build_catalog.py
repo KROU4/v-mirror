@@ -352,6 +352,14 @@ def build(gender: str, cc: Path, ru, en, atlas_colors, atlas_index, hairs) -> di
                     if iris and rec["slot"] == "eyes_color":
                         opt["iris"] = iris
                     rec["options"].append(opt)
+            # В данных игры встречаются повторы индекса (женский нос: h112 и h172 оба index=17).
+            # Внутри приложения индекс должен быть уникальным: берём позицию в списке,
+            # а исходный индекс сохраняем. Игрок всё равно выставляет номер по позиции.
+            idx = [o["i"] for o in rec["options"]]
+            if len(set(idx)) != len(idx):
+                for pos, o in enumerate(rec["options"]):
+                    o["gameIndex"] = o["i"]
+                    o["i"] = pos
             variants.append(rec)
 
     by_name = {r["name"]: r for r in variants}

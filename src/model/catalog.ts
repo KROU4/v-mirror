@@ -8,6 +8,8 @@ export type Loc = { ru: string; en: string };
 
 export interface Option {
   i: number;
+  /** исходный индекс из файла игры, если в нём были повторы (тогда i = позиция) */
+  gameIndex?: number;
   label: Loc;
   tags: string[];
   rating: [number, number];

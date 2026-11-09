@@ -125,13 +125,23 @@ function applyMorph(morph: string | null) {
  */
 function geometryStats(morph: string | null | undefined) {
   if (!morph || morph === 'None') return null;
-  const head = morphMeshes.reduce((a, b) =>
-    a.geometry.getAttribute('position').count >= b.geometry.getAttribute('position').count ? a : b,
-  );
-  const key = Object.keys(head.morphTargetDictionary).find((k) => k === morph || k.startsWith(morph + '_'));
-  if (key === undefined) return null;
-  const pos = head.geometry.getAttribute('position');
-  const delta = head.geometry.morphAttributes.position?.[head.morphTargetDictionary[key]];
+  // Берём подмеш головы, в котором этот морф сдвигает вершины сильнее всего
+  // (у женской головы морфы разных зон лежат в разных подмешах).
+  const keyOf = (m: MorphMesh) => Object.keys(m.morphTargetDictionary).find((k) => k === morph || k.startsWith(morph + '_'));
+  const strength = (m: MorphMesh) => {
+    const k = keyOf(m);
+    const d = k === undefined ? undefined : m.geometry.morphAttributes.position?.[m.morphTargetDictionary[k]];
+    if (!d) return 0;
+    let s = 0;
+    for (let i = 0; i < d.count; i++) s += Math.hypot(d.getX(i), d.getY(i), d.getZ(i));
+    return s;
+  };
+  const head = morphMeshes.map((m) => ({ m, s: strength(m) })).sort((a, b) => b.s - a.s)[0];
+  if (!head || head.s === 0) return null;
+  const key = keyOf(head.m)!;
+  const headMesh = head.m;
+  const pos = headMesh.geometry.getAttribute('position');
+  const delta = headMesh.geometry.morphAttributes.position?.[headMesh.morphTargetDictionary[key]];
   if (!delta) return null;
   let maxD = 0;
   for (let i = 0; i < pos.count; i++) maxD = Math.max(maxD, Math.hypot(delta.getX(i), delta.getY(i), delta.getZ(i)));
