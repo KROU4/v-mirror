@@ -20,7 +20,7 @@ export const LINES: Line[] = [
     slots: ['eyes', 'eyes_color', 'eyebrows', 'eyebrows_color', 'eyelash_color'],
   },
   { id: 'face', code: 'F', label: { ru: 'Лицо', en: 'Face' }, color: 'var(--line-face)', slots: ['nose', 'mouth', 'jaw', 'ear', 'teeth'] },
-  { id: 'beard', code: 'B', label: { ru: 'Борода', en: 'Beard' }, color: 'var(--line-hair)', slots: ['beard', 'beard_part', 'beard_color'] },
+  { id: 'beard', code: 'B', label: { ru: 'Борода', en: 'Beard' }, color: 'var(--line-beard)', slots: ['beard', 'beard_part', 'beard_color'] },
   {
     id: 'mods',
     code: 'M',

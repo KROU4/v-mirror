@@ -3,6 +3,7 @@ import { displayNumber, type Gender, type Option } from './model/catalog';
 import {
   decodeState,
   defaultState,
+  effectiveDefault,
   encodeState,
   gameSheet,
   randomize,
@@ -13,6 +14,7 @@ import {
 } from './model/state';
 import { morphInfo, MORPH_SLOTS, type MorphSlot } from './model/descriptors';
 import { LINES, LINE_OF_SLOT } from './ui/lines';
+import { pad2 } from './ui/format';
 import Portrait from './ui/Portrait';
 import type { ScanProvenance } from './scan/ScanPanel';
 // Панель скана тянет MediaPipe и данные подбора — грузим её только при первом открытии
@@ -65,7 +67,7 @@ export default function App() {
   const [current, setCurrent] = useState('skin_color');
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [prov, setProv] = useState<Record<string, ScanProvenance>>({});
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
 
   const state = states[gender];
@@ -76,16 +78,30 @@ export default function App() {
   useEffect(() => store.set('vm.states', states), [states]);
   useEffect(() => store.set('vm.gender', gender), [gender]);
 
-  const flash = useCallback((msg: string) => {
-    setToast(msg);
+  const flash = useCallback((text: string, undo?: () => void) => {
+    setToast({ text, undo });
     window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 2200);
+    toastTimer.current = window.setTimeout(() => setToast(null), undo ? 5000 : 2200);
   }, []);
 
   const update = useCallback(
     (next: CharacterState) => setStates((all) => ({ ...all, [next.gender]: next })),
     [],
   );
+
+  /** Массовая замена (Случайно, Сброс): запоминаем прежнее, чтобы вернуть одним нажатием. */
+  const replaceAll = (next: CharacterState, msg: string, clearDone: boolean) => {
+    const before = { state, prov, done };
+    update(next);
+    setProv({});
+    if (clearDone) setDone({});
+    flash(msg, () => {
+      update(before.state);
+      setProv(before.prov);
+      setDone(before.done);
+      setToast(null);
+    });
+  };
 
   const choose = useCallback(
     (vs: VisibleSlot, i: number) => {
@@ -119,8 +135,9 @@ export default function App() {
   useEffect(() => {
     if (mode !== 'edit') return;
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement;
-      if (t.closest('input, textarea, select')) return;
+      const t = e.target;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (t instanceof Element && t.closest('input, textarea, select, [role="tablist"], .seg')) return;
       if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
       if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
       if (e.key === 'ArrowDown') { e.preventDefault(); moveStation(1); }
@@ -147,7 +164,7 @@ export default function App() {
       const rows = sheet.filter((r) => LINE_OF_SLOT.get(r.slotId)?.id === line.id);
       if (!rows.length) continue;
       lines.push('', line.label.ru.toUpperCase());
-      for (const r of rows) lines.push(`  ${r.label.ru}: ${r.number} из ${r.total}${r.value.ru && !/^\d+$/.test(r.value.ru) ? ` (${r.value.ru})` : ''}`);
+      for (const r of rows) lines.push(`  ${r.label.ru}: ${pad2(r.number)} из ${pad2(r.total)}${r.value.ru && !/^\d+$/.test(r.value.ru) ? ` (${r.value.ru})` : ''}`);
     }
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -181,10 +198,10 @@ export default function App() {
             </button>
           ))}
         </div>
-        <button className="btn ghost" onClick={() => { update(randomize(gender, 3)); setProv({}); }} title="Случайная внешность (обыденная)" aria-label="Случайно">
+        <button className="btn ghost" onClick={() => replaceAll(randomize(gender, 3, Math.random, true, state), 'Лицо собрано случайно', false)} title="Случайное лицо (обыденное), тело не меняется" aria-label="Случайно">
           <IconShuffle /> <span className="btn-label">Случайно</span>
         </button>
-        <button className="btn ghost" onClick={() => { update(defaultState(gender)); setProv({}); setDone({}); }} title="Сбросить к значениям игры по умолчанию" aria-label="Сброс">
+        <button className="btn ghost" onClick={() => replaceAll(defaultState(gender), 'Все слоты сброшены к значениям игры', true)} title="Сбросить к значениям игры по умолчанию" aria-label="Сброс">
           <IconReset /> <span className="btn-label">Сброс</span>
         </button>
         <button className="btn ghost" onClick={share} title="Скопировать ссылку на эту V" aria-label="Ссылка">
@@ -227,9 +244,9 @@ export default function App() {
                         >
                           {pv && <span className="scan-dot" style={{ width: 4 + pv.conf * 6, height: 4 + pv.conf * 6 }} title={`Подобрано (${pv.src})`} />}
                           <span>{vs.slot.label.ru}</span>
-                          <span className={`val ${vs.value !== vs.variant.defaultIndex ? 'changed' : ''}`}>
+                          <span className={`val ${vs.value !== effectiveDefault(vs.variant) ? 'changed' : ''}`}>
                             {swatch && <i style={{ background: swatch }} />}
-                            {String(displayNumber(vs.variant, vs.value)).padStart(2, '0')}
+                            {pad2(displayNumber(vs.variant, vs.value))}
                           </span>
                         </button>
                       </li>
@@ -259,7 +276,9 @@ export default function App() {
               <button className="btn" onClick={copySheet}>
                 <IconCopy /> Копировать
               </button>
-              <button className="btn ghost" onClick={() => setDone({})}>Снять отметки</button>
+              <button className="btn ghost" onClick={() => setDone({})} disabled={!Object.values(done).some(Boolean)}>
+                Снять отметки
+              </button>
             </div>
           </div>
           <ol>
@@ -267,7 +286,7 @@ export default function App() {
               const rows = sheet.filter((r) => LINE_OF_SLOT.get(r.slotId)?.id === line.id);
               if (!rows.length) return null;
               return [
-                <li key={line.id} className="group" style={{ '--c': line.color } as CSSProperties}>
+                <li key={`line:${line.id}`} className="group" style={{ '--c': line.color } as CSSProperties}>
                   {line.label.ru}
                 </li>,
                 ...rows.map((r) => (
@@ -279,16 +298,17 @@ export default function App() {
                       aria-label={`${r.label.ru}: выставлено`}
                       onClick={() => setDone((d) => ({ ...d, [r.slotId]: !d[r.slotId] }))}
                     >
-                      {done[r.slotId] && <IconCheck />}
+                      <span className="box">{done[r.slotId] && <IconCheck />}</span>
                     </button>
                     <span className="name">
                       {r.label.ru}
+                      {done[r.slotId] && <span className="stamp">Выставлено</span>}
                       {r.value.ru && !/^\d+$/.test(r.value.ru) && <small>{r.value.ru}</small>}
                     </span>
                     <span className="num">
                       {r.hex && <i style={{ background: r.hex }} />}
-                      {r.number}
-                      <small className="muted">/{r.total}</small>
+                      {pad2(r.number)}
+                      <small className="muted">/{pad2(r.total)}</small>
                     </span>
                   </li>
                 )),
@@ -297,7 +317,18 @@ export default function App() {
           </ol>
         </aside>
       </div>
-      {toast && <div className="toast" role="status">{toast}</div>}
+      <div className="toast-host" role="status" aria-live="polite">
+        {toast && (
+          <div className="toast">
+            <span>{toast.text}</span>
+            {toast.undo && (
+              <button className="toast-undo" onClick={toast.undo}>
+                Отменить
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -331,20 +362,29 @@ function Editor({
   const total = vs.variant.options.length;
   const hasSwatches = vs.variant.options.some((o) => o.hex || o.iris);
   const caption = optionCaption(vs.slot.id, vs.option, state.gender);
+  const gridRef = useRef<HTMLDivElement>(null);
+  // Роуминговый tabindex: если фокус был в сетке, он идёт за выбранной ячейкой
+  useEffect(() => {
+    const g = gridRef.current;
+    if (g && g.contains(document.activeElement) && document.activeElement?.getAttribute('aria-checked') !== 'true') {
+      g.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+    }
+  }, [vs.value]);
   return (
     <div style={style}>
       <div className="stage-head">
         <Portrait state={state} className="portrait" />
         <div className="sign">
-          <div className="crumbs">
-            <span className="line-badge" style={{ background: line?.color }}>{line?.code}</span>
-            {line?.label.ru}
-          </div>
-          <h1>{vs.slot.label.ru}</h1>
+          <h1>
+            <span className="line-badge" role="img" aria-label={`Линия «${line?.label.ru ?? ''}»`} title={line?.label.ru}>
+              {line?.code}
+            </span>
+            {vs.slot.label.ru}
+          </h1>
           <div className="stop">
             <div className="stop-num" aria-live="polite">
-              {String(num).padStart(2, '0')}
-              <small>/ {total}</small>
+              {pad2(num)}
+              <small>/ {pad2(total)}</small>
             </div>
             <div className="stop-nav">
               <button className="btn" onClick={() => onStep(-1)} aria-label="Предыдущий вариант">
@@ -355,28 +395,31 @@ function Editor({
               </button>
             </div>
           </div>
-          <div className="stop-label">{caption ? <b>{caption}</b> : <span className="muted">Вариант {num}</span>}</div>
+          <div className="stop-label">{caption && <b>{caption}</b>}</div>
           <div className="hint">
             <span className="kbd">←</span> <span className="kbd">→</span> вариант · <span className="kbd">↑</span> <span className="kbd">↓</span> слот
           </div>
         </div>
       </div>
 
-      <div className="grid" role="radiogroup" aria-label={vs.slot.label.ru}>
+      <div className="grid" role="radiogroup" aria-label={vs.slot.label.ru} ref={gridRef}>
         {vs.variant.options.map((o, k) => {
           const sw = o.iris ?? o.hex;
           const isScan = prov && prov.value === o.i;
+          const cap = optionCaption(vs.slot.id, o, state.gender);
           return (
             <button
               key={o.i}
               role="radio"
               aria-checked={o.i === vs.value}
+              tabIndex={o.i === vs.value ? 0 : -1}
+              aria-label={cap ? `${pad2(k + 1)} — ${cap}` : pad2(k + 1)}
               className={`cell ${sw ? 'swatch' : ''}`}
-              title={optionCaption(vs.slot.id, o, state.gender) || `Вариант ${k + 1}`}
+              title={cap || undefined}
               onClick={() => onChoose(o.i)}
             >
               {sw && <span className="sw" style={{ background: sw }} />}
-              <span className="n">{k + 1}</span>
+              <span className="n">{pad2(k + 1)}</span>
               {!sw && vs.slot.id === 'hairstyle' && o.tags[0] && <span className="tag">{tagRu(o.tags[0])}</span>}
               {isScan && <span className="pick" />}
             </button>
@@ -390,7 +433,7 @@ function Editor({
             <>
               <dt>Подбор по фото</dt>
               <dd>
-                Вариант {displayNumber(vs.variant, prov.value)} · {prov.src === 'llm' ? 'модель' : prov.src === 'local' ? 'измерение' : 'вручную'} · уверенность {Math.round(prov.conf * 100)}%
+                Вариант {pad2(displayNumber(vs.variant, prov.value))} ·{prov.src === 'llm' ? 'модель' : prov.src === 'local' ? 'измерение' : 'вручную'} · уверенность {Math.round(prov.conf * 100)}%
                 {prov.why ? ` — ${prov.why}` : ''}
               </dd>
             </>

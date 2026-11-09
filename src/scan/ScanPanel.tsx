@@ -5,6 +5,7 @@ import { analyzePhoto, type PhotoAnalysis } from './analyze';
 import { applySuggestions, localSuggestions, mergeSuggestions, type Source, type Suggestion } from './match';
 import { buildPrompt, callOpenRouter, DEFAULT_MODELS, listVisionModels, parseLlm, photoToDataUrl, type ModelInfo } from './llm';
 import { IconCopy, IconDownload, IconUpload } from '../ui/Icons';
+import { pad2 } from '../ui/format';
 
 export interface ScanProvenance {
   src: Source;
@@ -262,17 +263,20 @@ export default function ScanPanel({
               }}
             >
               <IconUpload />
-              <b>Перетащите фото сюда</b>
-              <span>или нажмите, чтобы выбрать файл</span>
+              <b>
+                <span className="fine-only">Перетащите фото сюда</span>
+                <span className="touch-only">Выберите фото</span>
+              </b>
+              <span className="fine-only">или нажмите, чтобы выбрать файл</span>
               <span className="muted">JPG, PNG, WebP · одно лицо, анфас</span>
-              <input type="file" accept="image/*" hidden onChange={(e: ChangeEvent<HTMLInputElement>) => onFile(e.target.files?.[0])} />
+              <input className="vh" type="file" accept="image/*" onChange={(e: ChangeEvent<HTMLInputElement>) => onFile(e.target.files?.[0])} />
             </label>
           )}
           {imgUrl && (
             <div className="row">
               <label className="btn">
                 <IconUpload /> Другое фото
-                <input type="file" accept="image/*" hidden onChange={(e: ChangeEvent<HTMLInputElement>) => onFile(e.target.files?.[0])} />
+                <input className="vh" type="file" accept="image/*" onChange={(e: ChangeEvent<HTMLInputElement>) => onFile(e.target.files?.[0])} />
               </label>
               <div className="seg" role="group" aria-label="Для какого V подбирать">
                 {(['male', 'female'] as Gender[]).map((g) => (
@@ -304,7 +308,7 @@ export default function ScanPanel({
                   ) : null,
                 )}
               </div>
-              {Math.abs(analysis.yaw) > 12 && <p className="status err" style={{ marginBottom: 0 }}>Голова повёрнута на {Math.abs(analysis.yaw).toFixed(0)}° — форма лица измерена неточно.</p>}
+              {Math.abs(analysis.yaw) > 12 && <p className="status warn" style={{ marginBottom: 0 }}>Голова повёрнута на {Math.abs(analysis.yaw).toFixed(0)}° — форма лица измерена неточно.</p>}
             </div>
           )}
         </div>
@@ -326,10 +330,11 @@ export default function ScanPanel({
           {!imgUrl && !error && (
             <div className="panel">
               <h3>Как это работает</h3>
-              <p className="muted" style={{ margin: 0 }}>
-                1. Детектор находит 478 точек лица и измеряет пропорции глаз, носа, рта и челюсти — так же, как мы измерили каждый вариант головы V в игре. 2. Цвета кожи, радужки,
-                волос и бровей сравниваются с образцами игры. 3. Модель (по вашему ключу OpenRouter) уточняет то, что не измерить линейкой: причёску, бороду, шрамы, веснушки.
-              </p>
+              <ol className="steps">
+                <li>Детектор находит 478 точек лица и измеряет пропорции глаз, носа, рта и челюсти — так же, как измерен каждый вариант головы V в игре.</li>
+                <li>Цвета кожи, радужки, волос и бровей сравниваются с образцами игры.</li>
+                <li>Модель (по вашему ключу OpenRouter) уточняет то, что не измерить линейкой: причёску, бороду, шрамы, веснушки.</li>
+              </ol>
             </div>
           )}
 
@@ -434,7 +439,7 @@ export default function ScanPanel({
                     </span>
                     <span className="num" style={{ font: '700 22px/1 var(--font-sign)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                       {(v!.option?.iris ?? v!.option?.hex) && <i style={{ width: 14, height: 14, borderRadius: 3, background: v!.option?.iris ?? v!.option?.hex }} />}
-                      {displayNumber(v!.variant, v!.value)}
+                      {pad2(displayNumber(v!.variant, v!.value))}
                     </span>
                   </li>
                 ))}

@@ -19,7 +19,7 @@ STORY: Игрок видит маршрут всех слотов, едет по
 
 FIRST VIEWPORT: слева вертикальная схема линий (Кожа→Тело) со станциями; в центре крупная табличка «07 / 21» и сетка вариантов-ячеек, над ней пиктограмма-бюст; справа маршрутный лист. Главное действие «СКАН ФОТО» в верхней панели справа.
 
-FORM: candidate 3 of 7 (Night City transit wayfinding: NCART-подобная схема). seed: 1a092c4c41501aff
+FORM: candidate 3 of 7 (Night City transit wayfinding: NCART-подобная схема). seed:89fff10f8b9cc4cb
 Raises: Saville catalog — номер варианта как единственный заголовок; doujin catalog — ячейки с кодами, активная обведена; star atlas — уверенность подбора как шкала диаметров точек; ticket wallet — строки листа штампуются «ВЫСТАВЛЕНО»; type specimen — живой числовой отсчёт текущих значений.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
