@@ -99,11 +99,40 @@ function devSave(): Plugin {
 }
 
 /**
- * Меши головы и причёсок из локальной выгрузки игры (tools/local, в git не попадает)
- * отдаются по /game/... и в dev, и в preview. Нет выгрузки — 404, и приложение
- * показывает схематичный портрет вместо 3D-головы.
+ * Меши, текстуры, анимации и манифесты из локальной выгрузки игры (tools/local, в git
+ * не попадает) отдаются по /game/<раздел>/... и в dev, и в preview. Нет выгрузки — 404,
+ * и приложение показывает схематичный портрет вместо 3D-персонажа.
  */
-const GAME_DIRS: Record<string, string> = { glb: 'tools/local/glb', hair: 'tools/local/hair', renders: 'tools/local/renders' };
+const GAME_DIRS: Record<string, string> = {
+  glb: 'tools/local/glb',
+  hair: 'tools/local/hair',
+  renders: 'tools/local/renders',
+  tex: 'tools/local/tex',
+  body: 'tools/local/body',
+};
+const GAME_TYPES: Record<string, string> = {
+  glb: 'model/gltf-binary',
+  json: 'application/json',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+};
+/** Не больше 5 сегментов после раздела; каждый — без ведущей точки и без «..» */
+const SEGMENT = /^[\w][\w.-]*$/;
+const MAX_DEPTH = 5;
+
+/** /game/<раздел>/<путь> → относительный путь файла в tools/local или null. Экспорт — для тестов. */
+export function gameAssetPath(urlPath: string): { file: string; ext: string } | null {
+  const parts = urlPath.split('/');
+  if (parts[0] !== '' || parts.length < 3) return null;
+  const section = parts[1];
+  const rest = parts.slice(2);
+  if (!Object.hasOwn(GAME_DIRS, section) || rest.length > MAX_DEPTH) return null;
+  if (!rest.every((s) => SEGMENT.test(s) && !s.includes('..'))) return null;
+  const ext = /\.([a-z0-9]+)$/i.exec(rest[rest.length - 1])?.[1].toLowerCase() ?? '';
+  if (!Object.hasOwn(GAME_TYPES, ext)) return null;
+  return { file: path.join(GAME_DIRS[section], ...rest), ext };
+}
+
 function gameAssets(): Plugin {
   const handler = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
@@ -117,10 +146,10 @@ function gameAssets(): Plugin {
     } catch {
       return notFound(400); // битая %-последовательность не должна ронять мидлварь
     }
-    const m = /^\/(glb|hair|renders)\/((?:(?:male|female)\/)?[\w.-]+\.(glb|json|png))$/.exec(p);
-    const dir = m && Object.hasOwn(GAME_DIRS, m[1]) ? GAME_DIRS[m[1]] : undefined;
-    if (!m || !dir || m[2].includes('..')) return notFound();
-    const file = path.join(root, dir, m[2]);
+    if (p.includes('\0') || p.includes('\\')) return notFound(400);
+    const hit = gameAssetPath(p);
+    if (!hit) return notFound();
+    const file = path.join(root, hit.file);
     fs.stat(file, (err, st) => {
       if (err || !st.isFile()) return notFound();
       // Выгрузку можно пересобрать — кешируем с проверкой, а не на час вслепую
@@ -131,7 +160,7 @@ function gameAssets(): Plugin {
         res.statusCode = 304;
         return res.end();
       }
-      res.setHeader('Content-Type', m[3] === 'json' ? 'application/json' : m[3] === 'png' ? 'image/png' : 'model/gltf-binary');
+      res.setHeader('Content-Type', GAME_TYPES[hit.ext]);
       res.setHeader('Content-Length', String(st.size));
       if (req.method === 'HEAD') return res.end();
       // pipeline закрывает файл, если клиент оборвал загрузку

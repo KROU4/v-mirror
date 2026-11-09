@@ -1,74 +1,53 @@
-// Центр экрана: 3D-голова V, как в редакторе игры. Меши берутся из локальной выгрузки
-// игры (/game/...). Если её нет или WebGL недоступен — показываем схематичный портрет.
+// Центр экрана: V в полный рост из файлов игры, как в редакторе — живой персонаж,
+// камера едет к выбранной части тела. Ассеты берутся из локальной выгрузки (/game/...).
+// Если её нет или WebGL недоступен — показываем схематичный портрет.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { CharacterState } from '../model/state';
-import { slotValue, visibleSlots } from '../model/state';
-import type { HeadEngine, HeadLook } from './headEngine';
+import type { CharacterState } from '../../model/state';
+import type { AvatarEngine, SlotFocus } from './engine';
+import { lookOf } from './look';
 
-type Hints = Record<string, Record<string, string[]>>;
 type Status = 'probe' | 'loading' | 'ready' | 'missing';
 
-/** Как в игре: V смотрит вполоборота в сторону списка настроек */
+/** Как в игре: V стоит вполоборота в сторону списка настроек */
 export const DEFAULT_YAW = 14;
-let hintsPromise: Promise<Hints | null> | null = null;
-const loadHints = () =>
-  (hintsPromise ??= fetch('/game/hair/hint_meshes.json')
-    .then((r) => (r.ok && (r.headers.get('content-type') ?? '').includes('json') ? (r.json() as Promise<Hints>) : null))
-    .catch(() => null));
 
-function lookOf(state: CharacterState, hints: Hints | null): HeadLook {
-  const val = (id: string) => slotValue(state, id);
-  const morphs: string[] = [];
-  for (const vs of visibleSlots(state)) {
-    const m = vs.variant.type === 'morph' ? vs.option?.morph : undefined;
-    if (m && m !== 'None') morphs.push(m);
-  }
-  const hs = val('hairstyle')?.option;
-  const hint = Array.isArray(hs?.meshHint) ? hs?.meshHint[0] : hs?.meshHint;
-  return {
-    gender: state.gender,
-    morphs,
-    skin: val('skin_color')?.option?.hex,
-    hair: val('hair_color')?.option?.hex,
-    brows: val('eyebrows_color')?.option?.hex,
-    iris: val('eyes_color')?.option?.iris ?? val('eyes_color')?.option?.hex,
-    lashes: val('eyelash_color')?.option?.hex,
-    hairMeshes: (hint && hints?.[state.gender]?.[hint]) || [],
-  };
-}
+let probePromise: Promise<boolean> | null = null;
+/** Есть ли выгрузка игры: без неё 3D не грузим вовсе (three.js остаётся в отдельном чанке). */
+const probe = () =>
+  (probePromise ??= fetch('/game/hair/hint_meshes.json', { method: 'HEAD' })
+    .then((r) => r.ok && (r.headers.get('content-type') ?? '').includes('json'))
+    .catch(() => false));
 
-export default function HeadViewer({
+export default function AvatarViewer({
   state,
+  focus,
   yaw,
   onYaw,
   fallback,
 }: {
   state: CharacterState;
+  /** выбранная строка каталога — от неё кадр камеры и поза V */
+  focus: SlotFocus;
   yaw: number;
   onYaw: (deg: number) => void;
   fallback: ReactNode;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const engineRef = useRef<HeadEngine | null>(null);
+  const engineRef = useRef<AvatarEngine | null>(null);
   const [status, setStatus] = useState<Status>('probe');
-  const [hints, setHints] = useState<Hints | null>(null);
   const drag = useRef<{ x: number; yaw: number; id: number } | null>(null);
-  const look = useMemo(() => lookOf(state, hints), [state, hints]);
-  // Пока грузится чанк three.js, вид и угол могут измениться — движок стартует с последних
+  const look = useMemo(() => lookOf(state), [state]);
+  // Пока грузится чанк three.js, вид, кадр и угол могут измениться — движок стартует с последних
   const lookRef = useRef(look);
   lookRef.current = look;
   const yawRef = useRef(yaw);
   yawRef.current = yaw;
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
 
-  // Есть ли выгрузка игры: без неё 3D не грузим вовсе (three.js остаётся в отдельном чанке)
   useEffect(() => {
     let alive = true;
-    loadHints().then((h) => {
-      if (!alive) return;
-      if (!h) return setStatus('missing');
-      setHints(h);
-      setStatus('loading');
-    });
+    probe().then((ok) => alive && setStatus(ok ? 'loading' : 'missing'));
     return () => {
       alive = false;
     };
@@ -78,20 +57,21 @@ export default function HeadViewer({
     if (status === 'probe' || status === 'missing') return;
     const canvas = canvasRef.current;
     if (!canvas || engineRef.current) return;
-    let engine: HeadEngine | null = null;
+    let engine: AvatarEngine | null = null;
     let ro: ResizeObserver | null = null;
     let offResize = () => {};
     let cancelled = false;
-    import('./headEngine')
-      .then(({ HeadEngine }) => {
+    import('./engine')
+      .then(({ AvatarEngine }) => {
         if (cancelled) return;
         try {
-          engine = new HeadEngine(canvas);
+          engine = new AvatarEngine(canvas);
         } catch {
           return setStatus('missing'); // нет WebGL
         }
         engineRef.current = engine;
-        // Голова встаёт между колонкой типа тела и списком; в узкой раскладке колонок над ней нет
+        if (import.meta.env.DEV) (window as unknown as { __avatar?: AvatarEngine }).__avatar = engine;
+        // V встаёт между колонкой типа тела и списком; в узкой раскладке колонок над ней нет
         const fit = () => {
           const w = canvas.clientWidth;
           const h = canvas.clientHeight;
@@ -109,6 +89,7 @@ export default function HeadViewer({
         offResize = () => window.removeEventListener('resize', fit);
         fit();
         engine.setYaw(yawRef.current);
+        engine.setFocus(focusRef.current);
         engine
           .setLook(lookRef.current)
           .then((ok) => !cancelled && ok && setStatus('ready'))
@@ -122,7 +103,7 @@ export default function HeadViewer({
       engine?.dispose();
       engineRef.current = null;
     };
-    // Движок создаётся один раз после того, как выгрузка найдена; вид и угол обновляют эффекты ниже
+    // Движок создаётся один раз после того, как выгрузка найдена; вид, кадр и угол обновляют эффекты ниже
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status === 'probe' || status === 'missing']);
 
@@ -132,6 +113,10 @@ export default function HeadViewer({
       .then((ok) => ok && setStatus((s) => (s === 'loading' ? 'ready' : s)))
       .catch(() => setStatus('missing'));
   }, [look]);
+
+  useEffect(() => {
+    engineRef.current?.setFocus(focus);
+  }, [focus.slotId, focus.group, focus.variantName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     engineRef.current?.setYaw(yaw);
@@ -145,7 +130,7 @@ export default function HeadViewer({
         ref={canvasRef}
         className="head-canvas"
         role="img"
-        aria-label="3D-модель головы V с выбранными настройками. Перетащите, чтобы повернуть."
+        aria-label="3D-модель V с выбранными настройками. Перетащите, чтобы повернуть."
         onPointerDown={(e) => {
           drag.current = { x: e.clientX, yaw, id: e.pointerId };
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -161,7 +146,7 @@ export default function HeadViewer({
       />
       {status !== 'ready' && (
         <div className="head-loading" role="status">
-          <span>Загрузка модели головы</span>
+          <span>Загрузка модели V</span>
           <i />
         </div>
       )}

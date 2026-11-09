@@ -15,7 +15,7 @@ import { morphInfo, MORPH_SLOTS, type MorphSlot } from './model/descriptors';
 import { LINES, LINE_OF_SLOT } from './ui/lines';
 import { pad2 } from './ui/format';
 import Portrait from './ui/Portrait';
-import HeadViewer, { DEFAULT_YAW } from './ui/HeadViewer';
+import AvatarViewer, { DEFAULT_YAW } from './ui/avatar/AvatarViewer';
 import type { ScanProvenance } from './scan/ScanPanel';
 // Панель скана тянет MediaPipe и данные подбора — грузим её только при первом открытии
 const ScanPanel = lazy(() => import('./scan/ScanPanel'));
@@ -94,6 +94,11 @@ export default function App() {
   const slots = useMemo(() => visibleSlots(state), [state]);
   const sheet = useMemo(() => gameSheet(state), [state]);
   const cur = slots.find((s) => s.slot.id === current) ?? slots[0];
+  // Кадр камеры и поза V — по выбранной строке, как в редакторе игры
+  const focus = useMemo(
+    () => ({ slotId: cur?.slot.id, group: cur?.slot.group, variantName: cur?.variant.name }),
+    [cur?.slot.id, cur?.slot.group, cur?.variant.name],
+  );
 
   // Состояние из ссылки уже применено — убираем хеш, иначе перезагрузка затрёт последующие правки
   useEffect(() => {
@@ -357,7 +362,13 @@ export default function App() {
       </aside>
 
       <main className="cc-stage">
-        <HeadViewer state={state} yaw={yaw} onYaw={setYaw} fallback={<Portrait state={state} className="portrait-fallback" />} />
+        <AvatarViewer
+          state={state}
+          focus={focus}
+          yaw={yaw}
+          onYaw={setYaw}
+          fallback={<Portrait state={state} className="portrait-fallback" />}
+        />
         {scanMounted && (
           <section className="scan-wrap" aria-label="Скан фото" hidden={mode !== 'scan'}>
             <button className="scan-close" onClick={() => goMode('edit')} aria-label="Закрыть скан фото">
