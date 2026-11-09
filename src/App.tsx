@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { displayNumber, type Gender, type Option } from './model/catalog';
 import {
   decodeState,
@@ -14,7 +14,9 @@ import {
 import { morphInfo, MORPH_SLOTS, type MorphSlot } from './model/descriptors';
 import { LINES, LINE_OF_SLOT } from './ui/lines';
 import Portrait from './ui/Portrait';
-import ScanPanel, { type ScanProvenance } from './scan/ScanPanel';
+import type { ScanProvenance } from './scan/ScanPanel';
+// Панель скана тянет MediaPipe и данные подбора — грузим её только при первом открытии
+const ScanPanel = lazy(() => import('./scan/ScanPanel'));
 import { hairLabel } from './model/hair';
 import { browDescription } from './model/brows';
 import { IconCheck, IconCopy, IconLeft, IconLink, IconReset, IconRight, IconScan, IconShuffle } from './ui/Icons';
@@ -56,7 +58,10 @@ export default function App() {
     const h = decodeState(new URLSearchParams(location.hash.slice(1)).get('v') ?? '');
     return h?.gender ?? store.get<Gender>('vm.gender', 'male');
   });
-  const [mode, setMode] = useState<'edit' | 'scan'>('edit');
+  // ?scan=1 — сразу открыть скан фото (ссылка «сделай V по фото»)
+  const [mode, setMode] = useState<'edit' | 'scan'>(() =>
+    new URLSearchParams(window.location.search).get('scan') === '1' ? 'scan' : 'edit',
+  );
   const [current, setCurrent] = useState('skin_color');
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [prov, setProv] = useState<Record<string, ScanProvenance>>({});
@@ -237,7 +242,9 @@ export default function App() {
 
         <main className="stage">
           {mode === 'scan' ? (
-            <ScanPanel gender={gender} base={state} onApply={applyScan} onGender={setGender} />
+            <Suspense fallback={<p className="muted">Загружаю модуль скана…</p>}>
+              <ScanPanel gender={gender} base={state} onApply={applyScan} onGender={setGender} />
+            </Suspense>
           ) : cur ? (
             <Editor vs={cur} state={state} onChoose={(i) => choose(cur, i)} onStep={step} style={lineStyle(cur.slot.id)} prov={prov[cur.slot.id]} />
           ) : null}
