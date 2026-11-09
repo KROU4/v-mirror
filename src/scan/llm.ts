@@ -258,12 +258,36 @@ function jsonBlocks(s: string): string[] {
   return out;
 }
 
+/** Убирает запятые перед } и ] вне строк (слабые модели их оставляют). */
+function stripTrailingCommas(s: string): string {
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  for (let k = 0; k < s.length; k++) {
+    const ch = s[k];
+    if (inStr) {
+      out += ch;
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    if (ch === ',') {
+      let j = k + 1;
+      while (j < s.length && /\s/.test(s[j])) j++;
+      if (s[j] === '}' || s[j] === ']') continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 function parseLoose(block: string): unknown {
   try {
     return JSON.parse(block);
   } catch {
-    // Слабые модели оставляют запятые перед } и ]
-    return JSON.parse(block.replace(/,(\s*[}\]])/g, '$1'));
+    return JSON.parse(stripTrailingCommas(block));
   }
 }
 
@@ -272,6 +296,18 @@ export function extractJson(text: string): LlmJson {
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .replace(/```(?:json)?/gi, '');
   const blocks = jsonBlocks(cleaned);
+  // Незакрытая «{» в рассуждениях до ответа сбивает подсчёт глубины — тогда ищем от последнего
+  // объекта, который начинается с ключа "slots"/"bodyType"
+  const anchor = Math.max(cleaned.lastIndexOf('"slots"'), cleaned.lastIndexOf('"bodyType"'));
+  if (anchor > 0) {
+    for (let k = cleaned.lastIndexOf('{', anchor); k >= 0; k = cleaned.lastIndexOf('{', k - 1)) {
+      const tail = jsonBlocks(cleaned.slice(k));
+      if (tail.length) {
+        blocks.push(...tail);
+        break;
+      }
+    }
+  }
   if (!blocks.length) throw new Error('В ответе нет JSON');
   let fallback: LlmJson | null = null;
   // Ответ обычно в конце: идём с последнего блока, предпочитаем тот, где есть slots
@@ -343,7 +379,7 @@ export function parseLlm(gender: Gender, text: string, allowed?: readonly string
   const part = j.beard_part?.part;
   if (gender === 'male' && typeof part === 'string' && (!ok || ok.has('beard_part'))) {
     const key = part === 'full' ? '' : part;
-    if (key in BEARD_PART_RU) out.push({ slotId: 'beard_part', partKey: key, conf: 0.6, src: 'llm', why: BEARD_PART_RU[key] });
+    if (Object.hasOwn(BEARD_PART_RU, key)) out.push({ slotId: 'beard_part', partKey: key, conf: 0.6, src: 'llm', why: BEARD_PART_RU[key] });
   }
 
   const pres = j.present && typeof j.present === 'object' ? j.present : {};

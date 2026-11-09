@@ -40,7 +40,15 @@ function devSave(): Plugin {
         const host = req.headers.host;
         if (req.method !== 'POST' || req.headers['x-vmirror-save'] !== '1') return fail(403, 'forbidden');
         if (site && site !== 'same-origin') return fail(403, 'cross-site');
-        if (origin && host && new URL(origin).host !== host) return fail(403, 'cross-origin');
+        if (origin && host) {
+          let oh: string;
+          try {
+            oh = new URL(origin).host;
+          } catch {
+            return fail(403, 'bad origin');
+          }
+          if (oh !== host) return fail(403, 'cross-origin');
+        }
 
         const url = new URL(req.url ?? '', 'http://x');
         const rel = url.searchParams.get('file') ?? '';

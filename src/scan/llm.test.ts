@@ -20,6 +20,23 @@ describe('разбор ответа модели', () => {
     expect(extractJson(text).slots?.[nose]?.n).toBe(4);
   });
 
+  it('незакрытая скобка в рассуждениях не мешает найти ответ', () => {
+    const text = `Думаю: { вариант носа ... Итог:\n{"bodyType":"male","slots":{"${nose}":{"n":6}}}`;
+    expect(extractJson(text).slots?.[nose]?.n).toBe(6);
+  });
+
+  it('запятые внутри строк не трогаются при починке хвостовых запятых', () => {
+    const text = `{"slots":{"${nose}":{"n":2,"why":"прямой,}"},},"notes":"a,]b",}`;
+    const j = extractJson(text);
+    expect(j.slots?.[nose]?.why).toBe('прямой,}');
+    expect(j.notes).toBe('a,]b');
+  });
+
+  it('имена из прототипа не считаются частью бороды', () => {
+    const r = parseLlm('male', '{"slots":{},"beard_part":{"part":"constructor"}}', pack.slots);
+    expect(r.suggestions).toEqual([]);
+  });
+
   it('понятная ошибка, если JSON нет', () => {
     expect(() => extractJson('не знаю')).toThrow('В ответе нет JSON');
   });

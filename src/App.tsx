@@ -69,6 +69,7 @@ export default function App() {
   const [prov, setProv] = useState<Record<string, ScanProvenance>>({});
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
+  const gridFocusIntent = useRef(false);
 
   const state = states[gender];
   const slots = useMemo(() => visibleSlots(state), [state]);
@@ -96,12 +97,27 @@ export default function App() {
     [],
   );
 
+  /** Любая новая правка делает отмену массовой замены неактуальной — убираем кнопку. */
+  const dropUndo = useCallback(() => setToast((t) => (t?.undo ? null : t)), []);
+
+  const switchGender = useCallback(
+    (g: Gender) => {
+      if (g !== gender) dropUndo();
+      setGender(g);
+    },
+    [gender, dropUndo],
+  );
+
   /** Массовая замена (Случайно, Сброс): запоминаем прежнее, чтобы вернуть одним нажатием. */
-  const replaceAll = (next: CharacterState, msg: string, clearDone: boolean) => {
+  const replaceAll = (next: CharacterState, msg: string) => {
     const before = { state, prov, done };
+    // Отметка «Выставлено» снимается со строк, чей номер изменился
+    const was = new Map(sheet.map((r) => [r.slotId, r.number]));
+    const nextDone: Record<string, boolean> = {};
+    for (const r of gameSheet(next)) if (done[r.slotId] && was.get(r.slotId) === r.number) nextDone[r.slotId] = true;
     update(next);
     setProv({});
-    if (clearDone) setDone({});
+    setDone(nextDone);
     flash(msg, () => {
       update(before.state);
       setProv(before.prov);
@@ -114,8 +130,9 @@ export default function App() {
     (vs: VisibleSlot, i: number) => {
       update(setValue(states[gender], vs.variant.name, i));
       setDone((d) => ({ ...d, [vs.slot.id]: false }));
+      dropUndo();
     },
-    [states, gender, update],
+    [states, gender, update, dropUndo],
   );
 
   const step = useCallback(
@@ -144,7 +161,9 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target;
       if (e.altKey || e.ctrlKey || e.metaKey) return;
-      if (t instanceof Element && t.closest('input, textarea, select, [role="tablist"], .seg')) return;
+      if (t instanceof Element && t.closest('input, textarea, select')) return;
+      // Фокус в сетке вариантов — после смены слота вернуть его на выбранную ячейку
+      if (e.key.startsWith('Arrow')) gridFocusIntent.current = t instanceof Element && !!t.closest('.grid');
       if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
       if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
       if (e.key === 'ArrowDown') { e.preventDefault(); moveStation(1); }
@@ -201,15 +220,15 @@ export default function App() {
         </div>
         <div className="seg" role="group" aria-label="Тело персонажа">
           {(['male', 'female'] as Gender[]).map((g) => (
-            <button key={g} aria-pressed={gender === g} onClick={() => setGender(g)}>
+            <button key={g} aria-pressed={gender === g} onClick={() => switchGender(g)}>
               {g === 'male' ? 'Тип тела 1' : 'Тип тела 2'}
             </button>
           ))}
         </div>
-        <button className="btn ghost" onClick={() => replaceAll(randomize(gender, 3, Math.random, true, state), 'Лицо собрано случайно', false)} title="Случайное лицо (обыденное), тело не меняется" aria-label="Случайно">
+        <button className="btn ghost" onClick={() => replaceAll(randomize(gender, 3, Math.random, true, state), 'Лицо собрано случайно')} title="Случайное лицо (обыденное), тело не меняется" aria-label="Случайно">
           <IconShuffle /> <span className="btn-label">Случайно</span>
         </button>
-        <button className="btn ghost" onClick={() => replaceAll(defaultState(gender), 'Все слоты сброшены к значениям игры', true)} title="Сбросить к значениям игры по умолчанию" aria-label="Сброс">
+        <button className="btn ghost" onClick={() => replaceAll(defaultState(gender), 'Все слоты сброшены к значениям игры')} title="Сбросить к значениям игры по умолчанию" aria-label="Сброс">
           <IconReset /> <span className="btn-label">Сброс</span>
         </button>
         <button className="btn ghost" onClick={share} title="Скопировать ссылку на эту V" aria-label="Ссылка">
@@ -269,10 +288,10 @@ export default function App() {
         <main className="stage">
           {mode === 'scan' ? (
             <Suspense fallback={<p className="muted">Загружаю модуль скана…</p>}>
-              <ScanPanel gender={gender} base={state} onApply={applyScan} onGender={setGender} />
+              <ScanPanel gender={gender} base={state} onApply={applyScan} onGender={switchGender} />
             </Suspense>
           ) : cur ? (
-            <Editor vs={cur} state={state} onChoose={(i) => choose(cur, i)} onStep={step} style={lineStyle(cur.slot.id)} prov={prov[cur.slot.id]} />
+            <Editor vs={cur} state={state} onChoose={(i) => choose(cur, i)} onStep={step} style={lineStyle(cur.slot.id)} prov={prov[cur.slot.id]} focusIntent={gridFocusIntent} />
           ) : null}
         </main>
 
@@ -284,7 +303,7 @@ export default function App() {
               <button className="btn" onClick={copySheet}>
                 <IconCopy /> Копировать
               </button>
-              <button className="btn ghost" onClick={() => setDone({})} disabled={!Object.values(done).some(Boolean)}>
+              <button className="btn ghost" onClick={() => { setDone({}); dropUndo(); }} disabled={!Object.values(done).some(Boolean)}>
                 Снять отметки
               </button>
             </div>
@@ -304,7 +323,10 @@ export default function App() {
                       role="checkbox"
                       aria-checked={!!done[r.slotId]}
                       aria-label={`${r.label.ru}: выставлено`}
-                      onClick={() => setDone((d) => ({ ...d, [r.slotId]: !d[r.slotId] }))}
+                      onClick={() => {
+                        setDone((d) => ({ ...d, [r.slotId]: !d[r.slotId] }));
+                        dropUndo();
+                      }}
                     >
                       <span className="box">{done[r.slotId] && <IconCheck />}</span>
                     </button>
@@ -357,6 +379,7 @@ function Editor({
   onStep,
   style,
   prov,
+  focusIntent,
 }: {
   vs: VisibleSlot;
   state: CharacterState;
@@ -364,6 +387,8 @@ function Editor({
   onStep: (d: 1 | -1) => void;
   style: CSSProperties;
   prov?: ScanProvenance;
+  /** true, если стрелку нажали, когда фокус был в сетке вариантов */
+  focusIntent: { current: boolean };
 }) {
   const line = LINE_OF_SLOT.get(vs.slot.id);
   const num = displayNumber(vs.variant, vs.value);
@@ -371,13 +396,19 @@ function Editor({
   const hasSwatches = vs.variant.options.some((o) => o.hex || o.iris);
   const caption = optionCaption(vs.slot.id, vs.option, state.gender);
   const gridRef = useRef<HTMLDivElement>(null);
-  // Роуминговый tabindex: если фокус был в сетке, он идёт за выбранной ячейкой
+  // Роуминговый tabindex: если фокус был в сетке, он идёт за выбранной ячейкой — и при смене
+  // варианта, и при смене слота (тогда прежняя ячейка могла исчезнуть и фокус упал на body)
   useEffect(() => {
     const g = gridRef.current;
-    if (g && g.contains(document.activeElement) && document.activeElement?.getAttribute('aria-checked') !== 'true') {
+    if (!g) return;
+    const a = document.activeElement;
+    const inGrid = g.contains(a);
+    const wanted = inGrid || (focusIntent.current && (!a || a === document.body));
+    focusIntent.current = false;
+    if (wanted && a?.getAttribute('aria-checked') !== 'true') {
       g.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
     }
-  }, [vs.value]);
+  }, [vs.slot.id, vs.variant.name, vs.value, focusIntent]);
   return (
     <div style={style}>
       <div className="stage-head">
@@ -441,7 +472,7 @@ function Editor({
             <>
               <dt>Подбор по фото</dt>
               <dd>
-                Вариант {pad2(displayNumber(vs.variant, prov.value))} ·{prov.src === 'llm' ? 'модель' : prov.src === 'local' ? 'измерение' : 'вручную'} · уверенность {Math.round(prov.conf * 100)}%
+                Вариант {pad2(displayNumber(vs.variant, prov.value))} · {prov.src === 'llm' ? 'модель' : prov.src === 'local' ? 'измерение' : 'вручную'} · уверенность {Math.round(prov.conf * 100)}%
                 {prov.why ? ` — ${prov.why}` : ''}
               </dd>
             </>
