@@ -180,7 +180,7 @@ function geometryStats(morph: string | null | undefined) {
 }
 
 async function save(file: string, body: string) {
-  const r = await fetch(`/__save?file=${encodeURIComponent(file)}`, { method: 'POST', body });
+  const r = await fetch(`/__save?file=${encodeURIComponent(file)}`, { method: 'POST', body, headers: { 'X-Vmirror-Save': '1' } });
   if (!r.ok) throw new Error(`save ${file}: ${r.status}`);
 }
 

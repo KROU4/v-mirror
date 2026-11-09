@@ -188,7 +188,7 @@ def match_icon(icon: str, atlas_colors: dict[str, dict], index: dict[str, str]) 
     if k in index:
         return index[k]
     # Makeup_lip_color_red -> makeuplipcolorred ; atlas 00_makeup_lip_color_red -> makeuplipcolorred
-    cands = [(a, n) for a, n in index.items() if k in a or a in k]
+    cands = [(a, n) for a, n in index.items() if a and (k in a or a in k)]
     if cands:
         cands.sort(key=lambda t: -len(t[0]))
         return cands[0][1]
@@ -360,6 +360,10 @@ def build(gender: str, cc: Path, ru, en, atlas_colors, atlas_index, hairs) -> di
                 for pos, o in enumerate(rec["options"]):
                     o["gameIndex"] = o["i"]
                     o["i"] = pos
+                # defaultIndex указывал на игровой индекс — переводим в позицию первой такой опции
+                rec["defaultIndex"] = next(
+                    (o["i"] for o in rec["options"] if o["gameIndex"] == rec["defaultIndex"]), 0
+                )
             variants.append(rec)
 
     by_name = {r["name"]: r for r in variants}

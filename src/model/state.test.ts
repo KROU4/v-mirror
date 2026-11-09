@@ -83,6 +83,24 @@ describe('экспорт', () => {
     expect(gameSheet(back)).toEqual(gameSheet(s));
   });
 
+  it('у нетронутой V все строки листа — значения по умолчанию', () => {
+    for (const g of ['male', 'female'] as const) {
+      const changed = gameSheet(defaultState(g)).filter((r) => !r.isDefault).map((r) => r.slotId);
+      expect(changed, g).toEqual([]);
+      expect(encodeState(defaultState(g)).length).toBeLessThan(30);
+    }
+  });
+
+  it('«Случайно» не трогает тело', () => {
+    for (const g of ['male', 'female'] as const) {
+      const { catalog } = getIndex(g);
+      const body = catalog.slots.find((s) => !s.auto && s.group !== 'head' && s.variants[0]?.options.length > 1)!;
+      const v = body.variants[0];
+      const base = { gender: g, values: { [v.name]: v.options[1].i } };
+      expect(randomize(g, 5, mulberry32(7), true, base).values[v.name], `${g} ${body.id}`).toBe(v.options[1].i);
+    }
+  });
+
   it('лист для игры содержит номера в диапазоне', () => {
     for (const row of gameSheet(randomize('male', 10, mulberry32(3)))) {
       expect(row.number).toBeGreaterThanOrEqual(1);

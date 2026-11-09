@@ -47,10 +47,12 @@ export default function ScanPanel({
 }) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<PhotoAnalysis | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [over, setOver] = useState(false);
-  const [llm, setLlm] = useState<{ sugg: Suggestion[]; bodyType?: Gender; notes?: string } | null>(null);
+  // Ответ модели привязан к полу, для которого строился промпт: номера вариантов у типов тела разные
+  const [llmRaw, setLlm] = useState<{ gender: Gender; sugg: Suggestion[]; bodyType?: Gender; notes?: string } | null>(null);
+  const llm = llmRaw && llmRaw.gender === gender ? llmRaw : null;
+  const llmStale = !!llmRaw && llmRaw.gender !== gender;
   const [tab, setTab] = useState<Tab>(() => (ls.get('vm.orKey') ? 'model' : 'manual'));
   const [key, setKey] = useState(() => ls.get('vm.orKey'));
   const [model, setModel] = useState(() => ls.get('vm.orModel', DEFAULT_MODELS[0]));
@@ -59,6 +61,26 @@ export default function ScanPanel({
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const objUrlRef = useRef<string | null>(null);
+  // Номер текущего фото: ответы анализа и модели по прежнему фото отбрасываются
+  const photoSeq = useRef(0);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [asking, setAsking] = useState<string | null>(null);
+  const busy = asking ?? (analyzing ? 'Ищу лицо и замеряю черты…' : null);
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      if (objUrlRef.current) URL.revokeObjectURL(objUrlRef.current);
+    },
+    [],
+  );
+
+  // Смена типа тела отменяет запрос к модели: его номера относились бы к другому каталогу
+  useEffect(() => {
+    abortRef.current?.abort();
+    setAsking(null);
+  }, [gender]);
 
   useEffect(() => ls.set('vm.orKey', key), [key]);
   useEffect(() => ls.set('vm.orModel', model), [model]);
@@ -72,9 +94,17 @@ export default function ScanPanel({
   const prompt = useMemo(() => buildPrompt(gender, analysis), [gender, analysis]);
 
   const load = useCallback((url: string) => {
+    photoSeq.current++;
+    abortRef.current?.abort();
+    if (objUrlRef.current && objUrlRef.current !== url) {
+      URL.revokeObjectURL(objUrlRef.current);
+      objUrlRef.current = null;
+    }
     setError(null);
     setAnalysis(null);
     setLlm(null);
+    setAsking(null);
+    setAnalyzing(false);
     setImgUrl(url);
   }, []);
 
@@ -84,7 +114,9 @@ export default function ScanPanel({
       setError('Нужен файл изображения: JPG, PNG или WebP.');
       return;
     }
-    load(URL.createObjectURL(f));
+    const url = URL.createObjectURL(f);
+    load(url);
+    objUrlRef.current = url;
   };
 
   // Для автоматической проверки и отладки: загрузить фото по URL
@@ -94,20 +126,27 @@ export default function ScanPanel({
 
   const runAnalysis = useCallback(async () => {
     const img = imgRef.current;
-    if (!img) return;
-    setBusy('Ищу лицо и замеряю черты…');
+    if (!img || !img.naturalWidth) return;
+    const seq = photoSeq.current;
+    // Снимок пикселей сразу: если фото сменят во время анализа, размеры и пиксели не перемешаются
+    const snap = document.createElement('canvas');
+    snap.width = img.naturalWidth;
+    snap.height = img.naturalHeight;
+    snap.getContext('2d')!.drawImage(img, 0, 0);
+    setAnalyzing(true);
     setError(null);
     try {
-      const a = await analyzePhoto(img);
-      setAnalysis(a);
+      const a = await analyzePhoto(snap);
+      if (seq === photoSeq.current) setAnalysis(a);
     } catch (e) {
+      if (seq !== photoSeq.current) return;
       setError(
         (e as Error).message === 'NO_FACE'
           ? 'Лицо не найдено. Нужен снимок анфас, лицо целиком в кадре, без сильного наклона.'
           : `Не удалось проанализировать фото: ${(e as Error).message}`,
       );
     } finally {
-      setBusy(null);
+      if (seq === photoSeq.current) setAnalyzing(false);
     }
   }, []);
 
@@ -136,24 +175,31 @@ export default function ScanPanel({
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
-    setBusy(`Модель ${model} изучает фото…`);
+    const seq = photoSeq.current;
+    const g = gender;
+    const pack = prompt;
+    setAsking(`Модель ${model} изучает фото…`);
     setError(null);
     try {
       const dataUrl = await photoToDataUrl(img);
-      const text = await callOpenRouter({ key: key.trim(), model, imageDataUrl: dataUrl, prompt: prompt.text, signal: ac.signal });
-      const res = parseLlm(gender, text);
-      setLlm({ sugg: res.suggestions, bodyType: res.bodyType, notes: res.notes });
+      const text = await callOpenRouter({ key: key.trim(), model, imageDataUrl: dataUrl, prompt: pack.text, signal: ac.signal });
+      if (ac.signal.aborted || seq !== photoSeq.current) return;
+      const res = parseLlm(g, text, pack.slots);
+      setLlm({ gender: g, sugg: res.suggestions, bodyType: res.bodyType, notes: res.notes });
     } catch (e) {
-      if ((e as Error).name !== 'AbortError') setError((e as Error).message);
+      if ((e as Error).name !== 'AbortError' && !ac.signal.aborted) setError((e as Error).message);
     } finally {
-      setBusy(null);
+      if (abortRef.current === ac) {
+        setAsking(null);
+        abortRef.current = null;
+      }
     }
   };
 
   const parseManual = () => {
     try {
-      const res = parseLlm(gender, manual);
-      setLlm({ sugg: res.suggestions, bodyType: res.bodyType, notes: res.notes });
+      const res = parseLlm(gender, manual, prompt.slots);
+      setLlm({ gender, sugg: res.suggestions, bodyType: res.bodyType, notes: res.notes });
       setError(null);
     } catch (e) {
       setError(`Ответ не разобран: ${(e as Error).message}`);
@@ -364,6 +410,11 @@ export default function ScanPanel({
                   </button>
                 </p>
               )}
+              {llmStale && (
+                <p className="status" style={{ marginBottom: 0 }}>
+                  Ответ модели относился к другому типу тела, его номера здесь не подходят. Запросите модель заново.
+                </p>
+              )}
               {llm?.notes && <p className="muted" style={{ marginBottom: 0 }}>{llm.notes}</p>}
             </div>
           )}
@@ -392,7 +443,7 @@ export default function ScanPanel({
                 <button className="btn primary" onClick={apply}>
                   Применить к V
                 </button>
-                <span className="muted">Остальные слоты останутся как есть.</span>
+                <span className="muted">Меняются только слоты из этого списка.</span>
               </div>
             </div>
           )}

@@ -205,9 +205,20 @@ export async function callOpenRouter(opts: { key: string; model: string; imageDa
     }
     throw new Error(r.status === 401 ? 'Ключ OpenRouter не принят (401). Проверьте ключ.' : r.status === 429 ? 'Лимит запросов модели исчерпан (429). Подождите или выберите другую модель.' : `OpenRouter ${r.status}: ${msg}`);
   }
-  const j = JSON.parse(body) as { choices?: { message?: { content?: string } }[] };
-  const content = j.choices?.[0]?.message?.content;
-  if (!content) throw new Error('Модель вернула пустой ответ');
+  let j: { choices?: { message?: { content?: unknown } }[] };
+  try {
+    j = JSON.parse(body);
+  } catch {
+    throw new Error('OpenRouter вернул не JSON. Попробуйте ещё раз или выберите другую модель.');
+  }
+  const raw = j.choices?.[0]?.message?.content;
+  // Некоторые провайдеры отдают content массивом частей [{type:'text', text}]
+  const content = Array.isArray(raw)
+    ? raw.map((p) => (typeof p === 'string' ? p : p && typeof p === 'object' && 'text' in p ? String((p as { text: unknown }).text ?? '') : '')).join('')
+    : typeof raw === 'string'
+      ? raw
+      : '';
+  if (!content.trim()) throw new Error('Модель вернула пустой ответ');
   return content;
 }
 
@@ -220,12 +231,63 @@ interface LlmJson {
   notes?: string;
 }
 
+/** Все сбалансированные {...} верхнего уровня, с учётом строк и экранирования. */
+function jsonBlocks(s: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inStr = false;
+  let esc = false;
+  for (let k = 0; k < s.length; k++) {
+    const ch = s[k];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"' && depth > 0) inStr = true;
+    else if (ch === '{') {
+      if (depth === 0) start = k;
+      depth++;
+    } else if (ch === '}' && depth > 0) {
+      depth--;
+      if (depth === 0) out.push(s.slice(start, k + 1));
+    }
+  }
+  return out;
+}
+
+function parseLoose(block: string): unknown {
+  try {
+    return JSON.parse(block);
+  } catch {
+    // Слабые модели оставляют запятые перед } и ]
+    return JSON.parse(block.replace(/,(\s*[}\]])/g, '$1'));
+  }
+}
+
 export function extractJson(text: string): LlmJson {
-  const cleaned = text.replace(/```(?:json)?/gi, '');
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start < 0 || end <= start) throw new Error('В ответе нет JSON');
-  return JSON.parse(cleaned.slice(start, end + 1)) as LlmJson;
+  const cleaned = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/```(?:json)?/gi, '');
+  const blocks = jsonBlocks(cleaned);
+  if (!blocks.length) throw new Error('В ответе нет JSON');
+  let fallback: LlmJson | null = null;
+  // Ответ обычно в конце: идём с последнего блока, предпочитаем тот, где есть slots
+  for (let k = blocks.length - 1; k >= 0; k--) {
+    let v: unknown;
+    try {
+      v = parseLoose(blocks[k]);
+    } catch {
+      continue;
+    }
+    if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+    if ('slots' in v) return v as LlmJson;
+    fallback ??= v as LlmJson;
+  }
+  if (fallback) return fallback;
+  throw new Error('JSON в ответе повреждён: проверьте кавычки и скобки');
 }
 
 export interface LlmResult {
@@ -234,19 +296,36 @@ export interface LlmResult {
   notes?: string;
 }
 
-export function parseLlm(gender: Gender, text: string): LlmResult {
+const toNum = (x: unknown): number => (typeof x === 'number' ? x : typeof x === 'string' && x.trim() !== '' ? Number(x) : NaN);
+
+/**
+ * @param allowed слоты, о которых спрашивал промпт (`PromptPack.slots`). Остальные
+ *   ключи ответа игнорируются: модель не должна менять тело и скрытые слоты.
+ */
+export function parseLlm(gender: Gender, text: string, allowed?: readonly string[]): LlmResult {
   const j = extractJson(text);
   const idx = getIndex(gender);
   const out: Suggestion[] = [];
-  const clampConf = (c?: number) => Math.max(0.05, Math.min(0.95, Number.isFinite(c) ? (c as number) : 0.5));
+  const ok = allowed ? new Set(allowed) : null;
+  const clampConf = (c: unknown) => {
+    const x = toNum(c);
+    return Math.max(0.05, Math.min(0.95, Number.isFinite(x) ? x : 0.5));
+  };
+  const slots = j.slots && typeof j.slots === 'object' && !Array.isArray(j.slots) ? j.slots : {};
 
-  for (const [slotId, v] of Object.entries(j.slots ?? {})) {
+  for (const [slotId, v] of Object.entries(slots)) {
+    if (ok && !ok.has(slotId)) continue;
     const slot = idx.slotById.get(slotId);
-    if (!slot || !Number.isFinite(v?.n)) continue;
-    const variant = variantOf(gender, slotId)!;
-    const n = Math.max(1, Math.min(variant.options.length, Math.round(v.n!)));
+    const raw = toNum(v?.n);
+    if (!slot || !Number.isFinite(raw)) continue;
+    const variant = variantOf(gender, slotId);
+    if (!variant) continue;
+    const n = Math.round(raw);
+    // 0, отрицательные и номера за пределами — это «не вижу/не знаю», а не вариант 1 или последний
+    if (n < 1 || n > variant.options.length) continue;
     const o = variant.options[n - 1];
-    const s: Suggestion = { slotId, number: n, conf: clampConf(v.conf) * 0.95, src: 'llm', why: v.why };
+    const why = typeof v.why === 'string' ? v.why.slice(0, 200) : undefined;
+    const s: Suggestion = { slotId, number: n, conf: clampConf(v.conf) * 0.95, src: 'llm', why };
     if (o?.app && (o.hex || o.iris)) {
       s.colorKey = colorKey(o);
       s.hex = o.iris ?? o.hex;
@@ -262,12 +341,12 @@ export function parseLlm(gender: Gender, text: string): LlmResult {
 
   // Часть бороды — по смыслу (у каждого стиля свой набор частей)
   const part = j.beard_part?.part;
-  if (gender === 'male' && part) {
+  if (gender === 'male' && typeof part === 'string' && (!ok || ok.has('beard_part'))) {
     const key = part === 'full' ? '' : part;
-    out.push({ slotId: 'beard_part', partKey: key, conf: 0.6, src: 'llm', why: BEARD_PART_RU[key] ?? part });
+    if (key in BEARD_PART_RU) out.push({ slotId: 'beard_part', partKey: key, conf: 0.6, src: 'llm', why: BEARD_PART_RU[key] });
   }
 
-  const pres = j.present ?? {};
+  const pres = j.present && typeof j.present === 'object' ? j.present : {};
   const off = (slotId: string, why: string) => {
     const v = idx.slotById.get(slotId)?.variants[0];
     if (v) out.push({ slotId, value: v.options[0].i, conf: 0.7, src: 'llm', why });

@@ -22,11 +22,19 @@ export function defaultState(gender: Gender): CharacterState {
   return { gender, values: {} };
 }
 
+/**
+ * Значение по умолчанию, которое реально показывает редактор. У части цветовых
+ * вариантов опции начинаются с i=1 при defaultIndex=0 — тогда это первая опция.
+ */
+export function effectiveDefault(v: Variant): number {
+  if (v.options.some((o) => o.i === v.defaultIndex)) return v.defaultIndex;
+  return v.options[0]?.i ?? 0;
+}
+
 export function getValue(state: CharacterState, v: Variant): number {
   const set = state.values[v.name];
   if (set !== undefined && v.options.some((o) => o.i === set)) return set;
-  if (v.options.some((o) => o.i === v.defaultIndex)) return v.defaultIndex;
-  return v.options[0]?.i ?? 0;
+  return effectiveDefault(v);
 }
 
 export function getOption(state: CharacterState, v: Variant): Option | undefined {
@@ -125,10 +133,13 @@ export function mulberry32(seed: number): Rng {
   };
 }
 
-/** Как «Plain-to-Punk» в игре: 1 — обыденно, 10 — максимально панково. */
-export function randomize(gender: Gender, punk: number, rng: Rng = Math.random, keepBody = true): CharacterState {
+/**
+ * Как «Plain-to-Punk» в игре: 1 — обыденно, 10 — максимально панково.
+ * При keepBody слоты тела берутся из `base` (если он того же пола) и не трогаются.
+ */
+export function randomize(gender: Gender, punk: number, rng: Rng = Math.random, keepBody = true, base?: CharacterState): CharacterState {
   const { catalog } = getIndex(gender);
-  const values: Record<string, number> = {};
+  const values: Record<string, number> = keepBody && base?.gender === gender ? { ...base.values } : {};
   for (const slot of catalog.slots) {
     if (slot.auto || (keepBody && slot.group !== 'head')) continue;
     for (const v of slot.variants) {
@@ -162,7 +173,7 @@ export function gameSheet(state: CharacterState): SheetRow[] {
     total: variant.options.length,
     value: option?.label ?? { ru: String(value), en: String(value) },
     hex: option?.iris ?? option?.hex,
-    isDefault: value === variant.defaultIndex,
+    isDefault: value === effectiveDefault(variant),
   }));
 }
 
@@ -173,7 +184,7 @@ export function encodeState(state: CharacterState): string {
   const diff: Record<string, number> = {};
   for (const [name, i] of Object.entries(state.values)) {
     const v = variantByName.get(name);
-    if (v && active.has(name) && i !== v.defaultIndex) diff[name] = i;
+    if (v && active.has(name) && v.options.some((o) => o.i === i) && i !== effectiveDefault(v)) diff[name] = i;
   }
   const json = JSON.stringify({ g: state.gender === 'male' ? 'm' : 'f', v: diff });
   const b64 = btoa(unescape(encodeURIComponent(json)));
