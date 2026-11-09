@@ -70,7 +70,12 @@ export async function analyzePhoto(img: HTMLImageElement | HTMLCanvasElement): P
   const irisL = irisColor(s, P(468), P(469));
   const irisR = irisColor(s, P(473), P(474));
   const iris = irisL && irisR ? ([0, 1, 2].map((k) => (irisL[k] + irisR[k]) / 2) as RGB) : irisL ?? irisR;
-  const brows = robustColor(pixelsAround(s, [P(105), P(66), P(334), P(296), P(63), P(293)], iod * 0.035), 0.05, 0.45);
+  // В круге вокруг точек брови больше кожи, чем волосков: берём пиксели заметно темнее кожи,
+  // а если таких мало (светлые брови) — самую тёмную пятую часть
+  const browPx = pixelsAround(s, [P(105), P(66), P(334), P(296), P(63), P(293)], iod * 0.035);
+  const skinL = skin ? luminance(skin) : 0;
+  const darker = skin ? browPx.filter((c) => luminance(c) < skinL * 0.72) : [];
+  const brows = darker.length >= Math.max(12, browPx.length * 0.08) ? robustColor(darker, 0.05, 0.2) : robustColor(browPx, 0.03, 0.8);
   const lips = robustColor(pixelsAround(s, [P(0), P(17), P(37), P(267), P(84), P(314)], iod * 0.03), 0.2, 0.2);
   const chin = robustColor(pixelsAround(s, [P(152), P(175), P(199), P(171), P(396), P(136), P(365)], iod * 0.06), 0.1, 0.1);
 

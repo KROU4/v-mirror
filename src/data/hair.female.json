@@ -1,1 +1,266 @@
-{}
+{
+ "006_demo": {
+  "ru": "маленький пучок на макушке, бока выбриты",
+  "en": "small top knot, shaved sides"
+ },
+ "007_demo": {
+  "ru": "короткий колючий кроп, бока с переходом",
+  "en": "short spiky crop, faded sides"
+ },
+ "008_demo": {
+  "ru": "косая чёлка на глаз, короткий затылок",
+  "en": "side fringe over one eye, short back"
+ },
+ "009_demo": {
+  "ru": "пучок на макушке, бока выбриты",
+  "en": "top knot bun, shaved sides"
+ },
+ "011_demo": {
+  "ru": "длинные прямые ниже плеч, чёлка на глаза",
+  "en": "long straight below shoulders, bangs over eyes"
+ },
+ "020_mullet": {
+  "ru": "маллет с прямой чёлкой, длинный сзади",
+  "en": "mullet with straight bangs, long at the back"
+ },
+ "022_chrome_celeb": {
+  "ru": "длинные объёмные волны ниже плеч",
+  "en": "long voluminous waves past the shoulders"
+ },
+ "023_short_messy": {
+  "ru": "короткая асимметричная с длинной чёлкой набок",
+  "en": "short asymmetric cut with a long side fringe"
+ },
+ "025_pompadour": {
+  "ru": "высокий помпадур, бока выбриты",
+  "en": "tall pompadour, shaved sides"
+ },
+ "026_rattail": {
+  "ru": "короткий колючий верх и тонкий хвостик сзади",
+  "en": "short spiky top with a thin rat tail at the back"
+ },
+ "028_corpo_bun": {
+  "ru": "андеркат с пучком на затылке",
+  "en": "undercut with a bun at the back"
+ },
+ "029_misty": {
+  "ru": "большая лохматая шапка до подбородка",
+  "en": "big shaggy mop, chin length"
+ },
+ "030_punk_idol": {
+  "ru": "пышный растрёпанный верх, бока выбриты",
+  "en": "big messy top, shaved sides"
+ },
+ "033_player": {
+  "ru": "длинные, косой зачёс закрывает один глаз",
+  "en": "long, side-swept over one eye"
+ },
+ "034_militech_agent": {
+  "ru": "маллет: пышный зачёс сверху, сзади до плеч",
+  "en": "mullet: voluminous swept top, shoulder-length back"
+ },
+ "035_mohawk_tall": {
+  "ru": "высокий ирокез из шипов, бока выбриты",
+  "en": "tall spiky mohawk, shaved sides"
+ },
+ "036_high_tight": {
+  "ru": "высокий плоский верх, бока выбриты (high and tight)",
+  "en": "high flat top, shaved sides (high and tight)"
+ },
+ "037_gungho": {
+  "ru": "короткая с косым пробором, андеркат",
+  "en": "short side part with undercut"
+ },
+ "039_punk_shaved": {
+  "ru": "косая чёлка на глаз, короткий затылок",
+  "en": "side fringe over one eye, short back"
+ },
+ "040_pixie_bob": {
+  "ru": "лохматая каскадная, длинная чёлка на глаз",
+  "en": "shaggy layered, long fringe over one eye"
+ },
+ "041_valentino": {
+  "ru": "длинные прямые с чёлкой, собраны в низкий хвост",
+  "en": "long straight with bangs, tied in a low ponytail"
+ },
+ "042_topknots": {
+  "ru": "несколько маленьких пучков (банту-узлы)",
+  "en": "several small knots (bantu knots)"
+ },
+ "044_classic": {
+  "ru": "волнистое каре до подбородка",
+  "en": "wavy chin-length bob"
+ },
+ "045_short_spiked": {
+  "ru": "короткий колючий верх, бока выбриты",
+  "en": "short spiky top, shaved sides"
+ },
+ "047_swirl_pomp": {
+  "ru": "короткий закрученный кок, бока короткие",
+  "en": "short swirled quiff, short sides"
+ },
+ "048_dual_braids": {
+  "ru": "бритая голова с двумя короткими косичками сзади",
+  "en": "shaved head with two short braids at the back"
+ },
+ "049_thiago": {
+  "ru": "классический пышный помпадур назад, бока короткие",
+  "en": "classic voluminous pompadour swept back, short sides"
+ },
+ "051_judy": {
+  "ru": "асимметричная до подбородка, закрывает пол-лица",
+  "en": "asymmetric chin length, covers half the face"
+ },
+ "052_clair": {
+  "ru": "длинные волнистые каскадом ниже плеч",
+  "en": "long wavy layers past the shoulders"
+ },
+ "054_rogue_young": {
+  "ru": "панк: высокий зачёс вверх, длинные сзади",
+  "en": "punk: tall swept-up top, long back"
+ },
+ "056_rogue_old": {
+  "ru": "длинные, зачёсаны на одну сторону, ниже плеч",
+  "en": "long, swept to one side, past the shoulders"
+ },
+ "058_voodoo_01": {
+  "ru": "собраны в небрежный высокий узел, пряди выбиваются",
+  "en": "pulled into a messy high knot, loose strands"
+ },
+ "059_voodoo_02": {
+  "ru": "лохматая объёмная средней длины, многослойная",
+  "en": "shaggy voluminous medium length, layered"
+ },
+ "060_voodoo_03": {
+  "ru": "короткие торчащие дреды-твисты",
+  "en": "short spiky twists / dreads"
+ },
+ "063_messy_bob": {
+  "ru": "волнистые до челюсти, небрежное каре",
+  "en": "wavy jaw-length messy bob"
+ },
+ "064_bob_fringe": {
+  "ru": "многослойное каре с густой чёлкой",
+  "en": "layered bob with heavy bangs"
+ },
+ "068_animals_03": {
+  "ru": "косички (корнроу) собраны в низкий пучок",
+  "en": "cornrows tied into a low bun"
+ },
+ "077_nomad_02": {
+  "ru": "лохматая до челюсти, прямой пробор",
+  "en": "shaggy jaw length, center part"
+ },
+ "078_evelyn": {
+  "ru": "каре до подбородка с прямой чёлкой",
+  "en": "chin-length blunt bob with straight bangs"
+ },
+ "079_denny": {
+  "ru": "огромное пышное афро с чёлкой",
+  "en": "huge voluminous afro with bangs"
+ },
+ "081_buns_02": {
+  "ru": "два высоких пучка, длинные распущенные пряди и чёлка",
+  "en": "two high space buns, long loose strands and bangs"
+ },
+ "082_afro_bun": {
+  "ru": "кудрявый пучок на макушке, бока выбриты",
+  "en": "curly top bun, shaved sides"
+ },
+ "083_ponytail_01": {
+  "ru": "высокий хвост-«пузыри», бока гладкие",
+  "en": "high bubble ponytail, sleek sides"
+ },
+ "084_bun_chopsticks": {
+  "ru": "средней длины, собраны в низкий пучок, чёлка набок",
+  "en": "medium length in a low bun, side bangs"
+ },
+ "085_takemura": {
+  "ru": "зачёсана назад в небольшой пучок",
+  "en": "slicked back into a small bun"
+ },
+ "088_corpo_bob": {
+  "ru": "округлое каре с чёлкой до подбородка",
+  "en": "rounded chin-length bob with bangs"
+ },
+ "089_thompson": {
+  "ru": "короткий растрёпанный пикси",
+  "en": "short tousled pixie"
+ },
+ "090_alt": {
+  "ru": "длинные небрежные ниже плеч, пряди на лице",
+  "en": "long messy past shoulders, strands over the face"
+ },
+ "091_dakota": {
+  "ru": "длинные прямые, зачёсаны назад с пробором",
+  "en": "long straight, slicked back with a part"
+ },
+ "093_sumo": {
+  "ru": "гладко собраны в высокий пучок-самурай",
+  "en": "sleek high samurai top knot"
+ },
+ "095_panam": {
+  "ru": "высокая растрёпанная укладка, пряди у лица",
+  "en": "messy high updo, loose strands at the face"
+ },
+ "098_top_bun": {
+  "ru": "высокая пышная небрежная укладка, пряди у лица",
+  "en": "tall voluminous messy updo, strands framing the face"
+ },
+ "103_maelstrom_spikes": {
+  "ru": "ирокез из редких шипов, бока выбриты",
+  "en": "liberty spikes mohawk, shaved sides"
+ },
+ "106_ponytails": {
+  "ru": "два низких хвоста по бокам",
+  "en": "two low pigtails"
+ },
+ "110_wizzy": {
+  "ru": "длинные пышные кудри, верх собран в хвост",
+  "en": "long voluminous curls, half-up ponytail"
+ },
+ "115_alanah": {
+  "ru": "длинные гладкие ниже плеч, прядь на глаз",
+  "en": "long sleek past shoulders, strand over one eye"
+ },
+ "118_gillean": {
+  "ru": "длинные волнистые ниже плеч, боковой пробор",
+  "en": "long wavy past shoulders, side part"
+ },
+ "121_t_bug": {
+  "ru": "до плеч с пышным зачёсом сверху (мягкий маллет)",
+  "en": "shoulder length with voluminous top (soft mullet)"
+ },
+ "140_short_afro": {
+  "ru": "очень короткая текстурная",
+  "en": "very short textured"
+ },
+ "141_afro": {
+  "ru": "короткое округлое афро",
+  "en": "short rounded afro"
+ },
+ "142_afrohawk": {
+  "ru": "высокий кудрявый ирокез, бока выбриты",
+  "en": "tall curly mohawk, shaved sides"
+ },
+ "143_flat_top": {
+  "ru": "очень высокий плоский верх (бокс), бока выбриты",
+  "en": "very tall flat top, shaved sides"
+ },
+ "144_afro_braid_bun": {
+  "ru": "пышный колючий верх, бока короткие",
+  "en": "big spiky top, short sides"
+ },
+ "146_dread_undercut": {
+  "ru": "колючий верх с длинной рваной чёлкой на глаза",
+  "en": "spiky top with long jagged bangs over eyes"
+ },
+ "151_judy_variation02": {
+  "ru": "короткая растрёпанная, косая чёлка с прядями",
+  "en": "short messy, side fringe with loose strands"
+ },
+ "999_buzz_cap": {
+  "ru": "очень короткая, под машинку",
+  "en": "buzz cut"
+ }
+}

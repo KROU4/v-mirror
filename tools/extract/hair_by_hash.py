@@ -34,6 +34,10 @@ def extract_by_hash(wk: str, game: Path, paths: list[str], dest: Path) -> dict[s
     dest.mkdir(parents=True, exist_ok=True)
     found: dict[str, Path] = {}
     for p in paths:
+        target = dest / Path(p.replace("\\", "/")).name
+        if target.exists():
+            found[p] = target
+            continue
         h = fnv1a64(p)
         tmp = dest / f"_{h}"
         if tmp.exists():
@@ -43,7 +47,6 @@ def extract_by_hash(wk: str, game: Path, paths: list[str], dest: Path) -> dict[s
                            capture_output=True, text=True, encoding="utf-8", errors="ignore")
             files = [f for f in tmp.rglob("*") if f.is_file()] if tmp.exists() else []
             if files:
-                target = dest / Path(p.replace("\\", "/")).name
                 shutil.move(str(files[0]), target)
                 found[p] = target
                 break
@@ -72,7 +75,8 @@ def main() -> None:
                 continue
             r = (d.get("resource") or {}).get("DepotPath", {})
             r = r.get("$value") if isinstance(r, dict) else r
-            if r and str(r).endswith(".app") and Path(str(r).replace("\\", "/")).stem not in a2m:
+            # *_fpp — вид от первого лица, для описания не нужен
+            if r and str(r).endswith(".app") and "_fpp" not in str(r) and Path(str(r).replace("\\", "/")).stem not in a2m:
                 wanted.add(str(r))
     print("app без соответствия:", len(wanted))
 
@@ -80,6 +84,7 @@ def main() -> None:
     apps = extract_by_hash(a.wk, game, sorted(wanted), app_dir)
     print("достали app:", len(apps))
     json_dir = work / "hair_app_hash_json"
+    json_dir.mkdir(parents=True, exist_ok=True)  # WolvenKit не создаёт папку вывода сам
     subprocess.run([a.wk, "convert", "serialize", str(app_dir), "-o", str(json_dir)], capture_output=True)
 
     rx = re.compile(r'"\$value":\s*"(base\\\\characters\\\\common\\\\hair\\\\[^"]+?\.mesh)"')

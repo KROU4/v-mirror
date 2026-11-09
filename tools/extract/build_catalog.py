@@ -204,7 +204,7 @@ def match_icon(icon: str, atlas_colors: dict[str, dict], index: dict[str, str]) 
 # ---------------------------------------------------------------- hair meshes
 def hair_folders(all_list: Path) -> dict[str, str]:
     out: dict[str, str] = {}
-    rx = re.compile(r"characters\\common\\hair\\(hh_(\d{3})_[a-z]+__([a-z0-9_]+?))\\")
+    rx = re.compile(r"characters\\common\\hair\\(hh_(\d{3})_[a-z]+_{1,2}([a-z0-9_]+?))\\")
     for line in all_list.read_text(encoding="utf-8", errors="ignore").splitlines():
         m = rx.search(line)
         if m and m.group(2) not in out:
@@ -373,7 +373,8 @@ def build(gender: str, cc: Path, ru, en, atlas_colors, atlas_index, hairs) -> di
         # Точное соответствие .app -> меш (из export_hair.ps1): номер hairs_NNN в имени
         # ресурса не всегда совпадает с номером папки причёски (hairs_143 -> hh_060_wa__voodoo_03)
         if base in APP_TO_MESH and APP_TO_MESH[base]:
-            fm = re.search(r"\\hh_(\d{3})_[a-z]+__([a-z0-9_]+?)\\", APP_TO_MESH[base][0])
+            # обычно hh_045_ma__short_spiked, но встречается и hh_063_wa_messy_bob
+            fm = re.search(r"\\hh_(\d{3})_[a-z]+_{1,2}([a-z0-9_]+?)\\", APP_TO_MESH[base][0])
             if fm:
                 hint = f"{fm.group(1)}_{fm.group(2)}"
                 HINT_MESHES.setdefault(gender, {}).setdefault(hint, [re.split(r"[\\/]", p)[-1].rsplit(".", 1)[0] for p in APP_TO_MESH[base]])

@@ -126,8 +126,8 @@ a { color: var(--signal); text-underline-offset: 3px; }
 .sign { min-width: 0; }
 .sign .crumbs { display: flex; align-items: center; gap: 8px; color: var(--ink-3); font-size: 14px; }
 .sign h1 { margin: 8px 0 0; font: 600 34px/1.05 var(--font-sign); letter-spacing: 0.01em; text-wrap: balance; }
-.stop { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
-.stop-num { font: 700 88px/0.85 var(--font-sign); letter-spacing: -0.02em; }
+.stop { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 14px; }
+.stop-num { font: 700 88px/0.85 var(--font-sign); letter-spacing: -0.02em; white-space: nowrap; }
 .stop-num small { font-size: 34px; color: var(--ink-3); font-weight: 600; margin-left: 6px; }
 .stop-nav { display: flex; gap: 6px; }
 .stop-nav .btn { padding: 10px; }
@@ -259,6 +259,12 @@ a { color: var(--signal); text-underline-offset: 3px; }
   .stop-num { font-size: 64px; }
   .sign h1 { font-size: 26px; }
   .scan-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 400px) {
+  .stage-head { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; }
+  .portrait { width: 96px; height: 116px; }
+  .stop-num { font-size: 52px; }
+  .stop-num small { font-size: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

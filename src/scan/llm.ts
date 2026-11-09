@@ -32,6 +32,17 @@ const BEARD_PART: Record<string, string> = {
   sides: 'sideburns only',
 };
 
+/** То же по-русски — для подписи в списке подбора */
+const BEARD_PART_RU: Record<string, string> = {
+  '': 'полная (усы + подбородок + бакенбарды)',
+  chin: 'только подбородок',
+  mustache: 'только усы',
+  chin_mustache: 'подбородок + усы (эспаньолка)',
+  chin_sides: 'подбородок + бакенбарды, без усов',
+  mustache_sides: 'усы + бакенбарды, без подбородка',
+  sides: 'только бакенбарды',
+};
+
 const pretty = (s: string) => s.replace(/_/g, ' ');
 
 function variantOf(gender: Gender, slotId: string, name?: string): Variant | undefined {
@@ -130,7 +141,8 @@ ${measured}
 ${parts.join('\n\n')}
 
 Reply with ONLY a JSON object, no prose:
-{"bodyType":"male|female","slots":{"<slotId>":{"n":<number>,"conf":<0..1>,"why":"<short reason>"}},"beard_part":{"part":"full"},"present":{"facialHair":bool,"piercings":bool,"faceTattoo":bool,"eyeMakeup":bool,"cyberware":bool},"notes":"<one sentence>"}`;
+{"bodyType":"male|female","slots":{"<slotId>":{"n":<number>,"conf":<0..1>,"why":"<short reason in Russian>"}},"beard_part":{"part":"full"},"present":{"facialHair":bool,"piercings":bool,"faceTattoo":bool,"eyeMakeup":bool,"cyberware":bool},"notes":"<one sentence in Russian>"}
+Write "why" and "notes" in Russian: the user reads them.`;
   return { text, slots };
 }
 
@@ -252,7 +264,7 @@ export function parseLlm(gender: Gender, text: string): LlmResult {
   const part = j.beard_part?.part;
   if (gender === 'male' && part) {
     const key = part === 'full' ? '' : part;
-    out.push({ slotId: 'beard_part', partKey: key, conf: 0.6, src: 'llm', why: BEARD_PART[key] ?? part });
+    out.push({ slotId: 'beard_part', partKey: key, conf: 0.6, src: 'llm', why: BEARD_PART_RU[key] ?? part });
   }
 
   const pres = j.present ?? {};

@@ -81,19 +81,37 @@ function morphSuggestion(gender: Gender, slot: Exclude<MorphSlot, 'ear'>, a: Pho
   const turn = Math.min(1, Math.max(0, (Math.abs(a.yaw) - 8) / 20));
   // Нос и челюсть с фронтального фото определяются слабее — честно режем уверенность
   const slotTrust = slot === 'eyes' || slot === 'mouth' ? 1 : 0.6;
-  const conf = Math.max(0.1, Math.min(0.9, (0.35 + margin * 1.5 - best.d * 0.08) * slotTrust * (1 - turn * 0.6)));
-  return { slotId: slot, value: best.o.i, conf, src: 'local', why: `ближе всего: ${best.o.text.ru}` };
+  // Мимика искажает замер: улыбка растягивает рот и поднимает щёки, прищур сужает глаза
+  const expr = expressionLoad(a, slot);
+  const conf = Math.max(0.1, Math.min(0.9, (0.35 + margin * 1.5 - best.d * 0.08) * slotTrust * (1 - turn * 0.6) * (1 - expr * 0.7)));
+  const note = expr > 0.35 ? ' (мимика на фото — замер приблизительный)' : '';
+  return { slotId: slot, value: best.o.i, conf, src: 'local', why: `ближе всего: ${best.o.text.ru}${note}` };
+}
+
+/** Насколько выражение лица мешает замеру зоны (0 — нейтральное лицо, 1 — сильная мимика). */
+export function expressionLoad(a: PhotoAnalysis, slot: Exclude<MorphSlot, 'ear'>): number {
+  const b = a.blendshapes ?? {};
+  const avg = (...k: string[]) => k.reduce((s, x) => s + (b[x] ?? 0), 0) / k.length;
+  const smile = avg('mouthSmileLeft', 'mouthSmileRight');
+  const open = b.jawOpen ?? 0;
+  const squint = Math.max(avg('eyeSquintLeft', 'eyeSquintRight'), avg('cheekSquintLeft', 'cheekSquintRight'));
+  const v = slot === 'mouth' ? Math.max(smile, open) : slot === 'eyes' ? Math.max(squint, smile * 0.8) : slot === 'jaw' ? open : smile * 0.3;
+  return Math.max(0, Math.min(1, v));
 }
 
 export function localSuggestions(gender: Gender, a: PhotoAnalysis): Suggestion[] {
   const out: (Suggestion | null)[] = [];
   const c = a.colors;
-  out.push(colorSuggestion(gender, 'skin_color', c.skin?.rgb, { wL: 0.9, plainOnly: false, why: 'тон кожи щёк и лба' }));
+  const skinS = colorSuggestion(gender, 'skin_color', c.skin?.rgb, { wL: 0.9, plainOnly: false, why: 'тон кожи щёк и лба' });
+  out.push(skinS);
+  // Поправка на экспозицию и баланс белого: считаем, что кожа на фото — это подобранный
+  // образец игры, а разница — освещение. Тем же множителем приводим волосы, брови и щетину.
+  const fix = exposureFix(c.skin?.rgb, skinS?.hex);
   out.push(colorSuggestion(gender, 'eyes_color', c.iris?.rgb, { field: 'iris', wL: 0.5, why: 'цвет радужки' }));
   const hairConf = 0.4 + 0.5 * a.hairCoverage;
-  out.push(colorSuggestion(gender, 'hair_color', c.hair?.rgb, { wL: 0.8, why: 'волосы над лбом', confScale: hairConf }));
-  out.push(colorSuggestion(gender, 'eyebrows_color', c.brows?.rgb, { wL: 0.7, why: 'цвет бровей' }));
-  out.push(colorSuggestion(gender, 'eyelash_color', c.brows?.rgb, { wL: 0.7, why: 'по цвету бровей', confScale: 0.6 }));
+  out.push(colorSuggestion(gender, 'hair_color', fix(c.hair?.rgb), { wL: 0.8, why: 'волосы над лбом', confScale: hairConf }));
+  out.push(colorSuggestion(gender, 'eyebrows_color', fix(c.brows?.rgb), { wL: 0.7, why: 'цвет бровей' }));
+  out.push(colorSuggestion(gender, 'eyelash_color', fix(c.brows?.rgb), { wL: 0.7, why: 'по цвету бровей', confScale: 0.6 }));
   for (const slot of ['eyes', 'nose', 'mouth', 'jaw'] as const) out.push(morphSuggestion(gender, slot, a));
 
   const { slotById } = getIndex(gender);
@@ -102,7 +120,7 @@ export function localSuggestions(gender: Gender, a: PhotoAnalysis): Suggestion[]
     if (a.beardScore < 0.25) out.push({ slotId: 'beard', value: beard.options[0].i, conf: 0.55, src: 'local', why: 'подбородок не темнее кожи' });
     else {
       out.push({ slotId: 'beard', value: beard.options[Math.min(3, beard.options.length - 1)].i, conf: 0.25 + a.beardScore * 0.2, src: 'local', why: 'тёмная зона на подбородке — тип бороды лучше уточнить моделью' });
-      out.push(colorSuggestion(gender, 'beard_color', (c.chin ?? c.brows)?.rgb, { wL: 0.7, why: 'цвет щетины' }));
+      out.push(colorSuggestion(gender, 'beard_color', fix((c.chin ?? c.brows)?.rgb), { wL: 0.7, why: 'цвет щетины' }));
     }
   }
   const lipsType = slotById.get('makeupLips_type')?.variants[0];
@@ -115,6 +133,17 @@ export function localSuggestions(gender: Gender, a: PhotoAnalysis): Suggestion[]
     }
   }
   return out.filter((x): x is Suggestion => !!x);
+}
+
+/**
+ * Множитель по каналам «образец кожи игры / кожа на фото», ограниченный 0.55…1.6,
+ * чтобы не перекрашивать фото с очень необычным светом. Без замера кожи — без поправки.
+ */
+export function exposureFix(skinPhoto: RGB | undefined, skinGameHex: string | undefined): (c: RGB | undefined) => RGB | undefined {
+  if (!skinPhoto || !skinGameHex) return (c) => c;
+  const g = hexToRgb(skinGameHex);
+  const k = [0, 1, 2].map((i) => Math.max(0.55, Math.min(1.6, g[i] / Math.max(1, skinPhoto[i]))));
+  return (c) => (c ? ([0, 1, 2].map((i) => Math.max(0, Math.min(255, c[i] * k[i]))) as RGB) : c);
 }
 
 /** Объединение: для каждого слота берём подсказку с большей уверенностью. */
