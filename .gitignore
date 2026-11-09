@@ -12,3 +12,4 @@ game-cache/
 .omc/
 public/mediapipe/
 *.tsbuildinfo
+.impeccable/review/
