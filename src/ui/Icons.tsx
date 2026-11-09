@@ -68,6 +68,33 @@ export const IconReset = (p: SVGProps<SVGSVGElement>) => (
     <path d="M4 4v4.6h4.6" />
   </svg>
 );
+/** Контурный треугольник, как стрелки строк в редакторе игры */
+export const IconTriLeft = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ strokeWidth: 1.6, ...p })}>
+    <path d="M17 4.5v15L5.5 12z" />
+  </svg>
+);
+export const IconTriRight = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ strokeWidth: 1.6, ...p })}>
+    <path d="M7 4.5v15L18.5 12z" />
+  </svg>
+);
+export const IconGrid = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ strokeWidth: 1.6, ...p })}>
+    {[4, 10, 16].flatMap((y) => [4, 10, 16].map((x) => <rect key={`${x}${y}`} x={x} y={y} width="4" height="4" />))}
+  </svg>
+);
+/** Стрелка клавиши: в шрифте Tektur нет символов ← ↑ → ↓ */
+export const IconArrow = ({ dir, ...p }: SVGProps<SVGSVGElement> & { dir: 'up' | 'down' | 'left' | 'right' }) => (
+  <svg {...base({ strokeWidth: 2.4, ...p })} style={{ transform: `rotate(${{ up: 0, right: 90, down: 180, left: 270 }[dir]}deg)` }}>
+    <path d="M12 19V5M6 11l6-6 6 6" />
+  </svg>
+);
+export const IconClose =(p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+);
 export const IconDownload = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <path d="M12 4v12M7 11l5 5 5-5" />

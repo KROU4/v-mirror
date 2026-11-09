@@ -15,8 +15,7 @@
     "catalog": "python -I tools/extract/build_catalog.py --out src/data --work"
   },
   "dependencies": {
-    "@fontsource/barlow": "^5.3.0",
-    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource-variable/tektur": "^5.3.0",
     "@mediapipe/tasks-vision": "^1.2.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

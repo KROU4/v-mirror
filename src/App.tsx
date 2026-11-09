@@ -1,9 +1,8 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { displayNumber, type Gender, type Option } from './model/catalog';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { displayNumber, GROUP_LABEL, type Gender, type Option } from './model/catalog';
 import {
   decodeState,
   defaultState,
-  effectiveDefault,
   encodeState,
   gameSheet,
   randomize,
@@ -16,12 +15,13 @@ import { morphInfo, MORPH_SLOTS, type MorphSlot } from './model/descriptors';
 import { LINES, LINE_OF_SLOT } from './ui/lines';
 import { pad2 } from './ui/format';
 import Portrait from './ui/Portrait';
+import HeadViewer, { DEFAULT_YAW } from './ui/HeadViewer';
 import type { ScanProvenance } from './scan/ScanPanel';
 // Панель скана тянет MediaPipe и данные подбора — грузим её только при первом открытии
 const ScanPanel = lazy(() => import('./scan/ScanPanel'));
 import { hairLabel } from './model/hair';
 import { browDescription } from './model/brows';
-import { IconCheck, IconCopy, IconLeft, IconLink, IconReset, IconRight, IconScan, IconShuffle } from './ui/Icons';
+import { IconArrow, IconCheck, IconClose, IconGrid, IconReset, IconScan, IconShuffle, IconTriLeft, IconTriRight } from './ui/Icons';
 
 const store = {
   get<T>(k: string, d: T): T {
@@ -53,6 +53,9 @@ function initialStates(): Record<Gender, CharacterState> {
 }
 
 const isMorph = (id: string): id is MorphSlot => (MORPH_SLOTS as string[]).includes(id);
+const swatchOf = (o: Option | undefined) => o?.iris ?? o?.hex;
+const hasSwatches = (vs: VisibleSlot) => vs.variant.options.some((o) => o.hex || o.iris);
+const BODY_LABEL: Record<Gender, string> = { male: 'Тип тела 1', female: 'Тип тела 2' };
 
 export default function App() {
   const [states, setStates] = useState(initialStates);
@@ -65,11 +68,13 @@ export default function App() {
     new URLSearchParams(window.location.search).get('scan') === '1' ? 'scan' : 'edit',
   );
   const [current, setCurrent] = useState('skin_color');
+  const [picker, setPicker] = useState(false);
+  const [yaw, setYaw] = useState(DEFAULT_YAW);
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [prov, setProv] = useState<Record<string, ScanProvenance>>({});
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
-  const gridFocusIntent = useRef(false);
+  const listRef = useRef<HTMLOListElement>(null);
 
   const state = states[gender];
   const slots = useMemo(() => visibleSlots(state), [state]);
@@ -85,6 +90,18 @@ export default function App() {
 
   useEffect(() => store.set('vm.states', states), [states]);
   useEffect(() => store.set('vm.gender', gender), [gender]);
+
+  // Выбранная строка всегда видна в списке (стрелки ↑↓ листают его, как в игре). Листаем только
+  // сам список: scrollIntoView на телефоне, где список не прокручивается, дёргал бы всю страницу
+  useEffect(() => {
+    const box = listRef.current;
+    const el = box?.querySelector<HTMLElement>(`[data-slot="${CSS.escape(cur?.slot.id ?? '')}"]`);
+    if (!box || !el || box.scrollHeight <= box.clientHeight) return;
+    const b = box.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (r.top < b.top) box.scrollTop -= b.top - r.top + 8;
+    else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 8;
+  }, [cur?.slot.id]);
 
   const flash = useCallback((text: string, undo?: () => void) => {
     setToast({ text, undo });
@@ -102,29 +119,40 @@ export default function App() {
 
   const switchGender = useCallback(
     (g: Gender) => {
-      if (g !== gender) dropUndo();
+      if (g !== gender) {
+        dropUndo();
+        setPicker(false);
+      }
       setGender(g);
     },
     [gender, dropUndo],
   );
 
   /** Массовая замена (Случайно, Сброс): запоминаем прежнее, чтобы вернуть одним нажатием. */
-  const replaceAll = (next: CharacterState, msg: string) => {
-    const before = { state, prov, done };
-    // Отметка «Выставлено» снимается со строк, чей номер изменился
-    const was = new Map(sheet.map((r) => [r.slotId, r.number]));
-    const nextDone: Record<string, boolean> = {};
-    for (const r of gameSheet(next)) if (done[r.slotId] && was.get(r.slotId) === r.number) nextDone[r.slotId] = true;
-    update(next);
-    setProv({});
-    setDone(nextDone);
-    flash(msg, () => {
-      update(before.state);
-      setProv(before.prov);
-      setDone(before.done);
-      setToast(null);
-    });
-  };
+  const replaceAll = useCallback(
+    (next: CharacterState, msg: string) => {
+      const before = { state, prov, done };
+      // Отметка «выставлено» снимается со строк, чей номер изменился
+      const was = new Map(sheet.map((r) => [r.slotId, r.number]));
+      const nextDone: Record<string, boolean> = {};
+      for (const r of gameSheet(next)) if (done[r.slotId] && was.get(r.slotId) === r.number) nextDone[r.slotId] = true;
+      update(next);
+      setProv({});
+      setDone(nextDone);
+      flash(msg, () => {
+        update(before.state);
+        setProv(before.prov);
+        setDone(before.done);
+        setToast(null);
+      });
+    },
+    [state, prov, done, sheet, update, flash],
+  );
+
+  const shuffle = useCallback(
+    () => replaceAll(randomize(gender, 3, Math.random, true, state), 'Лицо собрано случайно, тело не тронуто'),
+    [replaceAll, gender, state],
+  );
 
   const choose = useCallback(
     (vs: VisibleSlot, i: number) => {
@@ -135,45 +163,37 @@ export default function App() {
     [states, gender, update, dropUndo],
   );
 
-  const step = useCallback(
-    (dir: 1 | -1) => {
-      if (!cur) return;
-      const opts = cur.variant.options;
-      const pos = opts.findIndex((o) => o.i === cur.value);
-      const next = opts[(pos + dir + opts.length) % opts.length];
-      choose(cur, next.i);
+  const stepRow = useCallback(
+    (vs: VisibleSlot, dir: number) => {
+      const opts = vs.variant.options;
+      const pos = opts.findIndex((o) => o.i === vs.value);
+      const next = opts[(((pos + dir) % opts.length) + opts.length) % opts.length];
+      choose(vs, next.i);
     },
-    [cur, choose],
+    [choose],
   );
 
-  const moveStation = useCallback(
+  const curId = cur?.slot.id;
+  const select = useCallback(
+    (id: string) => {
+      // Сетка цветов принадлежит строке: при переходе на другую строку закрывается
+      if (id !== curId) setPicker(false);
+      setCurrent(id);
+    },
+    [curId],
+  );
+
+  const moveRow = useCallback(
     (dir: 1 | -1) => {
       if (!cur) return;
       const ids = slots.map((s) => s.slot.id);
       const pos = ids.indexOf(cur.slot.id);
-      setCurrent(ids[Math.max(0, Math.min(ids.length - 1, pos + dir))]);
+      select(ids[Math.max(0, Math.min(ids.length - 1, pos + dir))]);
     },
-    [cur, slots],
+    [cur, slots, select],
   );
 
-  useEffect(() => {
-    if (mode !== 'edit') return;
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target;
-      if (e.altKey || e.ctrlKey || e.metaKey) return;
-      if (t instanceof Element && t.closest('input, textarea, select')) return;
-      // Фокус в сетке вариантов — после смены слота вернуть его на выбранную ячейку
-      if (e.key.startsWith('Arrow')) gridFocusIntent.current = t instanceof Element && !!t.closest('.grid');
-      if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
-      if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
-      if (e.key === 'ArrowDown') { e.preventDefault(); moveStation(1); }
-      if (e.key === 'ArrowUp') { e.preventDefault(); moveStation(-1); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [mode, step, moveStation]);
-
-  const share = async () => {
+  const share = useCallback(async () => {
     const url = `${location.origin}${location.pathname}#v=${encodeState(state)}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -183,10 +203,10 @@ export default function App() {
       history.replaceState(null, '', url);
       flash('Ссылка в адресной строке — скопируйте её');
     }
-  };
+  }, [state, flash]);
 
-  const copySheet = async () => {
-    const lines = [`V-MIRROR · ${gender === 'male' ? 'мужской' : 'женский'} V · Cyberpunk 2077 2.5`];
+  const copySheet = useCallback(async () => {
+    const lines = [`V-MIRROR · ${BODY_LABEL[gender].toLowerCase()} · Cyberpunk 2077 2.5`];
     for (const line of LINES) {
       const rows = sheet.filter((r) => LINE_OF_SLOT.get(r.slotId)?.id === line.id);
       if (!rows.length) continue;
@@ -195,158 +215,223 @@ export default function App() {
     }
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
-      flash('Лист скопирован');
+      flash('Список настроек скопирован');
     } catch {
       flash('Не удалось скопировать — браузер запретил доступ к буферу');
     }
-  };
+  }, [gender, sheet, flash]);
+
+  const resetAll = useCallback(() => replaceAll(defaultState(gender), 'Все настройки сброшены к значениям игры'), [replaceAll, gender]);
+
+  // Клавиши как в игре: ↑↓ строка, ←→ вариант, Q/E поворот головы; плюс R, C, L, G, Esc
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (t instanceof Element && t.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const k = e.key.toLowerCase();
+      if (k === 'escape') {
+        if (picker) {
+          setPicker(false);
+          document.querySelector<HTMLElement>(`[data-slot="${CSS.escape(cur?.slot.id ?? '')}"] .ctrl-grid`)?.focus();
+        } else if (mode === 'scan') setMode('edit');
+        return;
+      }
+      if (k === 'q' || k === 'й') return setYaw((y) => Math.max(-170, y - 20));
+      if (k === 'e' || k === 'у') return setYaw((y) => Math.min(170, y + 20));
+      if (mode !== 'edit' || !cur) return;
+      const inPicker = t instanceof Element && !!t.closest('.picker-grid');
+      if (e.key === 'ArrowRight') { e.preventDefault(); stepRow(cur, 1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); stepRow(cur, -1); }
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        if (inPicker) {
+          const grid = (t as Element).closest('.picker-grid')!;
+          const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').length || 1;
+          stepRow(cur, dir * cols);
+        } else moveRow(dir);
+      } else if (k === 'r' || k === 'к') shuffle();
+      else if (k === 'c' || k === 'с') copySheet();
+      else if (k === 'l' || k === 'д') share();
+      else if ((k === 'g' || k === 'п') && hasSwatches(cur)) setPicker((p) => !p);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mode, cur, picker, stepRow, moveRow, shuffle, copySheet, share]);
 
   const applyScan = (next: CharacterState, provenance: Record<string, ScanProvenance>) => {
     update(next);
     setProv(provenance);
     setDone({});
     setMode('edit');
-    flash('Подбор применён — проверьте маршрутный лист');
+    flash('Подбор применён — строки с точкой подобраны по фото');
   };
 
-  const lineStyle = (id: string) => ({ '--c': LINE_OF_SLOT.get(id)?.color ?? 'var(--ink-3)' }) as CSSProperties;
-
+  let lastGroup = '';
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="wordmark">
-          <b>V<span>-</span>MIRROR</b>
-          <small>редактор V · Cyberpunk 2077 2.5</small>
-        </div>
-        <div className="seg" role="group" aria-label="Тело персонажа">
-          {(['male', 'female'] as Gender[]).map((g) => (
-            <button key={g} aria-pressed={gender === g} onClick={() => switchGender(g)}>
-              {g === 'male' ? 'Тип тела 1' : 'Тип тела 2'}
-            </button>
-          ))}
-        </div>
-        <button className="btn ghost" onClick={() => replaceAll(randomize(gender, 3, Math.random, true, state), 'Лицо собрано случайно')} title="Случайное лицо (обыденное), тело не меняется" aria-label="Случайно">
-          <IconShuffle /> <span className="btn-label">Случайно</span>
-        </button>
-        <button className="btn ghost" onClick={() => replaceAll(defaultState(gender), 'Все слоты сброшены к значениям игры')} title="Сбросить к значениям игры по умолчанию" aria-label="Сброс">
-          <IconReset /> <span className="btn-label">Сброс</span>
-        </button>
-        <button className="btn ghost" onClick={share} title="Скопировать ссылку на эту V" aria-label="Ссылка">
-          <IconLink /> <span className="btn-label">Ссылка</span>
-        </button>
-        <button className={`btn ${mode === 'scan' ? '' : 'primary'}`} onClick={() => setMode(mode === 'scan' ? 'edit' : 'scan')}>
-          <IconScan /> {mode === 'scan' ? 'К редактору' : 'Скан фото'}
-        </button>
+    <div className="cc" data-mode={mode}>
+      <div className="cc-frame" aria-hidden="true" />
+
+      <div className="cc-proto" aria-hidden="true">
+        <b>V-MIRROR</b>
+        <span>Локальный редактор · данные из файлов игры 2.5 · номера совпадают с игрой</span>
+      </div>
+
+      <header className="cc-title">
+        <h1>
+          <span className="cc-chip" aria-hidden="true" />
+          Выбор внешности Ви
+        </h1>
+        <p>Выставьте эти номера в редакторе игры — и V будет такой же</p>
       </header>
 
-      <div className="workspace">
-        <nav className="map" aria-label="Схема слотов редактора">
-          {LINES.map((line) => {
-            const items = slots.filter((s) => LINE_OF_SLOT.get(s.slot.id)?.id === line.id);
-            if (!items.length) return null;
-            return (
-              <section key={line.id} className="map-line" style={{ '--c': line.color } as CSSProperties}>
-                <h3>
-                  <span className="line-badge">{line.code}</span>
-                  {line.label.ru}
-                </h3>
-                <ul className="stations">
-                  {items.map((vs) => {
-                    const pv = prov[vs.slot.id];
-                    const swatch = vs.option?.iris ?? vs.option?.hex;
-                    return (
-                      <li key={vs.slot.id}>
-                        <button
-                          className="station"
-                          aria-current={mode === 'edit' && cur?.slot.id === vs.slot.id}
-                          onClick={() => {
-                            setCurrent(vs.slot.id);
-                            setMode('edit');
-                            // На телефоне редактор стоит над схемой — поднимаем к нему
-                            if (window.matchMedia('(max-width: 760px)').matches) {
-                              const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-                              document.querySelector('.stage')?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
-                            }
-                          }}
-                        >
-                          {pv && <span className="scan-dot" style={{ width: 4 + pv.conf * 6, height: 4 + pv.conf * 6 }} title={`Подобрано (${pv.src})`} />}
-                          <span>{vs.slot.label.ru}</span>
-                          <span className={`val ${vs.value !== effectiveDefault(vs.variant) ? 'changed' : ''}`}>
-                            {swatch && <i style={{ background: swatch }} />}
-                            {pad2(displayNumber(vs.variant, vs.value))}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })}
-        </nav>
+      <aside className="cc-left" aria-label="Тип тела и действия">
+        <h2>Тип тела</h2>
+        <div className="bodies" role="group" aria-label="Тип тела">
+          {(['male', 'female'] as Gender[]).map((g) => (
+            <BodyCard key={g} g={g} active={gender === g} state={states[g]} onPick={() => switchGender(g)} />
+          ))}
+        </div>
+        <div className="left-actions">
+          <button className={`gbtn ${mode === 'scan' ? 'on' : 'accent'}`} onClick={() => setMode(mode === 'scan' ? 'edit' : 'scan')} aria-pressed={mode === 'scan'}>
+            <IconScan /> {mode === 'scan' ? 'К редактору' : 'Скан фото'}
+          </button>
+          <button className="gbtn" onClick={resetAll}>
+            <IconReset /> Сброс
+          </button>
+        </div>
+        <button className="gbtn shuffle" onClick={shuffle} title="Случайное лицо, тело не меняется">
+          <kbd>R</kbd> Случайно
+          <IconShuffle />
+        </button>
+      </aside>
 
-        <main className="stage">
-          {mode === 'scan' ? (
+      <main className="cc-stage">
+        <HeadViewer state={state} yaw={yaw} onYaw={setYaw} fallback={<Portrait state={state} className="portrait-fallback" />} />
+        {mode === 'scan' ? (
+          <section className="scan-wrap" aria-label="Скан фото">
+            <button className="scan-close" onClick={() => setMode('edit')} aria-label="Закрыть скан фото">
+              <IconClose />
+            </button>
             <Suspense fallback={<p className="muted">Загружаю модуль скана…</p>}>
               <ScanPanel gender={gender} base={state} onApply={applyScan} onGender={switchGender} />
             </Suspense>
-          ) : cur ? (
-            <Editor vs={cur} state={state} onChoose={(i) => choose(cur, i)} onStep={step} style={lineStyle(cur.slot.id)} prov={prov[cur.slot.id]} focusIntent={gridFocusIntent} />
-          ) : null}
-        </main>
+          </section>
+        ) : (
+          cur && (
+            <>
+              <InfoBox vs={cur} gender={gender} prov={prov[cur.slot.id]} />
+              {picker && hasSwatches(cur) && <Picker vs={cur} prov={prov[cur.slot.id]} onChoose={(i) => choose(cur, i)} onClose={() => setPicker(false)} />}
+            </>
+          )
+        )}
+      </main>
 
-        <aside className="sheet" aria-label="Маршрутный лист">
-          <div className="sheet-head">
-            <h2>Маршрутный лист</h2>
-            <p>Выставьте эти номера в редакторе игры и отмечайте готовое. Номер — позиция варианта слева направо.</p>
-            <div className="sheet-actions">
-              <button className="btn" onClick={copySheet}>
-                <IconCopy /> Копировать
-              </button>
-              <button className="btn ghost" onClick={() => { setDone({}); dropUndo(); }} disabled={!Object.values(done).some(Boolean)}>
-                Снять отметки
-              </button>
-            </div>
-          </div>
-          <ol>
-            {LINES.map((line) => {
-              const rows = sheet.filter((r) => LINE_OF_SLOT.get(r.slotId)?.id === line.id);
-              if (!rows.length) return null;
-              return [
-                <li key={`line:${line.id}`} className="group" style={{ '--c': line.color } as CSSProperties}>
-                  {line.label.ru}
-                </li>,
-                ...rows.map((r) => (
-                  <li key={r.slotId} className={done[r.slotId] ? 'done' : ''}>
+      <section className="cc-list" aria-label="Создание образа Ви">
+        <h2>Создание образа Ви</h2>
+        <ol className="rows" ref={listRef}>
+          {slots.map((vs) => {
+            const id = vs.slot.id;
+            const sel = cur?.slot.id === id;
+            const sw = hasSwatches(vs) ? swatchOf(vs.option) ?? '#000' : undefined;
+            const pv = prov[id];
+            const num = pad2(displayNumber(vs.variant, vs.value));
+            const group = vs.slot.group;
+            const showGroup = group !== lastGroup && lastGroup !== '';
+            lastGroup = group;
+            return [
+              showGroup && (
+                <li key={`g:${group}`} className="rows-group" aria-hidden="true">
+                  {GROUP_LABEL[group].ru}
+                </li>
+              ),
+              <li key={id} data-slot={id} className={`crow ${sel ? 'on' : ''} ${done[id] ? 'done' : ''}`}>
+                <button
+                  className="row-check"
+                  role="checkbox"
+                  aria-checked={!!done[id]}
+                  aria-label={`${vs.slot.label.ru}: выставлено в игре`}
+                  title="Отметить, что уже выставлено в игре"
+                  onClick={() => {
+                    setDone((d) => ({ ...d, [id]: !d[id] }));
+                    dropUndo();
+                  }}
+                >
+                  <span className="box">{done[id] && <IconCheck />}</span>
+                </button>
+                <button className="row-head" aria-current={sel} onClick={() => select(id)}>
+                  <span className="row-label">{vs.slot.label.ru}</span>
+                  {pv && <span className="row-scan" title={`Подобрано по фото (${pv.src === 'llm' ? 'модель' : 'замер'})`} />}
+                  <span className="row-val">
+                    {sw && <i className="row-sw" style={{ background: sw }} />}
+                    <span className={sw ? 'row-num small' : 'row-num'}>{num}</span>
+                  </span>
+                </button>
+                <div className={`row-ctrl ${sw ? 'three' : ''}`}>
+                  <button
+                    aria-label={`${vs.slot.label.ru}: предыдущий вариант`}
+                    onClick={() => {
+                      select(id);
+                      stepRow(vs, -1);
+                    }}
+                  >
+                    <IconTriLeft />
+                  </button>
+                  {sw && (
                     <button
-                      className="check"
-                      role="checkbox"
-                      aria-checked={!!done[r.slotId]}
-                      aria-label={`${r.label.ru}: выставлено`}
+                      className="ctrl-grid"
+                      aria-label={`${vs.slot.label.ru}: все цвета`}
+                      aria-expanded={sel && picker}
                       onClick={() => {
-                        setDone((d) => ({ ...d, [r.slotId]: !d[r.slotId] }));
-                        dropUndo();
+                        select(id);
+                        setPicker((p) => (sel ? !p : true));
                       }}
                     >
-                      <span className="box">{done[r.slotId] && <IconCheck />}</span>
+                      <IconGrid />
                     </button>
-                    <span className="name">
-                      {r.label.ru}
-                      {done[r.slotId] && <span className="stamp">Выставлено</span>}
-                      {r.value.ru && !/^\d+$/.test(r.value.ru) && <small>{r.value.ru}</small>}
-                    </span>
-                    <span className="num">
-                      {r.hex && <i style={{ background: r.hex }} />}
-                      {pad2(r.number)}
-                      <small className="muted">/{pad2(r.total)}</small>
-                    </span>
-                  </li>
-                )),
-              ];
-            })}
-          </ol>
-        </aside>
-      </div>
+                  )}
+                  <button
+                    aria-label={`${vs.slot.label.ru}: следующий вариант`}
+                    onClick={() => {
+                      select(id);
+                      stepRow(vs, 1);
+                    }}
+                  >
+                    <IconTriRight />
+                  </button>
+                </div>
+              </li>,
+            ];
+          })}
+        </ol>
+        <div className="list-actions">
+          <button className="gbtn" onClick={copySheet}>
+            <kbd>C</kbd> Копировать список
+          </button>
+          <button className="gbtn" onClick={share}>
+            <kbd>L</kbd> Ссылка
+          </button>
+        </div>
+      </section>
+
+      <footer className="cc-foot" aria-label="Управление">
+        <span>
+          <kbd>Q</kbd> Повернуть <kbd>E</kbd>
+        </span>
+        <span>
+          <kbd aria-label="Вверх"><IconArrow dir="up" /></kbd>
+          <kbd aria-label="Вниз"><IconArrow dir="down" /></kbd> Выбрать
+        </span>
+        <span>
+          <kbd aria-label="Влево"><IconArrow dir="left" /></kbd>
+          <kbd aria-label="Вправо"><IconArrow dir="right" /></kbd> Изменить
+        </span>
+        <span>
+          <kbd>G</kbd> Сетка цветов
+        </span>
+      </footer>
+
       <div className="toast-host" role="status" aria-live="polite">
         {toast && (
           <div className="toast">
@@ -363,6 +448,20 @@ export default function App() {
   );
 }
 
+function BodyCard({ g, active, state, onPick }: { g: Gender; active: boolean; state: CharacterState; onPick: () => void }) {
+  const [noImg, setNoImg] = useState(false);
+  return (
+    <button className="body-card" aria-pressed={active} onClick={onPick}>
+      {noImg ? (
+        <Portrait state={state} className="body-img" />
+      ) : (
+        <img className="body-img" src={`/game/renders/${g}/base.png`} alt="" onError={() => setNoImg(true)} />
+      )}
+      <span>{BODY_LABEL[g]}</span>
+    </button>
+  );
+}
+
 function optionCaption(slotId: string, o: Option | undefined, gender: Gender): string {
   if (!o) return '';
   if (slotId === 'hairstyle') return hairLabel(o, gender);
@@ -372,129 +471,71 @@ function optionCaption(slotId: string, o: Option | undefined, gender: Gender): s
   return /^\d+$/.test(l) ? '' : l;
 }
 
-function Editor({
-  vs,
-  state,
-  onChoose,
-  onStep,
-  style,
-  prov,
-  focusIntent,
-}: {
-  vs: VisibleSlot;
-  state: CharacterState;
-  onChoose: (i: number) => void;
-  onStep: (d: 1 | -1) => void;
-  style: CSSProperties;
-  prov?: ScanProvenance;
-  /** true, если стрелку нажали, когда фокус был в сетке вариантов */
-  focusIntent: { current: boolean };
-}) {
-  const line = LINE_OF_SLOT.get(vs.slot.id);
-  const num = displayNumber(vs.variant, vs.value);
-  const total = vs.variant.options.length;
-  const hasSwatches = vs.variant.options.some((o) => o.hex || o.iris);
-  const caption = optionCaption(vs.slot.id, vs.option, state.gender);
+function InfoBox({ vs, gender, prov }: { vs: VisibleSlot; gender: Gender; prov?: ScanProvenance }) {
+  const caption = optionCaption(vs.slot.id, vs.option, gender);
+  return (
+    <div className="info" aria-live="polite">
+      <div className="info-head">
+        <span>{vs.slot.label.ru}</span>
+        <b>
+          {pad2(displayNumber(vs.variant, vs.value))}
+          <small> / {pad2(vs.variant.options.length)}</small>
+        </b>
+      </div>
+      {caption && <p>{caption}</p>}
+      {prov && (
+        <p className="info-prov">
+          По фото: вариант {pad2(displayNumber(vs.variant, prov.value))} · {prov.src === 'llm' ? 'модель' : prov.src === 'local' ? 'замер' : 'вручную'} · уверенность {Math.round(prov.conf * 100)}%
+          {prov.why ? ` — ${prov.why}` : ''}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Picker({ vs, prov, onChoose, onClose }: { vs: VisibleSlot; prov?: ScanProvenance; onChoose: (i: number) => void; onClose: () => void }) {
   const gridRef = useRef<HTMLDivElement>(null);
-  // Роуминговый tabindex: если фокус был в сетке, он идёт за выбранной ячейкой — и при смене
-  // варианта, и при смене слота (тогда прежняя ячейка могла исчезнуть и фокус упал на body)
+  // Фокус идёт за выбранной ячейкой: при открытии и при смене варианта стрелками
   useEffect(() => {
     const g = gridRef.current;
     if (!g) return;
     const a = document.activeElement;
-    const inGrid = g.contains(a);
-    const wanted = inGrid || (focusIntent.current && (!a || a === document.body));
-    focusIntent.current = false;
-    if (wanted && a?.getAttribute('aria-checked') !== 'true') {
+    if ((!a || a === document.body || g.contains(a)) && a?.getAttribute('aria-checked') !== 'true') {
       g.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
     }
-  }, [vs.slot.id, vs.variant.name, vs.value, focusIntent]);
+  }, [vs.value]);
+  useEffect(() => {
+    gridRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+  }, [vs.slot.id]);
   return (
-    <div style={style}>
-      <div className="stage-head">
-        <Portrait state={state} className="portrait" />
-        <div className="sign">
-          <h1>
-            <span className="line-badge" role="img" aria-label={`Линия «${line?.label.ru ?? ''}»`} title={line?.label.ru}>
-              {line?.code}
-            </span>
-            {vs.slot.label.ru}
-          </h1>
-          <div className="stop">
-            <div className="stop-num" aria-live="polite">
-              {pad2(num)}
-              <small>/ {pad2(total)}</small>
-            </div>
-            <div className="stop-nav">
-              <button className="btn" onClick={() => onStep(-1)} aria-label="Предыдущий вариант">
-                <IconLeft />
-              </button>
-              <button className="btn" onClick={() => onStep(1)} aria-label="Следующий вариант">
-                <IconRight />
-              </button>
-            </div>
-          </div>
-          <div className="stop-label">{caption && <b>{caption}</b>}</div>
-          <div className="hint">
-            <span className="kbd">←</span> <span className="kbd">→</span> вариант · <span className="kbd">↑</span> <span className="kbd">↓</span> слот
-          </div>
-        </div>
+    <div className="picker" role="dialog" aria-label={`${vs.slot.label.ru}: выбор цвета`}>
+      <div className="picker-head">
+        <span>{vs.slot.label.ru}</span>
+        <button onClick={onClose} aria-label="Закрыть сетку цветов">
+          <IconClose />
+        </button>
       </div>
-
-      <div className="grid" role="radiogroup" aria-label={vs.slot.label.ru} ref={gridRef}>
+      <div className="picker-grid" role="radiogroup" aria-label={vs.slot.label.ru} ref={gridRef}>
         {vs.variant.options.map((o, k) => {
-          const sw = o.iris ?? o.hex;
-          const isScan = prov && prov.value === o.i;
-          const cap = optionCaption(vs.slot.id, o, state.gender);
+          const sw = swatchOf(o) ?? '#000';
           return (
             <button
               key={o.i}
               role="radio"
               aria-checked={o.i === vs.value}
               tabIndex={o.i === vs.value ? 0 : -1}
-              aria-label={cap ? `${pad2(k + 1)} — ${cap}` : pad2(k + 1)}
-              className={`cell ${sw ? 'swatch' : ''}`}
-              title={cap || undefined}
+              aria-label={`${pad2(k + 1)}${o.label.ru && !/^\d+$/.test(o.label.ru) ? ` — ${o.label.ru}` : ''}`}
+              className="cell"
               onClick={() => onChoose(o.i)}
+              onDoubleClick={onClose}
             >
-              {sw && <span className="sw" style={{ background: sw }} />}
+              <span className="sw" style={{ background: sw }} />
               <span className="n">{pad2(k + 1)}</span>
-              {!sw && vs.slot.id === 'hairstyle' && o.tags[0] && <span className="tag">{tagRu(o.tags[0])}</span>}
-              {isScan && <span className="pick" />}
+              {prov?.value === o.i && <span className="pick" title="Подобрано по фото" />}
             </button>
           );
         })}
       </div>
-
-      {(prov || hasSwatches || isMorph(vs.slot.id)) && (
-        <dl className="desc">
-          {prov && (
-            <>
-              <dt>Подбор по фото</dt>
-              <dd>
-                Вариант {pad2(displayNumber(vs.variant, prov.value))} · {prov.src === 'llm' ? 'модель' : prov.src === 'local' ? 'измерение' : 'вручную'} · уверенность {Math.round(prov.conf * 100)}%
-                {prov.why ? ` — ${prov.why}` : ''}
-              </dd>
-            </>
-          )}
-          {isMorph(vs.slot.id) && (
-            <>
-              <dt>Как измерено</dt>
-              <dd>Описание варианта получено из смещений вершин 3D-головы V и рендера через детектор лица — так же анализируется ваше фото.</dd>
-            </>
-          )}
-          {hasSwatches && (
-            <>
-              <dt>Цвет</dt>
-              <dd>Образец — усреднённый цвет миниатюры из игры. В игре оттенок зависит от освещения.</dd>
-            </>
-          )}
-        </dl>
-      )}
     </div>
   );
-}
-
-function tagRu(t: string) {
-  return ({ Buzz: 'ёжик', Short: 'корот', Long: 'длин', Dreads: 'дред', None: 'нет' } as Record<string, string>)[t] ?? t;
 }

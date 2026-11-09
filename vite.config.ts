@@ -97,8 +97,47 @@ function devSave(): Plugin {
   };
 }
 
+/**
+ * Меши головы и причёсок из локальной выгрузки игры (tools/local, в git не попадает)
+ * отдаются по /game/... и в dev, и в preview. Нет выгрузки — 404, и приложение
+ * показывает схематичный портрет вместо 3D-головы.
+ */
+const GAME_DIRS: Record<string, string> = { glb: 'tools/local/glb', hair: 'tools/local/hair', renders: 'tools/local/renders' };
+function gameAssets(): Plugin {
+  const handler = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const m = /^\/([a-z]+)\/((?:(?:male|female)\/)?[\w.-]+\.(glb|json|png))$/.exec(decodeURIComponent((req.url ?? '').split('?')[0]));
+    const dir = m && GAME_DIRS[m[1]];
+    if (!m || !dir || m[2].includes('..')) {
+      res.statusCode = 404;
+      return res.end('not found');
+    }
+    const file = path.join(root, dir, m[2]);
+    fs.stat(file, (err, st) => {
+      if (err || !st.isFile()) {
+        res.statusCode = 404;
+        return res.end('not found');
+      }
+      res.setHeader('Content-Type', m[3] === 'json' ? 'application/json' : m[3] === 'png' ? 'image/png' : 'model/gltf-binary');
+      res.setHeader('Content-Length', String(st.size));
+      res.setHeader('Cache-Control', 'max-age=3600');
+      if (req.method === 'HEAD') return res.end();
+      fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
+    });
+  };
+  return {
+    name: 'game-assets',
+    configureServer(server) {
+      server.middlewares.use('/game', handler);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use('/game', handler);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), devSave()],
+  plugins: [react(), devSave(), gameAssets()],
   server: { port: 5177, strictPort: true },
   test: { environment: 'node' },
 });
