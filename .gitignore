@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.vite/
+*.log
+.env
+.env.*
+!.env.example
+# локальные выгрузки из игры — не коммитим (ассеты CDPR)
+tools/local/
+game-cache/
+.claude/docker-keep-running
+.omc/
