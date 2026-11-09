@@ -75,6 +75,13 @@ export default function App() {
   const sheet = useMemo(() => gameSheet(state), [state]);
   const cur = slots.find((s) => s.slot.id === current) ?? slots[0];
 
+  // Состояние из ссылки уже применено — убираем хеш, иначе перезагрузка затрёт последующие правки
+  useEffect(() => {
+    if (new URLSearchParams(location.hash.slice(1)).has('v')) {
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  }, []);
+
   useEffect(() => store.set('vm.states', states), [states]);
   useEffect(() => store.set('vm.gender', gender), [gender]);
 
@@ -149,11 +156,12 @@ export default function App() {
 
   const share = async () => {
     const url = `${location.origin}${location.pathname}#v=${encodeState(state)}`;
-    history.replaceState(null, '', url);
     try {
       await navigator.clipboard.writeText(url);
       flash('Ссылка на персонажа скопирована');
     } catch {
+      // Буфер недоступен — кладём ссылку в адресную строку, чтобы её можно было скопировать вручную
+      history.replaceState(null, '', url);
       flash('Ссылка в адресной строке — скопируйте её');
     }
   };
