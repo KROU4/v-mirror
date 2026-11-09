@@ -10,3 +10,5 @@ tools/local/
 game-cache/
 .claude/docker-keep-running
 .omc/
+public/mediapipe/
+*.tsbuildinfo

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Калибровка морфов</title>
+    <style>
+      body { margin: 0; background: #111; color: #ddd; font: 13px/1.4 monospace; display: flex; flex-wrap: wrap; gap: 16px; padding: 12px; }
+      #log { white-space: pre-wrap; max-height: 40vh; overflow: auto; flex: 1; min-width: 280px; }
+      canvas { border: 1px solid #333; width: min(640px, 92vw); height: auto; }
+    </style>
+  </head>
+  <body>
+    <div>
+      <canvas id="c" width="640" height="640"></canvas>
+      <div>
+        <button id="run">Прогнать все морфы</button>
+        <button id="hair">Рендер причёсок</button>
+        <label>slot <input id="slot" value="nose" size="6" /></label>
+        <label>i <input id="opt" value="0" size="3" /></label>
+        <button id="one">Показать</button>
+      </div>
+    </div>
+    <div id="log"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

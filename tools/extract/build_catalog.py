@@ -70,7 +70,8 @@ RU_WORDS = {
     "ginger": "рыжий", "copper": "медный", "strawberry": "клубничный", "teal": "бирюзовый", "ombre": "омбре",
     "liquorice": "лакричный", "carbon": "угольный", "blue": "синий", "sapphire": "сапфировый", "saphire": "сапфировый",
     "apple": "яблочный", "gray": "серый", "grey": "серый", "gunmetal": "оружейный", "ash": "пепельный", "pink": "розовый",
-    "magenta": "маджента", "rose": "розовый", "steel": "стальной", "cold": "холодный", "white": "белый",
+    "magenta": "маджента", "rose": "чайная роза", "cyan": "циан", "baby": "нежно", "sign": "", "multilayer": "узор",
+    "warning": "предупреждение", "splash": "брызги", "rebecca": "ребекка", "steel": "стальной", "cold": "холодный", "white": "белый",
     "cyberpunk": "киберпанк", "yellow": "жёлтый", "goblin": "гоблинский", "green": "зелёный", "liliac": "сиреневый",
     "lilac": "сиреневый", "mermaid": "русалочий", "aquamarine": "аквамарин", "purple": "фиолетовый", "salt": "соль",
     "n": "и", "pepper": "перец", "toxic": "токсичный", "medium": "средний", "sky": "небесный", "citrus": "цитрусовый",
@@ -90,7 +91,7 @@ RU_WORDS = {
 
 def humanize(raw: str) -> dict:
     s = re.sub(r"^.*__", "", raw)          # he_000_pma__basehead__12_gradient_brown -> 12_gradient_brown
-    s = re.sub(r"^(Bla|Thumb_nail_(0\d_)?(all_)?|Makeup_(lip_color|cheek|freckle)_|Makeupcolor_|Piercing_|Teeth_|Pubes_)", "", s)
+    s = re.sub(r"^(Bla(?=[A-Z])|Thumb_nail_(0\d_)?(all_)?|Makeup_(lip_color|cheek|freckle)_|Makeupcolor_|Piercing_|Teeth_|Pubes_)", "", s)
     s = re.sub(r"^\d+_", "", s)
     s = re.sub(r"_?multilayer$", "", s)
     toks = [t for t in re.split(r"[_\s]+|(?<=[a-z])(?=[A-Z])", s) if t]
@@ -211,6 +212,15 @@ def hair_folders(all_list: Path) -> dict[str, str]:
     return out
 
 
+_A2M = Path(__file__).resolve().parents[2] / "tools" / "local" / "hair" / "app_to_mesh.json"
+APP_TO_MESH: dict[str, list[str]] = (
+    {k: (v if isinstance(v, list) else [v]) for k, v in json.loads(_A2M.read_text(encoding="utf-8-sig")).items()}
+    if _A2M.exists() else {}
+)
+# meshHint -> имена мешей (для рендера причёсок в tools/calibrate; только локально)
+HINT_MESHES: dict[str, dict[str, list[str]]] = {}
+
+
 # ---------------------------------------------------------------- catalog
 GROUP_ORDER = {"headCustomizationOptions": "head", "bodyCustomizationOptions": "body", "armsCustomizationOptions": "arms"}
 
@@ -232,7 +242,25 @@ def build(gender: str, cc: Path, ru, en, atlas_colors, atlas_index, hairs) -> di
             if c.get("Red") or c.get("Green") or c.get("Blue"):
                 key = re.sub(r"^\d+_", "", str(v(o["name"])).split("__")[-1])
                 hair_rgb.setdefault(key, to_hex([c["Red"], c["Green"], c["Blue"]]))
-    HAIRY = {"hair_color", "eyebrows_color", "eyelash_color", "beard_color", "pubic_hair_color"}
+    # В определениях игры у части цветов (pink_rose, black_salt_n_pepper) RGB скопирован
+    # с другого цвета. Такие дубли заменяем образцом из атласа иконок волос.
+    seen: dict[str, list[str]] = defaultdict(list)
+    for k, hx in hair_rgb.items():
+        seen[hx].append(k)
+    hair_dups = {k for ks in seen.values() if len(ks) > 1 for k in ks}
+    for item in root["headCustomizationOptions"]:
+        d = item.get("Data") or {}
+        if v(d.get("uiSlot")) != "hair_color":
+            continue
+        for o in d.get("definitions", []):
+            key = re.sub(r"^\d+_", "", str(v(o["name"])).split("__")[-1])
+            icon = v(o.get("icon"))
+            if key in hair_dups and icon and icon not in ("None", "0"):
+                part = match_icon(icon, atlas_colors, atlas_index)
+                if part:
+                    hair_rgb[key] = to_hex(atlas_colors[part]["avg"])
+                    hair_dups.discard(key)
+    HAIRY ={"hair_color", "eyebrows_color", "eyelash_color", "beard_color", "pubic_hair_color"}
     unmatched_icons = set()
     for list_name, group in GROUP_ORDER.items():
         for item in root[list_name]:
@@ -297,6 +325,14 @@ def build(gender: str, cc: Path, ru, en, atlas_colors, atlas_index, hairs) -> di
                         key = re.sub(r"^\d+_", "", str(v(o["name"])).split("__")[-1])
                         hexc = hair_rgb.get(key, hexc)
                     label = resolve(o.get("localizedName", ""), ru, en)
+                    app_tail = re.sub(r"^\d+_", "", str(v(o["name"])).split("__")[-1])
+                    app_words = set(re.findall(r"[a-z]{3,}", app_tail))
+                    label_words = set(re.findall(r"[a-z]{3,}", label["en"].lower()))
+                    # В локализации игры встречаются чужие подписи (brown_ombre -> «Blue Sapphire»)
+                    mismatch = bool(app_words) and bool(label_words) and not (app_words & label_words)
+                    if (not label["ru"].strip() or mismatch) and rec["slot"] in HAIRY | {"eyes_color"} and app_words:
+                        # Имя ресурса надёжнее имени иконки (у иконок встречаются опечатки и дубли)
+                        label = humanize(v(o["name"]))
                     if not label["ru"].strip():
                         if icon and icon not in ("None", "0") and not str(icon).isdigit():
                             label = humanize(icon.replace("OptionsIcons.", ""))
@@ -326,16 +362,25 @@ def build(gender: str, cc: Path, ru, en, atlas_colors, atlas_index, hairs) -> di
         if not r or not r["resource"]:
             return None
         base = re.split(r"[\\/]", r["resource"])[-1].rsplit(".", 1)[0]
+        # Точное соответствие .app -> меш (из export_hair.ps1): номер hairs_NNN в имени
+        # ресурса не всегда совпадает с номером папки причёски (hairs_143 -> hh_060_wa__voodoo_03)
+        if base in APP_TO_MESH and APP_TO_MESH[base]:
+            fm = re.search(r"\\hh_(\d{3})_[a-z]+__([a-z0-9_]+?)\\", APP_TO_MESH[base][0])
+            if fm:
+                hint = f"{fm.group(1)}_{fm.group(2)}"
+                HINT_MESHES.setdefault(gender, {}).setdefault(hint, [re.split(r"[\\/]", p)[-1].rsplit(".", 1)[0] for p in APP_TO_MESH[base]])
+                return hint
         m = re.search(r"hairs_(\d+)", base)
         if m and m.group(1).zfill(3) in hairs:
-            return hairs[m.group(1).zfill(3)]
+            return f"{m.group(1).zfill(3)}_{hairs[m.group(1).zfill(3)]}"
         return base
 
     for r in variants:
         if r["type"] != "switcher":
             continue
         for o in r["options"]:
-            hints = [h for h in (res_hint(n) for n in o["activates"]) if h and "_fpp" not in h]
+            # Варианты *_fpp — вид от первого лица, их ресурсы нумеруются иначе; описываем по виду от третьего лица
+            hints = [h for h in (res_hint(n) for n in o["activates"] if "fpp" not in n) if h and "_fpp" not in h]
             if not hints and any(n.endswith("_none") for n in o["activates"]):
                 o["meshHint"] = "none"
             if hints:
@@ -425,6 +470,8 @@ def main():
               f"unmatchedIcons={len(st['unmatchedIcons'])} controllersNotVisible={st['controllersNotVisible']}")
         if st["unmatchedIcons"]:
             print("   unmatched:", " ".join(st["unmatchedIcons"]))
+    if HINT_MESHES:
+        (_A2M.parent / "hint_meshes.json").write_text(json.dumps(HINT_MESHES, indent=1), encoding="utf-8")
 
 
 if __name__ == "__main__":
