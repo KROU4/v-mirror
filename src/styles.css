@@ -19,7 +19,6 @@
   --line-body: #7fd94c;
   --signal: #2fe0d0;
   --signal-ink: #04201d;
-  --warn: #ffb347;
   --danger: #ff5a5f;
   --ok: #7fd94c;
   --radius: 6px;
@@ -179,10 +178,6 @@ a { color: var(--signal); text-underline-offset: 3px; }
 }
 .check[aria-checked='true'] { background: var(--ok); border-color: var(--ok); }
 .check svg { width: 14px; height: 14px; }
-.stamp {
-  justify-self: end; font: 700 11px/1 var(--font-sign); letter-spacing: 0.12em; color: var(--ok);
-  border: 1.5px solid var(--ok); border-radius: 3px; padding: 3px 5px; transform: rotate(-4deg);
-}
 
 /* ---------- сканер ---------- */
 .scan { display: grid; gap: 20px; max-width: 1100px; }

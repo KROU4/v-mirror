@@ -220,7 +220,8 @@ export default function App() {
                             setMode('edit');
                             // На телефоне редактор стоит над схемой — поднимаем к нему
                             if (window.matchMedia('(max-width: 760px)').matches) {
-                              document.querySelector('.stage')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                              document.querySelector('.stage')?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
                             }
                           }}
                         >
