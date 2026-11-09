@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from 'react';
 import { displayNumber, GROUP_LABEL, type Gender, type Option } from './model/catalog';
 import {
   decodeState,
@@ -70,11 +70,25 @@ export default function App() {
   const [current, setCurrent] = useState('skin_color');
   const [picker, setPicker] = useState(false);
   const [yaw, setYaw] = useState(DEFAULT_YAW);
-  const [done, setDone] = useState<Record<string, boolean>>({});
-  const [prov, setProv] = useState<Record<string, ScanProvenance>>({});
+  // Отметки «выставлено» и точки подбора по фото у каждого тела свои
+  const [doneAll, setDoneAll] = useState<Record<Gender, Record<string, boolean>>>({ male: {}, female: {} });
+  const [provAll, setProvAll] = useState<Record<Gender, Record<string, ScanProvenance>>>({ male: {}, female: {} });
+  const done = doneAll[gender];
+  const prov = provAll[gender];
+  const setDone = useCallback(
+    (g: Gender, v: SetStateAction<Record<string, boolean>>) => setDoneAll((a) => ({ ...a, [g]: typeof v === 'function' ? v(a[g]) : v })),
+    [],
+  );
+  const setProv = useCallback(
+    (g: Gender, v: Record<string, ScanProvenance>) => setProvAll((a) => ({ ...a, [g]: v })),
+    [],
+  );
+  // Сканер, однажды открытый, остаётся смонтированным: выход из скана не теряет фото и ответ модели
+  const [scanMounted, setScanMounted] = useState(mode === 'scan');
   const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const listRef = useRef<HTMLOListElement>(null);
+  const kbdMove = useRef(false);
 
   const state = states[gender];
   const slots = useMemo(() => visibleSlots(state), [state]);
@@ -96,7 +110,15 @@ export default function App() {
   useEffect(() => {
     const box = listRef.current;
     const el = box?.querySelector<HTMLElement>(`[data-slot="${CSS.escape(cur?.slot.id ?? '')}"]`);
-    if (!box || !el || box.scrollHeight <= box.clientHeight) return;
+    const byKeys = kbdMove.current;
+    kbdMove.current = false;
+    if (!box || !el) return;
+    if (box.scrollHeight <= box.clientHeight) {
+      // Телефон: список — часть страницы. Листаем страницу только при ходе стрелками,
+      // scroll-margin в CSS учитывает прилипшую сверху голову
+      if (byKeys) el.scrollIntoView({ block: 'nearest' });
+      return;
+    }
     const b = box.getBoundingClientRect();
     const r = el.getBoundingClientRect();
     if (r.top < b.top) box.scrollTop -= b.top - r.top + 8;
@@ -131,22 +153,23 @@ export default function App() {
   /** Массовая замена (Случайно, Сброс): запоминаем прежнее, чтобы вернуть одним нажатием. */
   const replaceAll = useCallback(
     (next: CharacterState, msg: string) => {
+      const g = next.gender;
       const before = { state, prov, done };
       // Отметка «выставлено» снимается со строк, чей номер изменился
       const was = new Map(sheet.map((r) => [r.slotId, r.number]));
       const nextDone: Record<string, boolean> = {};
       for (const r of gameSheet(next)) if (done[r.slotId] && was.get(r.slotId) === r.number) nextDone[r.slotId] = true;
       update(next);
-      setProv({});
-      setDone(nextDone);
+      setProv(g, {});
+      setDone(g, nextDone);
       flash(msg, () => {
         update(before.state);
-        setProv(before.prov);
-        setDone(before.done);
+        setProv(g, before.prov);
+        setDone(g, before.done);
         setToast(null);
       });
     },
-    [state, prov, done, sheet, update, flash],
+    [state, prov, done, sheet, update, flash, setProv, setDone],
   );
 
   const shuffle = useCallback(
@@ -157,10 +180,10 @@ export default function App() {
   const choose = useCallback(
     (vs: VisibleSlot, i: number) => {
       update(setValue(states[gender], vs.variant.name, i));
-      setDone((d) => ({ ...d, [vs.slot.id]: false }));
+      setDone(gender, (d) => ({ ...d, [vs.slot.id]: false }));
       dropUndo();
     },
-    [states, gender, update, dropUndo],
+    [states, gender, update, dropUndo, setDone],
   );
 
   const stepRow = useCallback(
@@ -174,13 +197,22 @@ export default function App() {
   );
 
   const curId = cur?.slot.id;
+  /** Режим и сетка цветов меняются в одном месте: сетка живёт только в редакторе. */
+  const goMode = useCallback((m: 'edit' | 'scan') => {
+    setPicker(false);
+    if (m === 'scan') setScanMounted(true);
+    setMode(m);
+  }, []);
+
   const select = useCallback(
     (id: string) => {
       // Сетка цветов принадлежит строке: при переходе на другую строку закрывается
       if (id !== curId) setPicker(false);
+      // Клик по строке во время скана возвращает к редактору, как в прежней версии
+      if (mode === 'scan') goMode('edit');
       setCurrent(id);
     },
-    [curId],
+    [curId, mode, goMode],
   );
 
   const moveRow = useCallback(
@@ -188,10 +220,17 @@ export default function App() {
       if (!cur) return;
       const ids = slots.map((s) => s.slot.id);
       const pos = ids.indexOf(cur.slot.id);
+      kbdMove.current = true;
       select(ids[Math.max(0, Math.min(ids.length - 1, pos + dir))]);
     },
     [cur, slots, select],
   );
+
+  /** Закрыть сетку цветов и вернуть фокус на её кнопку в строке (×, Esc, двойной клик). */
+  const closePicker = useCallback(() => {
+    setPicker(false);
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-slot="${CSS.escape(curId ?? '')}"] .ctrl-grid`)?.focus());
+  }, [curId]);
 
   const share = useCallback(async () => {
     const url = `${location.origin}${location.pathname}#v=${encodeState(state)}`;
@@ -231,10 +270,9 @@ export default function App() {
       if (t instanceof Element && t.closest('input, textarea, select, [contenteditable="true"]')) return;
       const k = e.key.toLowerCase();
       if (k === 'escape') {
-        if (picker) {
-          setPicker(false);
-          document.querySelector<HTMLElement>(`[data-slot="${CSS.escape(cur?.slot.id ?? '')}"] .ctrl-grid`)?.focus();
-        } else if (mode === 'scan') setMode('edit');
+        // Скан остаётся смонтированным, поэтому Esc закрывает его без потери фото и ответа модели
+        if (picker && mode === 'edit') closePicker();
+        else if (mode === 'scan') goMode('edit');
         return;
       }
       if (k === 'q' || k === 'й') return setYaw((y) => Math.max(-170, y - 20));
@@ -258,13 +296,13 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [mode, cur, picker, stepRow, moveRow, shuffle, copySheet, share]);
+  }, [mode, cur, picker, stepRow, moveRow, shuffle, copySheet, share, closePicker, goMode]);
 
   const applyScan = (next: CharacterState, provenance: Record<string, ScanProvenance>) => {
     update(next);
-    setProv(provenance);
-    setDone({});
-    setMode('edit');
+    setProv(next.gender, provenance);
+    setDone(next.gender, {});
+    goMode('edit');
     flash('Подбор применён — строки с точкой подобраны по фото');
   };
 
@@ -281,7 +319,16 @@ export default function App() {
       <header className="cc-title">
         <h1>
           <span className="cc-chip" aria-hidden="true" />
-          Выбор внешности Ви
+          <span className="cc-bits" aria-hidden="true">
+            0110001
+            <br />
+            0111000
+            <br />
+            0110000
+            <br />
+            0110101
+          </span>
+          <span className="cc-name">Выбор внешности Ви</span>
         </h1>
         <p>Выставьте эти номера в редакторе игры — и V будет такой же</p>
       </header>
@@ -294,37 +341,36 @@ export default function App() {
           ))}
         </div>
         <div className="left-actions">
-          <button className={`gbtn ${mode === 'scan' ? 'on' : 'accent'}`} onClick={() => setMode(mode === 'scan' ? 'edit' : 'scan')} aria-pressed={mode === 'scan'}>
+          <button className={`gbtn ${mode === 'scan' ? 'on' : 'accent'}`} onClick={() => goMode(mode === 'scan' ? 'edit' : 'scan')} aria-pressed={mode === 'scan'}>
             <IconScan /> {mode === 'scan' ? 'К редактору' : 'Скан фото'}
           </button>
           <button className="gbtn" onClick={resetAll}>
             <IconReset /> Сброс
           </button>
+          <button className="gbtn shuffle" onClick={shuffle} title="Случайное лицо, тело не меняется">
+            <kbd>R</kbd> Случайно
+            <IconShuffle />
+          </button>
         </div>
-        <button className="gbtn shuffle" onClick={shuffle} title="Случайное лицо, тело не меняется">
-          <kbd>R</kbd> Случайно
-          <IconShuffle />
-        </button>
       </aside>
 
       <main className="cc-stage">
         <HeadViewer state={state} yaw={yaw} onYaw={setYaw} fallback={<Portrait state={state} className="portrait-fallback" />} />
-        {mode === 'scan' ? (
-          <section className="scan-wrap" aria-label="Скан фото">
-            <button className="scan-close" onClick={() => setMode('edit')} aria-label="Закрыть скан фото">
+        {scanMounted && (
+          <section className="scan-wrap" aria-label="Скан фото" hidden={mode !== 'scan'}>
+            <button className="scan-close" onClick={() => goMode('edit')} aria-label="Закрыть скан фото">
               <IconClose />
             </button>
             <Suspense fallback={<p className="muted">Загружаю модуль скана…</p>}>
               <ScanPanel gender={gender} base={state} onApply={applyScan} onGender={switchGender} />
             </Suspense>
           </section>
-        ) : (
-          cur && (
-            <>
-              <InfoBox vs={cur} gender={gender} prov={prov[cur.slot.id]} />
-              {picker && hasSwatches(cur) && <Picker vs={cur} prov={prov[cur.slot.id]} onChoose={(i) => choose(cur, i)} onClose={() => setPicker(false)} />}
-            </>
-          )
+        )}
+        {mode === 'edit' && cur && (
+          <>
+            <InfoBox vs={cur} gender={gender} prov={prov[cur.slot.id]} />
+            {picker && hasSwatches(cur) && <Picker vs={cur} prov={prov[cur.slot.id]} onChoose={(i) => choose(cur, i)} onClose={closePicker} />}
+          </>
         )}
       </main>
 
@@ -354,7 +400,7 @@ export default function App() {
                   aria-label={`${vs.slot.label.ru}: выставлено в игре`}
                   title="Отметить, что уже выставлено в игре"
                   onClick={() => {
-                    setDone((d) => ({ ...d, [id]: !d[id] }));
+                    setDone(gender, (d) => ({ ...d, [id]: !d[id] }));
                     dropUndo();
                   }}
                 >
@@ -364,11 +410,11 @@ export default function App() {
                   <span className="row-label">{vs.slot.label.ru}</span>
                   {pv && <span className="row-scan" title={`Подобрано по фото (${pv.src === 'llm' ? 'модель' : 'замер'})`} />}
                   <span className="row-val">
-                    {sw && <i className="row-sw" style={{ background: sw }} />}
                     <span className={sw ? 'row-num small' : 'row-num'}>{num}</span>
+                    {sw && <i className="row-sw" style={{ background: sw }} />}
                   </span>
                 </button>
-                <div className={`row-ctrl ${sw ? 'three' : ''}`}>
+                <div className="row-ctrl">
                   <button
                     aria-label={`${vs.slot.label.ru}: предыдущий вариант`}
                     onClick={() => {
@@ -378,6 +424,8 @@ export default function App() {
                   >
                     <IconTriLeft />
                   </button>
+                  {/* Как в игре: у строк без сетки средняя плашка пустая, стрелки стоят в одну колонку */}
+                  {!sw && <span className="ctrl-gap" aria-hidden="true" />}
                   {sw && (
                     <button
                       className="ctrl-grid"
@@ -427,7 +475,7 @@ export default function App() {
           <kbd aria-label="Влево"><IconArrow dir="left" /></kbd>
           <kbd aria-label="Вправо"><IconArrow dir="right" /></kbd> Изменить
         </span>
-        <span>
+        <span className="foot-g">
           <kbd>G</kbd> Сетка цветов
         </span>
       </footer>
@@ -451,13 +499,15 @@ export default function App() {
 function BodyCard({ g, active, state, onPick }: { g: Gender; active: boolean; state: CharacterState; onPick: () => void }) {
   const [noImg, setNoImg] = useState(false);
   return (
-    <button className="body-card" aria-pressed={active} onClick={onPick}>
+    <button className="body-card" aria-pressed={active} onClick={onPick} aria-label={BODY_LABEL[g]}>
       {noImg ? (
         <Portrait state={state} className="body-img" />
       ) : (
         <img className="body-img" src={`/game/renders/${g}/base.png`} alt="" onError={() => setNoImg(true)} />
       )}
-      <span>{BODY_LABEL[g]}</span>
+      <span className="body-tag" aria-hidden="true">
+        {BODY_LABEL[g]}
+      </span>
     </button>
   );
 }

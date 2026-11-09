@@ -73,10 +73,10 @@ export class HeadEngine {
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.setClearColor(0x000000, 0);
     // Свет как в редакторе игры: тёплый ключевой спереди, красный и бирюзовый контровые сзади
-    this.scene.add(new THREE.HemisphereLight('#ffe9e0', '#2a0c10', 0.9));
+    this.scene.add(new THREE.HemisphereLight('#ffe9e0', '#1a1416', 0.9));
     const key = new THREE.DirectionalLight('#fff1e6', 2.4);
     const fill = new THREE.DirectionalLight('#ffd2c8', 0.5);
-    const rimL = new THREE.DirectionalLight('#ff3347', 2.3);
+    const rimL = new THREE.DirectionalLight('#ff3347', 0.9);
     const rimR = new THREE.DirectionalLight('#46d9ff', 1.8);
     this.scene.add(key, fill, rimL, rimR, this.hair);
     this.lights = { key, fill, rimL, rimR };
@@ -90,7 +90,8 @@ export class HeadEngine {
       loadScene(`/game/glb/heb_000_${c}__morphs.morphtarget.glb`),
     ]);
     const skin = new THREE.MeshStandardMaterial({ color: '#c99a7c', roughness: 0.58, metalness: 0 });
-    const browsMat = new THREE.MeshStandardMaterial({ color: '#2a1d16', roughness: 0.9 });
+    // Брови — карточки без текстуры-маски: полупрозрачность смягчает «плашку»
+    const browsMat = new THREE.MeshStandardMaterial({ color: '#2a1d16', roughness: 0.95, transparent: true, opacity: 0.78, depthWrite: false });
     const lashes = new THREE.MeshStandardMaterial({ color: '#141010', roughness: 0.8, side: THREE.DoubleSide });
     const rig: HeadRig = { root: new THREE.Group(), morphMeshes: [], skin, brows: browsMat, lashes, eyes: [], target: new THREE.Vector3(), dist: 1 };
     // В меше глаз: двусторонние карточки ресниц («doubled»), глазные яблоки (самый крупный
@@ -112,8 +113,11 @@ export class HeadEngine {
         else {
           const pos = m.geometry.getAttribute('position');
           if (m !== eyeball) {
-            if (/doubled/i.test(m.name)) m.material = lashes;
-            else m.visible = false;
+            if (/doubled/i.test(m.name)) {
+              m.material = lashes;
+              // ресницы двигаются вместе с веками — им нужны те же морфы глаз
+              if (m.morphTargetDictionary && m.morphTargetInfluences) rig.morphMeshes.push(m as MorphMesh);
+            } else m.visible = false;
             return;
           }
           // Радужка и зрачок — по нормали «вперёд» (текстур глаз в выгрузке нет)
@@ -140,8 +144,8 @@ export class HeadEngine {
     // (у мужской головы в выгрузке длиннее шея). Центр вращения — середина головы за глазами.
     const eyeBox = new THREE.Box3().setFromObject(eyes);
     const eye = eyeBox.getCenter(new THREE.Vector3());
-    rig.target.set(eye.x, eye.y - 0.035, eye.z - FACING * 0.085);
-    rig.dist = 0.25 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    rig.target.set(eye.x, eye.y + 0.012, eye.z - FACING * 0.085);
+    rig.dist = 0.205 / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     return rig;
   }
 
@@ -155,15 +159,21 @@ export class HeadEngine {
     return p;
   }
 
-  /** Применяет внешний вид. Последний вызов побеждает: устаревшие загрузки отбрасываются. */
-  async setLook(look: HeadLook): Promise<void> {
+  /**
+   * Применяет внешний вид. Последний вызов побеждает: устаревшие загрузки отбрасываются.
+   * Возвращает true, если голова этого вызова надета (false — вызов вытеснен следующим).
+   */
+  async setLook(look: HeadLook): Promise<boolean> {
     const my = ++this.token;
     const rig = await this.rigFor(look.gender);
-    if (this.disposed || my !== this.token) return;
+    if (this.disposed || my !== this.token) return false;
     if (this.rig !== rig) {
       if (this.rig) this.scene.remove(this.rig.root);
       this.scene.add(rig.root);
       this.rig = rig;
+      // Причёска прежнего тела на новой голове не остаётся
+      this.hair.clear();
+      this.hairKey = '';
     }
     rig.skin.color.set(safe(look.skin, '#c99a7c'));
     rig.brows.color.set(safe(look.brows ?? look.hair, '#2a1d16'));
@@ -194,7 +204,7 @@ export class HeadEngine {
     // следующим (например, сменой цвета), оставил бы на голове прежнюю причёску
     if (hairKey !== this.hairKey) {
       const scenes = await Promise.all(look.hairMeshes.map((n) => loadScene(`/game/hair/${n}.glb`).catch(() => null)));
-      if (this.disposed || my !== this.token) return;
+      if (this.disposed || my !== this.token) return true;
       this.hairKey = hairKey;
       this.hair.clear();
       for (const s of scenes) {
@@ -210,6 +220,7 @@ export class HeadEngine {
       }
       this.render();
     }
+    return true;
   }
 
   setYaw(deg: number) {
@@ -234,9 +245,9 @@ export class HeadEngine {
       l.target.position.copy(t);
       l.target.updateMatrixWorld();
     };
-    at(this.lights.key, 0.7, 0.8, 1.4);
-    at(this.lights.fill, -1.2, 0.1, 1);
-    at(this.lights.rimL, -1.4, 0.5, -0.9);
+    at(this.lights.key, -0.7, 0.8, 1.4);
+    at(this.lights.fill, 1.2, 0.1, 1);
+    at(this.lights.rimL, -1.0, 0.6, -1.8);
     at(this.lights.rimR, 1.5, 0.3, -0.6);
   }
 
@@ -246,6 +257,9 @@ export class HeadEngine {
     this.camera.aspect = w / h;
     // На узком экране отъезжаем, чтобы голова с причёской влезала по ширине
     this.camera.zoom = Math.min(1, (w / h) * 1.3);
+    // На широком экране голова, как в игре, левее центра — между колонкой типа тела и списком
+    const center = w / h > 1.3 ? 0.42 : 0.5;
+    this.camera.setViewOffset(w, h, (0.5 - center) * w, 0, w, h);
     this.camera.updateProjectionMatrix();
     this.render();
   }

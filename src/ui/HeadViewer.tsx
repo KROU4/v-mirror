@@ -8,7 +8,8 @@ import type { HeadEngine, HeadLook } from './headEngine';
 type Hints = Record<string, Record<string, string[]>>;
 type Status = 'probe' | 'loading' | 'ready' | 'missing';
 
-export const DEFAULT_YAW = -18;
+/** Как в игре: V смотрит вполоборота в сторону списка настроек */
+export const DEFAULT_YAW = 14;
 let hintsPromise: Promise<Hints | null> | null = null;
 const loadHints = () =>
   (hintsPromise ??= fetch('/game/hair/hint_meshes.json')
@@ -53,6 +54,11 @@ export default function HeadViewer({
   const [hints, setHints] = useState<Hints | null>(null);
   const drag = useRef<{ x: number; yaw: number; id: number } | null>(null);
   const look = useMemo(() => lookOf(state, hints), [state, hints]);
+  // Пока грузится чанк three.js, вид и угол могут измениться — движок стартует с последних
+  const lookRef = useRef(look);
+  lookRef.current = look;
+  const yawRef = useRef(yaw);
+  yawRef.current = yaw;
 
   // Есть ли выгрузка игры: без неё 3D не грузим вовсе (three.js остаётся в отдельном чанке)
   useEffect(() => {
@@ -88,10 +94,10 @@ export default function HeadViewer({
         ro = new ResizeObserver(fit);
         ro.observe(canvas);
         fit();
-        engine.setYaw(yaw);
+        engine.setYaw(yawRef.current);
         engine
-          .setLook(look)
-          .then(() => !cancelled && setStatus('ready'))
+          .setLook(lookRef.current)
+          .then((ok) => !cancelled && ok && setStatus('ready'))
           .catch(() => !cancelled && setStatus('missing'));
       })
       .catch(() => setStatus('missing'));
@@ -106,7 +112,10 @@ export default function HeadViewer({
   }, [status === 'probe' || status === 'missing']);
 
   useEffect(() => {
-    engineRef.current?.setLook(look).catch(() => setStatus('missing'));
+    engineRef.current
+      ?.setLook(look)
+      .then((ok) => ok && setStatus((s) => (s === 'loading' ? 'ready' : s)))
+      .catch(() => setStatus('missing'));
   }, [look]);
 
   useEffect(() => {

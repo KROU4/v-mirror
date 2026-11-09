@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pipeline } from 'node:stream';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const MAX_BODY = 40 * 1024 * 1024;
@@ -106,23 +107,35 @@ const GAME_DIRS: Record<string, string> = { glb: 'tools/local/glb', hair: 'tools
 function gameAssets(): Plugin {
   const handler = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, next: () => void) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    const m = /^\/([a-z]+)\/((?:(?:male|female)\/)?[\w.-]+\.(glb|json|png))$/.exec(decodeURIComponent((req.url ?? '').split('?')[0]));
-    const dir = m && GAME_DIRS[m[1]];
-    if (!m || !dir || m[2].includes('..')) {
-      res.statusCode = 404;
-      return res.end('not found');
+    const notFound = (code = 404) => {
+      res.statusCode = code;
+      res.end(code === 400 ? 'bad request' : 'not found');
+    };
+    let p: string;
+    try {
+      p = decodeURIComponent((req.url ?? '').split('?')[0]);
+    } catch {
+      return notFound(400); // битая %-последовательность не должна ронять мидлварь
     }
+    const m = /^\/(glb|hair|renders)\/((?:(?:male|female)\/)?[\w.-]+\.(glb|json|png))$/.exec(p);
+    const dir = m && Object.hasOwn(GAME_DIRS, m[1]) ? GAME_DIRS[m[1]] : undefined;
+    if (!m || !dir || m[2].includes('..')) return notFound();
     const file = path.join(root, dir, m[2]);
     fs.stat(file, (err, st) => {
-      if (err || !st.isFile()) {
-        res.statusCode = 404;
-        return res.end('not found');
+      if (err || !st.isFile()) return notFound();
+      // Выгрузку можно пересобрать — кешируем с проверкой, а не на час вслепую
+      const etag = `W/"${st.size}-${Math.round(st.mtimeMs)}"`;
+      res.setHeader('ETag', etag);
+      res.setHeader('Cache-Control', 'no-cache');
+      if (req.headers['if-none-match'] === etag) {
+        res.statusCode = 304;
+        return res.end();
       }
       res.setHeader('Content-Type', m[3] === 'json' ? 'application/json' : m[3] === 'png' ? 'image/png' : 'model/gltf-binary');
       res.setHeader('Content-Length', String(st.size));
-      res.setHeader('Cache-Control', 'max-age=3600');
       if (req.method === 'HEAD') return res.end();
-      fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
+      // pipeline закрывает файл, если клиент оборвал загрузку
+      pipeline(fs.createReadStream(file), res, () => {});
     });
   };
   return {
