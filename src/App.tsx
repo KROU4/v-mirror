@@ -219,9 +219,11 @@ export default function App() {
     (dir: 1 | -1) => {
       if (!cur) return;
       const ids = slots.map((s) => s.slot.id);
-      const pos = ids.indexOf(cur.slot.id);
+      const next = ids[Math.max(0, Math.min(ids.length - 1, ids.indexOf(cur.slot.id) + dir))];
+      // На краю списка строка не меняется — флаг не взводим, иначе следующий клик дёрнет страницу
+      if (next === cur.slot.id) return;
       kbdMove.current = true;
-      select(ids[Math.max(0, Math.min(ids.length - 1, pos + dir))]);
+      select(next);
     },
     [cur, slots, select],
   );

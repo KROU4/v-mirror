@@ -80,6 +80,7 @@ export default function HeadViewer({
     if (!canvas || engineRef.current) return;
     let engine: HeadEngine | null = null;
     let ro: ResizeObserver | null = null;
+    let offResize = () => {};
     let cancelled = false;
     import('./headEngine')
       .then(({ HeadEngine }) => {
@@ -90,9 +91,22 @@ export default function HeadViewer({
           return setStatus('missing'); // нет WebGL
         }
         engineRef.current = engine;
-        const fit = () => engine?.resize(canvas.clientWidth, canvas.clientHeight);
+        // Голова встаёт между колонкой типа тела и списком; в узкой раскладке колонок над ней нет
+        const fit = () => {
+          const w = canvas.clientWidth;
+          const h = canvas.clientHeight;
+          const c = canvas.getBoundingClientRect();
+          const left = document.querySelector('.cc-left')?.getBoundingClientRect();
+          const list = document.querySelector('.cc-list')?.getBoundingClientRect();
+          const stacked = window.matchMedia('(max-width: 900px)').matches;
+          const gl = !stacked && left ? Math.max(0, left.right - c.left) : 0;
+          const gr = !stacked && list ? Math.min(w, list.left - c.left) : w;
+          engine?.resize(w, h, gl, gr > gl ? gr : w);
+        };
         ro = new ResizeObserver(fit);
         ro.observe(canvas);
+        window.addEventListener('resize', fit);
+        offResize = () => window.removeEventListener('resize', fit);
         fit();
         engine.setYaw(yawRef.current);
         engine
@@ -104,6 +118,7 @@ export default function HeadViewer({
     return () => {
       cancelled = true;
       ro?.disconnect();
+      offResize();
       engine?.dispose();
       engineRef.current = null;
     };

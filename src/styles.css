@@ -205,7 +205,8 @@ svg.body-img { background: var(--bg-1); }
 
 .picker {
   position: absolute; right: calc(var(--list-w) + var(--list-pad) + 14px); top: 120px; z-index: 4;
-  width: min(372px, calc(100% - 36px)); max-height: calc(100% - 150px);
+  /* не заходит под колонку типа тела на узком десктопе */
+  width: min(372px, calc(100% - var(--left-w) - var(--list-w) - var(--list-pad) - 28px)); max-height: calc(100% - 150px);
   display: flex; flex-direction: column; background: rgba(18, 8, 12, 0.96); border: 1px solid var(--red-line-hi);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   animation: pop 180ms var(--ease);
@@ -284,7 +285,7 @@ svg.body-img { background: var(--bg-1); }
 .row-ctrl button:active { --p-fill: rgba(255, 95, 88, 0.32); }
 .row-ctrl svg { width: 22px; height: 22px; }
 .row-ctrl .ctrl-grid svg { width: 20px; height: 20px; }
-.row-ctrl .ctrl-grid[aria-expanded='true'] { --p-line: var(--cyan-dim); color: var(--cyan); }
+.crow .row-ctrl .ctrl-grid[aria-expanded='true'] { --p-line: var(--cyan-dim); color: var(--cyan); }
 
 /* Выбранная строка — плашка ярче целиком, как курсор в редакторе игры */
 .crow.on .row-head { --p-line: var(--red-line-hi); --p-fill: rgba(96, 26, 34, 0.92); color: var(--cream); }
@@ -394,10 +395,10 @@ svg.body-img { background: var(--bg-1); }
 
 /* ---------- адаптив ---------- */
 @media (max-width: 1280px) {
-  :root { --left-w: 180px; --list-w: clamp(330px, 32vw, 400px); --list-pad: 2.5vw; }
-  .cc-left { padding-left: 34px; padding-bottom: 130px; }
-  .left-actions { width: 140px; }
-  .gbtn { font-size: 15px; padding: 0 12px; }
+  :root { --left-w: 200px; --list-w: clamp(330px, 32vw, 400px); --list-pad: 2.5vw; }
+  .cc-left { padding-left: 24px; padding-right: 12px; padding-bottom: 130px; }
+  .left-actions { width: auto; grid-template-columns: minmax(0, 1fr); }
+  .gbtn { font-size: 15px; padding: 0 12px; gap: 8px; }
   .cc-proto, .cc-bits { display: none; }
   .cc-title { left: calc(var(--left-w) + 20px); }
   .cc-name { font-size: 26px; }
@@ -461,9 +462,6 @@ svg.body-img { background: var(--bg-1); }
   .list-actions { padding: 12px 0 0; }
   .cc-foot { display: none; }
   .toast-host { top: auto; bottom: 16px; }
-}
-@media (max-width: 900px) {
-  html { scroll-padding-top: calc(min(40vh, 400px) + 8px); }
 }
 @media (hover: none) {
   .cc-foot, .gbtn kbd { display: none; }

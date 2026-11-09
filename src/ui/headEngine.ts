@@ -251,14 +251,17 @@ export class HeadEngine {
     at(this.lights.rimR, 1.5, 0.3, -0.6);
   }
 
-  resize(w: number, h: number) {
+  /**
+   * gapLeft..gapRight — видимый промежуток холста между колонками интерфейса (в пикселях
+   * холста). Голова встаёт в его середину и уменьшается, если промежуток узкий.
+   */
+  resize(w: number, h: number, gapLeft = 0, gapRight = w) {
     if (w < 1 || h < 1) return;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    // На узком экране отъезжаем, чтобы голова с причёской влезала по ширине
-    this.camera.zoom = Math.min(1, (w / h) * 1.3);
-    // На широком экране голова, как в игре, левее центра — между колонкой типа тела и списком
-    const center = w / h > 1.3 ? 0.42 : 0.5;
+    const gap = Math.max(1, gapRight - gapLeft);
+    this.camera.zoom = Math.min(1, (gap / h) * 1.3);
+    const center = (gapLeft + gapRight) / 2 / w;
     this.camera.setViewOffset(w, h, (0.5 - center) * w, 0, w, h);
     this.camera.updateProjectionMatrix();
     this.render();
