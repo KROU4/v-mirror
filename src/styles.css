@@ -315,7 +315,7 @@ svg.body-img { background: var(--bg-1); }
 .scan-close:hover { color: var(--cream); }
 .scan-close svg { width: 22px; height: 22px; }
 .scan { display: grid; gap: 20px; }
-.scan h1 { color: var(--cyan-soft); text-transform: uppercase; letter-spacing: 0.02em; font-weight: 400 !important; }
+.scan h1 { color: var(--cyan-soft); text-transform: uppercase; letter-spacing: 0.02em; }
 .scan-grid { display: grid; grid-template-columns: minmax(220px, 360px) minmax(0, 1fr); gap: 22px; align-items: start; }
 .drop {
   position: relative; display: grid; place-items: center; text-align: center; gap: 10px; min-height: 280px; padding: 24px;

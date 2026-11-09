@@ -236,7 +236,7 @@ export default function ScanPanel({
   return (
     <div className="scan">
       <div>
-        <h1 style={{ margin: 0, font: '600 34px/1.05 var(--font-sign)' }}>Скан фото → настройки V</h1>
+        <h1 style={{ margin: 0, font: '400 30px/1.05 var(--font-sign)' }}>Скан фото → настройки V</h1>
         <p className="muted" style={{ marginTop: 6, maxWidth: '70ch' }}>
           Лицо измеряется прямо в браузере: фото никуда не уходит, пока вы сами не отправите его модели. Лучше всего работает снимок анфас при ровном дневном свете.
         </p>
@@ -437,7 +437,7 @@ export default function ScanPanel({
                       {slot!.label.ru} <span className="src">{s.src === 'llm' ? 'модель' : 'замер'}</span>
                       {s.why && <span className="why">{s.why}</span>}
                     </span>
-                    <span className="num" style={{ font: '700 22px/1 var(--font-sign)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                    <span className="num" style={{ font: '500 22px/1 var(--font-sign)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                       {(v!.option?.iris ?? v!.option?.hex) && <i style={{ width: 14, height: 14, borderRadius: 3, background: v!.option?.iris ?? v!.option?.hex }} />}
                       {pad2(displayNumber(v!.variant, v!.value))}
                     </span>
