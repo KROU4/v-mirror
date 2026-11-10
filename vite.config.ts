@@ -219,7 +219,12 @@ export const CSP = [
 /** Public URL of the site for canonical/OG tags (VITE_SITE_URL, default: the GitHub Pages project site). */
 export function siteUrl(raw: string | undefined, base: string): string {
   const s = (raw ?? '').trim();
-  if (/^https?:\/\//.test(s)) return s.endsWith('/') ? s : s + '/';
+  if (/^https?:\/\//.test(s)) {
+    // URL lower-cases the host: CI passes https://<Owner>.github.io/... with the owner's casing
+    const u = new URL(s);
+    const p = u.pathname.endsWith('/') ? u.pathname : u.pathname + '/';
+    return u.origin + p;
+  }
   return 'https://krou4.github.io' + (base.startsWith('/') ? base : '/');
 }
 

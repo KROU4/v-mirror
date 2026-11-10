@@ -5,7 +5,17 @@ export const REPO_URL = (env.VITE_REPO_URL || 'https://github.com/KROU4/v-mirror
 export const PACK_GUIDE_URL = `${REPO_URL}/blob/main/docs/ASSET_PACK.md`;
 
 /** Public address of the site (VITE_SITE_URL at build time), with a trailing slash. */
-export const SITE_URL = (env.VITE_SITE_URL || 'https://krou4.github.io/v-mirror/').replace(/\/*$/, '/');
+export const SITE_URL = normalizeSite(env.VITE_SITE_URL || 'https://krou4.github.io/v-mirror/');
+
+/** Lower-cased host (CI passes the GitHub owner with its own casing) and a trailing slash. */
+export function normalizeSite(raw: string): string {
+  try {
+    const u = new URL(raw);
+    return u.origin + u.pathname.replace(/\/*$/, '/');
+  } catch {
+    return raw.replace(/\/*$/, '/');
+  }
+}
 /** The PowerShell one-liner that builds the asset pack (public/pack.ps1, stamped by the build). */
 export const PACK_ONE_LINER = `irm ${SITE_URL}pack.ps1 | iex`;
 /**

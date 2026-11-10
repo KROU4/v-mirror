@@ -80,6 +80,8 @@ describe('pack.ps1: коммит сборки', () => {
 
   it('адрес сайта для pack.ps1: VITE_SITE_URL, база проекта, иначе публичный сайт', () => {
     expect(packSiteUrl('https://example.org/vm', '/')).toBe('https://example.org/vm/');
+    // CI passes the GitHub owner with its own casing: the host is lower-cased, the path kept
+    expect(packSiteUrl('https://KROU4.github.io/v-mirror/', '/v-mirror/')).toBe('https://krou4.github.io/v-mirror/');
     expect(packSiteUrl(undefined, '/v-mirror/')).toBe('https://krou4.github.io/v-mirror/');
     // локальная сборка с базой '/' не ведёт на https://krou4.github.io/
     expect(packSiteUrl(undefined, '/')).toBe('https://krou4.github.io/v-mirror/');
