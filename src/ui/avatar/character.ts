@@ -16,7 +16,7 @@ import { loadJson } from './assets';
 import { FaceRig } from './face';
 import { morphTargetMatches, type AvatarLook } from './look';
 import type { Materials } from './materials';
-import { BodyAnimator, HandGuard } from './motion';
+import { BodyAnimator, HandGuard, NailTwist } from './motion';
 import { weldSeams } from './seams';
 import { MasterSkeleton } from './skeleton';
 import { HEAD_LAYER } from './stage';
@@ -133,6 +133,7 @@ export class Character {
   readonly face: FaceRig;
   readonly anim: BodyAnimator;
   private handGuard: HandGuard;
+  private nailTwist: NailTwist;
   private morphMeshes: MorphMesh[] = [];
   private head: THREE.SkinnedMesh[] = [];
   private eyeballs: THREE.SkinnedMesh[] = [];
@@ -164,9 +165,10 @@ export class Character {
     this.sk = new MasterSkeleton(skeleton);
     this.root.name = 'V_' + this.code;
     this.root.add(this.sk.root);
-    this.face = new FaceRig(this.sk, bodyM.faceRig[this.code]);
+    this.face = new FaceRig(this.sk, bodyM.faceRig[this.code], gender);
     this.anim = new BodyAnimator(this.root);
     this.handGuard = new HandGuard(this.sk);
+    this.nailTwist = new NailTwist(this.sk);
     this.hairManifest = loadJson<HairManifest>('tex/hair/manifest.json');
   }
 
@@ -547,7 +549,10 @@ export class Character {
     this.anim.update(dt);
     // клип поднимает кисть к лицу выше, чем в игре, — опускаем её до кадра лица
     this.handGuard.apply(this.root);
-    this.face.update(dt, camera);
+    // Поднятая кисть — тылом (ногтями) к камере
+    this.nailTwist.apply(dt, this.anim.handUp, camera);
+    // В позе ногтей голова наклонена к поднятой кисти — V смотрит на неё, а не в камеру
+    this.face.update(dt, camera, this.anim.handUp ? this.raisedHand(this.gazeW) : null);
     // Свет внутри рта: чем плотнее сомкнуты губы, тем темнее зубы и язык
     const k = 0.3 + 0.7 * this.face.mouthOpen;
     for (const m of this.teeth) {
@@ -565,6 +570,25 @@ export class Character {
       const u = (m.material as THREE.Material).userData.eyeShadow as { uEyesOpen?: { value: number } } | undefined;
       if (u?.uEyesOpen) u.uEyesOpen.value = open;
     }
+  }
+
+  private gazeW = new THREE.Vector3();
+  private tmpW = new THREE.Vector3();
+
+  /** Середина поднятой (более высокой) кисти — между запястьем и кончиком среднего пальца, мировые оси. */
+  private raisedHand(out: THREE.Vector3): THREE.Vector3 | null {
+    let best = -Infinity;
+    for (const side of ['Left', 'Right']) {
+      const hand = this.sk.get(`${side}Hand`);
+      const tip = this.sk.get(`${side}HandMiddle3`);
+      if (!hand || !tip) continue;
+      hand.getWorldPosition(this.tmpW);
+      const y = this.tmpW.y;
+      if (y <= best) continue;
+      best = y;
+      tip.getWorldPosition(out).add(this.tmpW).multiplyScalar(0.5);
+    }
+    return best > -Infinity ? out : null;
   }
 
   /**

@@ -53,7 +53,11 @@ const LAMPS: LampSpec[] = [
   // бледнее, сила меньше; недостающий фронтальный свет даёт Main_Eyes на уровне глаз.
   { name: 'Fill_Upper', pos: [0.55, 0.0, -0.94], color: '#d8f0ff', lm: 100, out: 50, inn: 1, aim: [0, 1.62, 0] },
   { name: 'Fill_Base', pos: [2.25, 0.0, -1.58], color: '#a5e4ff', lm: 10, out: 40, inn: 1, aim: [0, 0.6, 0] },
-  { name: 'Fill_Left', pos: [2.25, 3.0, -1.58], color: '#a5e4ff', lm: 10, out: 90, inn: 30, aim: [0, 1.3, 0] },
+  // Fill_Left — единственная лампа, которая светит на правую (+X) половину лица спереди.
+  // С 10 лм (×LM_TO_CD) стенка носа от угла глаза до ноздри и подглазья уходили в
+  // серо-бурую полосу: там оставался только голубой Fill_Upper снизу. Сила — ROLE_GAIN, цвет
+  // бледнее игрового #a5e4ff: насыщенный циан на тёплой коже даёт серые и оливковые тени.
+  { name: 'Fill_Left', pos: [2.25, 3.0, -1.58], color: '#cfeaff', lm: 10, out: 90, inn: 30, aim: [0, 1.3, 0] },
   { name: 'Fill_Lower', pos: [0.99, 0.93, -0.33], color: '#a5e4ff', lm: 2.5, out: 45, inn: 30, aim: [0, 0.9, 0] },
   { name: 'Highlight_Right', pos: [-2.05, 2.0, -1.01], color: '#ffffff', lm: 50, out: 15, inn: 10, aim: [0, 1.62, 0] },
   { name: 'Highlight_Body', pos: [-1.79, 0.0, -1.19], color: '#ffffff', lm: 75, out: 55, inn: 1, aim: [0, 0.9, 0] },
@@ -85,6 +89,8 @@ const ROLE_GAIN: Record<string, number> = {
   Main_Top: 0.9,
   Main_Eyes: 1.8,
   Fill_Upper: 0.9,
+  // ≈ 150 «лм» на голову: лампа в 3 м, при силе игры её вклад в тень лица ~1 %
+  Fill_Left: 15,
 };
 
 export class LightRig {

@@ -1,7 +1,35 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BodyAnimator, HAND_GUARD, handGuardShift, solveTwoBone } from './motion';
+import { BodyAnimator, HAND_GUARD, handGuardShift, NAIL_TWIST, solveTwoBone, twistToFace } from './motion';
 import type { MasterSkeleton } from './skeleton';
+
+describe('twistToFace: тыл кисти к камере поворотом вокруг предплечья', () => {
+  const axis = new THREE.Vector3(0, 1, 0); // предплечье вертикально
+  const toCam = new THREE.Vector3(0, 0, -1);
+
+  it('тыл уже смотрит в камеру — поворачивать не нужно', () => {
+    expect(twistToFace(axis, new THREE.Vector3(0, 0, -1), toCam)).toBeCloseTo(0, 6);
+  });
+
+  it('кисть ребром к камере: поворот доводит тыл до камеры', () => {
+    const back = new THREE.Vector3(1, 0, 0);
+    const a = twistToFace(axis, back, toCam, 90);
+    expect(Math.abs(a)).toBeCloseTo(Math.PI / 2, 5);
+    const turned = back.clone().applyAxisAngle(axis, a);
+    expect(turned.dot(toCam)).toBeCloseTo(1, 5);
+  });
+
+  it('поворот ограничен maxDeg и идёт в нужную сторону', () => {
+    const back = new THREE.Vector3(1, 0, 0);
+    const a = twistToFace(axis, back, toCam);
+    expect(Math.abs(a)).toBeCloseTo(THREE.MathUtils.degToRad(NAIL_TWIST.maxDeg), 6);
+    expect(back.clone().applyAxisAngle(axis, a).dot(toCam)).toBeGreaterThan(back.dot(toCam));
+  });
+
+  it('предплечье смотрит прямо в камеру — пронация ничего не решает', () => {
+    expect(twistToFace(new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0), toCam)).toBe(0);
+  });
+});
 
 const NAMES = [
   'ui_closeup_shot',

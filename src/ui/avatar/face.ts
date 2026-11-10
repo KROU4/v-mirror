@@ -9,48 +9,95 @@ const UP_LOCAL = new THREE.Vector3(0, 1, 0); // ось «открытия» че
 const DEG = THREE.MathUtils.DEG2RAD;
 const smooth = (x: number) => x * x * (3 - 2 * x);
 
+type V3 = [number, number, number];
+
 /**
  * Улыбка раздела «Зубы»: сдвиг костей губ, мм в осях персонажа [наружу, вверх, назад].
- * Челюсть — около 2,15° (cc_behaviour.md §2.3, решение xf-studio для ui_expose_teeth).
+ * Челюсть по cc_behaviour.md §2.3 (xf-studio, ui_expose_teeth) — около 2,15°, но наши кости
+ * губ не повторяют лицевой граф игры, и с таким углом нижний ряд открывался целиком; здесь
+ * 1–1,6°. В игре это мягкая открытая улыбка: видны верхние резцы, нижние зубы почти закрыты нижней
+ * губой. Если верхняя губа поднимается слабее, чем опускаются челюсть и нижняя губа, выходит
+ * оскал — верхние зубы под губой, нижний ряд открыт целиком.
  */
 export const SMILE = {
-  jawDeg: 2.15,
+  // С 2,15° (и нижней губой назад на 3 мм) мужская улыбка выходила узким прямоугольным
+  // оскалом: оба ряда открыты почти одинаково
+  jawDeg: 1.6,
   // Верхняя губа: подъём растёт от центра к краям — линия губы идёт полумесяцем (∪)
-  lipUpMid: [0.3, 2.4, -0.3],
-  lipUp2: [1.5, 3.8, 0.4],
-  lipUp3: [3.0, 5.5, 1.0],
+  lipUpMid: [0.3, 3.8, -0.3] as V3,
+  lipUp2: [1.5, 5.2, 0.4] as V3,
+  lipUp3: [3.0, 6.6, 1.0] as V3,
   // кожа над верхней губой
-  rowAMid: [0.2, 1.0, -0.2],
-  rowA2: [1.2, 2.5, 0.3],
-  rowA3: [4.0, 7.0, 1.8],
-  rowBMid: [0, 0.5, 0],
-  rowB2: [1.5, 2.5, 0.3],
-  rowB3: [3.0, 4.5, 0.8],
-  // Нижняя губа опускается немного, к краям не поднимается и уходит назад к зубам:
-  // вперёд-вниз она выворачивается и открывает влажную внутреннюю сторону
-  lipDnMid: [0.3, -1.0, 3.2],
-  lipDn2: [1.0, -0.5, 3.6],
-  lipDn3: [2.5, 0, 3.5],
+  rowAMid: [0.2, 1.3, -0.2] as V3,
+  rowA2: [1.2, 2.8, 0.3] as V3,
+  rowA3: [4.0, 7.0, 1.8] as V3,
+  rowBMid: [0, 0.6, 0] as V3,
+  rowB2: [1.5, 2.7, 0.3] as V3,
+  rowB3: [3.0, 4.7, 0.8] as V3,
+  // Нижняя губа: её и так уводит вниз челюсть, поэтому кости губы чуть поднимаются, а к
+  // краям — заметно, вслед за уголками (иначе между уголком и губой открывается розовый
+  // клин изнанки). Назад к зубам — не больше 1,5 мм у центра: при 3–4 мм губа
+  // подворачивается, и над ней светлой лентой вдоль всего нижнего ряда выходит изнанка.
+  lipDnMid: [0.3, 0.6, 1.5] as V3,
+  lipDn2: [2.0, 2.0, 1.5] as V3,
+  lipDn3: [5.5, 7.5, 3.0] as V3,
   // кожа под нижней губой и у уголков (кости на челюсти)
-  rowA4: [5.5, 8.5, 3.0],
-  rowA5: [1.5, 0.5, 2.5],
-  rowA6: [0.3, -1.5, 0.8],
-  rowB4: [4.0, 6.5, 2.0],
-  rowB5: [2.0, 2.5, 1.0],
+  rowA4: [5.5, 9.0, 3.0] as V3,
+  rowA5: [1.5, 0.8, 2.5] as V3,
+  rowA6: [0.3, -1.0, 0.8] as V3,
+  rowB4: [4.0, 7.0, 2.0] as V3,
+  rowB5: [2.0, 2.8, 1.0] as V3,
   // уголки — вверх и назад, выше центра губ
-  corner: [6.0, 9.5, 3.0],
+  corner: [6.5, 11.0, 3.0] as V3,
   // щёки поднимаются и чуть выдаются вперёд, носогубная складка углубляется
-  cheek: [0.8, 3.5, -1.0],
-  cheekLow: [2.0, 5.0, 0.5],
-  cheekJaw: [1.0, 1.5, 0.3],
-} satisfies Record<string, number | [number, number, number]>;
+  cheek: [0.8, 3.5, -1.0] as V3,
+  cheekLow: [2.0, 5.0, 0.5] as V3,
+  cheekJaw: [1.0, 1.5, 0.3] as V3,
+};
 
-type SmileKey = Exclude<keyof typeof SMILE, 'jawDeg'>;
+export type Smile = typeof SMILE;
+type SmileKey = Exclude<keyof Smile, 'jawDeg'>;
 
-/** Кости лица → смещение улыбки (и размыкание губ на выдохе, мм). */
-const SMILE_BONES: [RegExp, SmileKey, [number, number, number]?][] = [
-  [/^[lr]_J_mug_lip_up_[01]_JNT$/, 'lipUpMid', [0, 0.6, 0]],
-  [/^[lr]_J_mug_lip_up_2_JNT$/, 'lipUp2', [0, 0.5, 0]],
+/**
+ * У женского лица губы полнее: верхняя губа закрывала резцы почти целиком, а нижняя с
+ * челюстью открывала весь нижний ряд — оскал. Верхнюю губу и уголки поднимаем выше, челюсть
+ * и нижнюю губу опускаем меньше.
+ */
+const SMILE_FEMALE: Partial<Smile> = {
+  jawDeg: 1.0,
+  lipUpMid: [0.3, 4.8, -0.5],
+  lipUp2: [1.5, 6.1, 0.2],
+  lipUp3: [3.0, 7.5, 1.0],
+  rowAMid: [0.2, 2.4, -0.3],
+  rowA2: [1.2, 3.8, 0.3],
+  rowBMid: [0, 1.2, 0],
+  rowB2: [1.5, 3.2, 0.3],
+  // нижняя губа прикрывает нижний ряд почти целиком, края идут за уголками наружу и вверх
+  lipDnMid: [0.3, 1.2, 1.0],
+  lipDn2: [2.0, 2.6, 1.5],
+  lipDn3: [5.5, 7.0, 3.0],
+  rowA6: [0.3, 0.3, 0.8],
+  corner: [6.0, 11.5, 3.0],
+  rowA4: [5.5, 9.5, 3.0],
+};
+
+/** Улыбка «Зубы» для пола V. */
+export function smileFor(gender: 'female' | 'male'): Smile {
+  return gender === 'female' ? { ...SMILE, ...SMILE_FEMALE } : SMILE;
+}
+
+/**
+ * Насколько разомкнуты губы (0..1). Дыхание губ не размыкает: на выдохе через приоткрытый
+ * рот у кромки нижней губы выходила рваная бело-розовая полоса изнанки и блестели зубы.
+ */
+export function mouthOpenFor(teeth: number): number {
+  return THREE.MathUtils.clamp(teeth, 0, 1);
+}
+
+/** Кости лица → смещение улыбки. */
+const SMILE_BONES: [RegExp, SmileKey][] = [
+  [/^[lr]_J_mug_lip_up_[01]_JNT$/, 'lipUpMid'],
+  [/^[lr]_J_mug_lip_up_2_JNT$/, 'lipUp2'],
   [/^[lr]_J_mug_lip_up_3_JNT$/, 'lipUp3'],
   [/^[lr]_J_mug_mouth_rowA_[01]_JNT$/, 'rowAMid'],
   [/^[lr]_J_mug_mouth_rowA_2_JNT$/, 'rowA2'],
@@ -58,8 +105,8 @@ const SMILE_BONES: [RegExp, SmileKey, [number, number, number]?][] = [
   [/^[lr]_J_mug_mouth_rowB_[01]_JNT$/, 'rowBMid'],
   [/^[lr]_J_mug_mouth_rowB_2_JNT$/, 'rowB2'],
   [/^[lr]_J_mug_mouth_rowB_3_JNT$/, 'rowB3'],
-  [/^[lr]_J_mug_lip_dn_[01]_JNT$/, 'lipDnMid', [0, -0.8, 0]],
-  [/^[lr]_J_mug_lip_dn_2_JNT$/, 'lipDn2', [0, -0.6, 0]],
+  [/^[lr]_J_mug_lip_dn_[01]_JNT$/, 'lipDnMid'],
+  [/^[lr]_J_mug_lip_dn_2_JNT$/, 'lipDn2'],
   [/^[lr]_J_mug_lip_dn_3_JNT$/, 'lipDn3'],
   [/^[lr]_J_mug_mouth_rowA_4_JNT$/, 'rowA4'],
   [/^[lr]_J_mug_mouth_rowA_5_JNT$/, 'rowA5'],
@@ -87,6 +134,20 @@ export function lidPose(blink: number, teeth: number): { upper: number; lower: n
   };
 }
 
+/**
+ * Пределы взгляда относительно головы, °. Вверх — не больше 5°: верхнее веко за взглядом
+ * не идёт, и при опущенной голове (строка «Ногти», V смотрит на кисть) взгляд в камеру
+ * на +15° закатывал глаза — из-под века были видны одни белки.
+ */
+export const GAZE_LIMIT = { yaw: 25, up: 5, down: 12 };
+
+/** Направление взгляда (единичный вектор в осях персонажа: +Y вверх, −Z вперёд) → углы, рад. */
+export function gazeAngles(dir: { x: number; y: number; z: number }): { yaw: number; pitch: number } {
+  const yaw = THREE.MathUtils.clamp(Math.atan2(dir.x, -dir.z), -GAZE_LIMIT.yaw * DEG, GAZE_LIMIT.yaw * DEG);
+  const pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1)), -GAZE_LIMIT.down * DEG, GAZE_LIMIT.up * DEG);
+  return { yaw, pitch };
+}
+
 interface Offset {
   bone: THREE.Bone;
   rest: THREE.Vector3;
@@ -94,7 +155,6 @@ interface Offset {
   basis: THREE.Matrix3;
   /** сдвиг (м) в осях персонажа: +Y вверх, −Z вперёд, +X вправо от V */
   teeth: THREE.Vector3;
-  breath: THREE.Vector3;
 }
 
 interface Corner {
@@ -125,6 +185,7 @@ export class FaceRig {
   private headBindQ = new THREE.Quaternion();
   private upperDeg: number;
   private lowerDeg: number;
+  private smile: Smile;
 
   // состояние
   private time = 0;
@@ -153,7 +214,8 @@ export class FaceRig {
     return this.lidsClosed;
   }
 
-  constructor(sk: MasterSkeleton, spec: FaceRigSpec) {
+  constructor(sk: MasterSkeleton, spec: FaceRigSpec, gender: 'female' | 'male' = 'female') {
+    this.smile = smileFor(gender);
     this.upperDeg = spec.eyelids.blinkUpperDeg;
     this.lowerDeg = spec.eyelids.blinkLowerDeg;
     this.jaw = sk.get(spec.jaw.joint);
@@ -183,7 +245,7 @@ export class FaceRig {
     // назад и заметно вверх, верхняя губа поднимается к краям сильнее, чем в центре (∪),
     // нижняя опускается немного и прижимается к зубам, щёки приподняты. Ровный подъём всей
     // верхней губы при опущенном центре нижней даёт щель ∩ или прямоугольный оскал.
-    const add = (re: RegExp, teeth: [number, number, number], breath: [number, number, number] = [0, 0, 0]) => {
+    const add = (re: RegExp, teeth: V3) => {
       for (const [name, bone] of sk.bones) {
         if (!re.test(name)) continue;
         const side = name.startsWith('l_') ? -1 : name.startsWith('r_') ? 1 : 0;
@@ -192,11 +254,10 @@ export class FaceRig {
           rest: sk.restPos.get(name)!.clone(),
           basis: parentBasis(sk, bone),
           teeth: new THREE.Vector3(teeth[0] * side, teeth[1], teeth[2]).multiplyScalar(0.001),
-          breath: new THREE.Vector3(breath[0] * side, breath[1], breath[2]).multiplyScalar(0.001),
         });
       }
     };
-    for (const [re, key, breath] of SMILE_BONES) add(re, SMILE[key], breath);
+    for (const [re, key] of SMILE_BONES) add(re, this.smile[key]);
 
     this.head = sk.get('Head');
     if (this.head) sk.bindWorld.get('Head')!.decompose(new THREE.Vector3(), this.headBindQ, new THREE.Vector3());
@@ -237,10 +298,11 @@ export class FaceRig {
   }
 
   /**
-   * Кадр лица. Вызывать после mixer.update и до отрисовки; camera — мировая позиция камеры.
+   * Кадр лица. Вызывать после mixer.update и до отрисовки; camera — мировая позиция камеры,
+   * gaze — куда смотреть вместо камеры (кисть в позе ногтей), мировые оси.
    * Кости лица пишутся от позы привязки, поэтому ничего не накапливается.
    */
-  update(dt: number, camera: THREE.Vector3) {
+  update(dt: number, camera: THREE.Vector3, gaze?: THREE.Vector3 | null) {
     this.time += dt;
     const natural = this.blinkCurve(dt);
     const blink = this.blinkOverride ?? natural;
@@ -248,18 +310,15 @@ export class FaceRig {
     const k = 1 - Math.exp(-dt / 0.13);
     this.teethAmount += (this.teethTarget - this.teethAmount) * k;
     const teeth = this.teethAmount;
-    // Дыхание ртом: губы чуть размыкаются раз в ~11 с примерно на 2 с
-    const phase = (this.time % 11) / 11;
-    const breath = phase > 0.15 && phase < 0.38 ? Math.sin(((phase - 0.15) / 0.23) * Math.PI) ** 2 : 0;
-
-    this.mouth = Math.max(teeth, 0.35 * breath);
+    // Губы сомкнуты всё время, кроме улыбки «Зубы» (дыхание их не размыкает)
+    this.mouth = mouthOpenFor(teeth);
     if (this.jaw) {
-      const deg = -(0.7 * breath) * (1 - teeth) - SMILE.jawDeg * teeth;
+      const deg = -this.smile.jawDeg * teeth;
       this.jaw.quaternion.copy(this.jawRest).multiply(new THREE.Quaternion().setFromAxisAngle(UP_LOCAL, deg * DEG));
     }
     const tmp = new THREE.Vector3();
     for (const o of this.offsets) {
-      tmp.copy(o.teeth).multiplyScalar(teeth).addScaledVector(o.breath, breath * (1 - teeth)).applyMatrix3(o.basis);
+      tmp.copy(o.teeth).multiplyScalar(teeth).applyMatrix3(o.basis);
       o.bone.position.copy(o.rest).add(tmp);
     }
 
@@ -273,10 +332,10 @@ export class FaceRig {
       c.bone.position.copy(c.rest).sub(c.center).applyAxisAngle(c.axis, a).add(c.center);
     }
 
-    this.updateEyes(dt, camera);
+    this.updateEyes(dt, gaze ?? camera);
   }
 
-  private updateEyes(dt: number, camera: THREE.Vector3) {
+  private updateEyes(dt: number, target: THREE.Vector3) {
     if (!this.head || !this.eyes.length) return;
     // Саккады: новая точка каждые 0,8–2,5 с, переход за ~40 мс
     if (this.time >= this.saccadeAt) {
@@ -286,14 +345,13 @@ export class FaceRig {
     this.sac.lerp(this.sacTarget, 1 - Math.exp(-dt / 0.04));
     this.head.updateWorldMatrix(true, false);
     const inv = this.head.matrixWorld.clone().invert();
-    const camLocal = camera.clone().applyMatrix4(inv);
-    // направление на камеру от середины между глазами — в осях персонажа (bind)
+    const camLocal = target.clone().applyMatrix4(inv);
+    // направление на цель от середины между глазами — в осях персонажа (bind)
     const mid = new THREE.Vector3();
     for (const e of this.eyes) mid.add(e.bone.position);
     mid.multiplyScalar(1 / this.eyes.length);
     const dirB = camLocal.sub(mid).normalize().applyQuaternion(this.headBindQ);
-    const yaw = THREE.MathUtils.clamp(Math.atan2(dirB.x, -dirB.z), -25 * DEG, 25 * DEG);
-    const pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(dirB.y, -1, 1)), -15 * DEG, 15 * DEG);
+    const { yaw, pitch } = gazeAngles(dirB);
     this.look.lerp(new THREE.Vector2(yaw, pitch), 1 - Math.exp(-dt / 0.08));
     const y = this.look.x + this.sac.x;
     const p = this.look.y + this.sac.y;

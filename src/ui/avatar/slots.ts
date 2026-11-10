@@ -85,6 +85,14 @@ export function cameraSlotFor(slotId: string | undefined, group?: string, varian
   return 'UI_HeadPreview';
 }
 
+/**
+ * Самый крупный план (глаза, нос, губы, челюсть, зубы, общий кадр головы): макушка
+ * заходит под заголовок, и подзаголовок ложится текстом поверх волос — его прячем.
+ */
+export function isCloseupFocus(slotId: string | undefined, group?: string, variantName?: string): boolean {
+  return cameraShot(cameraSlotFor(slotId, group, variantName), 'female').distance < 1.5;
+}
+
 /** Поза тела: крупный план головы, рост или поднятая рука (ногти). */
 export type BodyMode = 'closeup' | 'fullbody' | 'hand';
 

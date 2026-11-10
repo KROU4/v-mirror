@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bodyModeFor, cameraShot, cameraSlotFor, clipPlan, HAND_END_SPEED, type BodyMode } from './slots';
+import { bodyModeFor, cameraShot, cameraSlotFor, clipPlan, HAND_END_SPEED, isCloseupFocus, type BodyMode } from './slots';
 
 describe('cameraSlotFor', () => {
   it('без строки — кадр кожи', () => {
@@ -117,5 +117,17 @@ describe('позы и клипы', () => {
     for (const from of modes)
       for (const to of ['closeup', 'fullbody', 'hand'] as BodyMode[])
         expect(names(clipPlan(from, to)).filter((c) => c.startsWith('ui_closeup_shot_'))).toEqual([]);
+  });
+});
+
+describe('isCloseupFocus (подзаголовок прячется на крупных планах лица)', () => {
+  it('глаза, нос, губы, челюсть, зубы и общий кадр головы — крупный план', () => {
+    for (const id of ['eyes', 'nose', 'mouth', 'jaw', 'teeth', 'ears']) expect(isCloseupFocus(id, 'head')).toBe(true);
+  });
+
+  it('кожа, причёска, ногти и тело — нет', () => {
+    for (const id of ['skin_color', 'hairstyle', 'nails_l']) expect(isCloseupFocus(id, 'head')).toBe(false);
+    expect(isCloseupFocus('breast', 'body')).toBe(false);
+    expect(isCloseupFocus(undefined)).toBe(false);
   });
 });

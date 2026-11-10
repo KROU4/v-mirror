@@ -281,7 +281,7 @@ export default function ScanPanel({
               <div className="seg" role="group" aria-label="Для какого V подбирать">
                 {(['male', 'female'] as Gender[]).map((g) => (
                   <button key={g} aria-pressed={gender === g} onClick={() => onGender(g)}>
-                    {g === 'male' ? 'Тип 1' : 'Тип 2'}
+                    {g === 'male' ? 'Мужской' : 'Женский'}
                   </button>
                 ))}
               </div>
@@ -409,7 +409,7 @@ export default function ScanPanel({
               )}
               {llm?.bodyType && llm.bodyType !== gender && (
                 <p className="status" style={{ marginBottom: 0 }}>
-                  Модель считает, что ближе тип тела {llm.bodyType === 'male' ? '1' : '2'}.{' '}
+                  Модель считает, что ближе {llm.bodyType === 'male' ? 'мужской' : 'женский'} тип тела.{' '}
                   <button className="btn ghost" onClick={() => onGender(llm.bodyType!)}>
                     Переключить
                   </button>

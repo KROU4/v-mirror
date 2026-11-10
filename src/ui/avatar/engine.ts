@@ -102,13 +102,16 @@ export class AvatarEngine {
       // план» её не задерживает — лицевой граф игры от клипа тела не зависит
       ch.face.teethTarget = this.slot === 'UI_Teeth' && !ch.anim.handUp ? 1 : 0;
       ch.update(dt, this.rig.camera.position);
-      // Крупные планы: прицел мягко идёт за головой по горизонтали и глубине
+      // Крупные планы: прицел мягко идёт за головой по горизонтали и глубине. Вход в
+      // слежение быстрый: при переезде «рост → лицо» клип ui_fullbody_to_closeup уводит голову
+      // вбок, и с медленным входом (0,6 с) лицо успевало уехать под левую колонку, пока камера
+      // уже подъехала. Издали сдвиг прицела на сантиметры незаметен, так что рывка нет.
       const want = bodyModeFor(this.slot) === 'closeup' ? 1 : 0;
-      this.followW += (want - this.followW) * (1 - Math.exp(-dt / 0.6));
+      this.followW += (want - this.followW) * (1 - Math.exp(-dt / (want > this.followW ? 0.15 : 0.6)));
       ch.headDrift(this.drift);
       this.drift.y = 0;
       this.drift.multiplyScalar(this.followW);
-      this.follow.lerp(this.drift, 1 - Math.exp(-dt / 0.35));
+      this.follow.lerp(this.drift, 1 - Math.exp(-dt / 0.18));
       this.rig.setFollow(this.follow);
     }
     this.renderer.render(this.scene, this.rig.camera);

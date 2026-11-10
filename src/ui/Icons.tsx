@@ -95,6 +95,13 @@ export const IconClose =(p: SVGProps<SVGSVGElement>) => (
     <path d="M6 6l12 12M18 6 6 18" />
   </svg>
 );
+/** Силуэт «голова и плечи» — заглушка плитки типа тела, пока нет рендера портрета */
+export const IconBust = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base({ strokeWidth: 0.9, viewBox: '0 0 24 30', preserveAspectRatio: 'xMidYMax meet', ...p })}>
+    <path d="M12 4.5c2.6 0 4.3 2 4.3 4.9 0 3.3-1.9 6-4.3 6s-4.3-2.7-4.3-6c0-2.9 1.7-4.9 4.3-4.9Z" />
+    <path d="M9.8 15v2.2L4 19.6C2.6 20.2 2 21.4 2 23v7M14.2 15v2.2l5.8 2.4c1.4.6 2 1.8 2 3.4v7" />
+  </svg>
+);
 export const IconDownload = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <path d="M12 4v12M7 11l5 5 5-5" />

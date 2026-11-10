@@ -135,7 +135,11 @@ kbd svg { width: 15px; height: 15px; }
   padding: 2px 6px 7px; border-bottom: 3px solid var(--cyan-soft);
   font-size: 31px; line-height: 1; font-stretch: 92%; letter-spacing: 0.03em; text-transform: uppercase;
 }
-.cc-title p { margin: 12px 0 0; font-size: 16px; font-weight: 500; letter-spacing: 0.03em; text-transform: uppercase; color: var(--red-text); text-shadow: 0 0 6px rgba(10, 6, 10, 0.95), 0 1px 2px rgba(0, 0, 0, 0.9); }
+.cc-title p { margin: 12px 0 0; font-size: 16px; font-weight: 500; letter-spacing: 0.03em; text-transform: uppercase; color: var(--red-text); text-shadow: 0 0 6px rgba(10, 6, 10, 0.95), 0 1px 2px rgba(0, 0, 0, 0.9); transition: opacity 0.3s; }
+/* Крупный план лица: макушка уходит под заголовок — подзаголовок не ложится текстом на волосы */
+@media (min-width: 901px) {
+  .cc-title[data-closeup] p { opacity: 0; }
+}
 /* На крупных планах волосы заходят под заголовок: мягкая тёмная подложка держит текст читаемым */
 .cc-title::before {
   content: ''; position: absolute; inset: -16px -64px -20px -40px; z-index: -1; pointer-events: none;
@@ -150,22 +154,54 @@ kbd svg { width: 15px; height: 15px; }
 .cc-left h2, .cc-list h2 {
   margin: 0; font-size: 25px; font-weight: 500; line-height: 1.05; letter-spacing: 0.03em; text-transform: uppercase; color: var(--red-text);
 }
-.bodies { display: grid; gap: 12px; justify-items: start; }
+.bodies { display: grid; gap: 10px; width: min(170px, 100%); }
+/* Плитка типа тела: портрет V, отрендеренный 3D-движком приложения, на винной подсветке.
+   Невыбранная — приглушённая, при наведении оживает (цвет, лёгкий наезд, пробег скан-линии) */
 .body-card {
   --p-clip: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
   --p-fill: rgba(42, 20, 24, 0.9);
-  display: grid; width: 112px; padding: 4px; color: var(--red-text);
+  display: grid; width: 100%; padding: 4px; color: var(--red-text); text-align: left;
+  transition: color 160ms var(--ease);
+}
+.body-pic {
+  position: relative; display: block; height: 150px; overflow: hidden;
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
+  background: radial-gradient(ellipse 75% 70% at 50% 38%, rgba(128, 32, 44, 0.6), rgba(22, 9, 14, 0.95) 78%);
 }
 .body-img {
-  display: block; width: 104px; height: 130px; object-fit: cover; object-position: 50% 28%;
-  /* серый фон рендера уходит в винный, как подсветка готовых вариантов в игре */
-  filter: grayscale(1) sepia(0.85) hue-rotate(-28deg) saturate(2.1) brightness(0.8) contrast(1.15);
+  display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; transform-origin: 50% 30%;
+  filter: grayscale(0.75) brightness(0.6) contrast(1.05);
+  transition: filter 220ms var(--ease), transform 600ms var(--ease);
 }
-svg.body-img { background: var(--bg-1); }
-.body-tag { padding: 4px 2px 1px; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
+/* Скан-линии и подсветка снизу; полоса пробегает сверху вниз при наведении */
+.body-fx {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    repeating-linear-gradient(180deg, rgba(8, 2, 4, 0.14) 0 1px, transparent 1px 4px),
+    linear-gradient(0deg, rgba(255, 95, 88, 0.16), transparent 38%);
+  transition: opacity 220ms var(--ease);
+}
+.body-fx::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 26%; opacity: 0;
+  background: linear-gradient(180deg, transparent, rgba(94, 242, 255, 0.2) 70%, rgba(94, 242, 255, 0.5) 100%);
+}
+.body-card:hover .body-fx::after { animation: body-sweep 900ms var(--ease) 1; }
+@keyframes body-sweep {
+  from { opacity: 1; transform: translateY(-100%); }
+  to { opacity: 0; transform: translateY(400%); }
+}
+.body-tag {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 4px 2px;
+  font-size: 13px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.body-tag b { font-weight: 500; color: var(--ink-3); }
 .body-card:hover { --p-line: var(--red); color: var(--red-hi); }
+.body-card:hover .body-img { filter: grayscale(0.25) brightness(0.88) contrast(1.05); transform: scale(1.04) translateY(-2px); }
 .body-card[aria-pressed='true'] { --p-line: var(--red-line-hi); --p-fill: rgba(120, 30, 40, 0.75); color: var(--cream); }
-.body-card[aria-pressed='true'] .body-img { filter: grayscale(1) sepia(0.6) hue-rotate(-28deg) saturate(1.6) brightness(1) contrast(1.1); }
+.body-card[aria-pressed='true'] .body-img { filter: none; }
+.body-card[aria-pressed='true'] .body-tag b { color: var(--cream); }
+.body-card[aria-pressed='true'] .body-fx { opacity: 0.35; }
 .left-actions { display: grid; gap: 8px; margin-top: 8px; width: 170px; }
 
 /* Кнопка в стиле игры: плашка со срезанными углами, клавиша слева */
@@ -207,6 +243,30 @@ svg.body-img { background: var(--bg-1); }
 .info-head small { font-size: 15px; color: var(--ink-3); }
 .info p { margin: 6px 0 0; color: var(--cream-2); font-size: 14px; line-height: 1.35; }
 .info .info-prov { color: var(--cyan); }
+/* Отметка «выставлено в игре» выбранной строки и общий счёт — вместо квадратов в каждой строке */
+.info-done {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 95, 88, 0.22);
+}
+.done-btn {
+  display: inline-flex; align-items: center; gap: 9px; min-height: 34px; padding: 0 6px 0 9px;
+  border: 1px solid var(--red-line); background: var(--red-fill); color: var(--red-text);
+  font-size: 13px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 140ms var(--ease), background 140ms var(--ease), border-color 140ms var(--ease);
+}
+.done-btn kbd { min-width: 22px; height: 22px; margin-left: 2px; font-size: 12px; }
+/* Единственный флажок на экране — с тем же срезанным углом, что и плашки */
+.done-mark {
+  display: grid; place-items: center; width: 14px; height: 14px; flex: none;
+  background: currentColor; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%);
+}
+.done-mark::before { content: ''; grid-area: 1 / 1; width: 11px; height: 11px; background: transparent; }
+.done-btn[aria-checked='false'] .done-mark { background: transparent; clip-path: none; box-shadow: inset 0 0 0 1.5px currentColor; }
+.done-mark svg { grid-area: 1 / 1; z-index: 1; width: 11px; height: 11px; color: var(--signal-ink); }
+.done-btn:hover { color: var(--cream); border-color: var(--red); background: var(--red-fill-hi); }
+.done-btn[aria-checked='true'] { color: var(--cyan); border-color: var(--cyan-dim); background: rgba(14, 44, 52, 0.6); }
+.done-btn[aria-checked='true'] .done-mark::before { background: var(--cyan); }
+.done-count { font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
 
 .picker {
   position: absolute; right: calc(var(--list-w) + var(--list-pad) + 14px); top: 120px; z-index: 4;
@@ -247,21 +307,10 @@ svg.body-img { background: var(--bg-1); }
   font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
 }
 .crow { position: relative; display: grid; row-gap: 6px; margin-bottom: 12px; }
-/* Отметка «выставлено» — внутри плашки слева, приглушённая, пока не нужна */
-.row-check {
-  position: absolute; left: 4px; top: 6px; z-index: 1; width: 44px; height: 44px; padding: 0; border: 0; background: transparent;
-  display: grid; place-items: center; color: var(--bg-0);
-}
-.row-check .box { width: 16px; height: 16px; border: 1.5px solid #b84a4e; display: grid; place-items: center; transition: background 140ms var(--ease), border-color 140ms var(--ease); }
-.row-check:hover .box { border-color: var(--red-hi); }
-.row-check[aria-checked='true'] .box { background: var(--cyan); border-color: var(--cyan); }
-.row-check svg { width: 12px; height: 12px; }
-.row-check:focus-visible { outline-offset: -8px; }
-
 .row-head {
   --p-clip: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
   --p-fill: rgba(42, 20, 24, 0.85);
-  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 0 16px 0 46px; text-align: left;
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 0 16px 0 18px; text-align: left;
   color: var(--red-text); transition: color 140ms var(--ease);
 }
 .row-head:has(.row-sw) { padding-right: 4px; }
@@ -296,8 +345,11 @@ svg.body-img { background: var(--bg-1); }
 .crow.on .row-head { --p-line: var(--red-line-hi); --p-fill: rgba(96, 26, 34, 0.92); color: var(--cream); }
 .crow.on .row-num { color: var(--cream); }
 .crow.on .row-ctrl > * { --p-line: rgba(255, 143, 128, 0.75); }
+/* Выставленная в игре строка: бирюзовая галочка у номера, подпись приглушена */
+.row-done { width: 16px; height: 16px; flex: none; align-self: center; color: var(--cyan); filter: drop-shadow(0 0 4px rgba(94, 242, 255, 0.55)); }
 .crow.done .row-label { color: var(--ink-3); }
 .crow.done .row-num { color: var(--cyan); }
+.crow.done.on .row-label { color: var(--cream-2); }
 
 .list-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 14px 14px 0 0; }
 .list-actions .gbtn { justify-content: center; min-height: 52px; }
@@ -308,7 +360,9 @@ svg.body-img { background: var(--bg-1); }
   gap: 32px; white-space: nowrap; color: var(--red-text);
   font-size: 19px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
 }
-.cc-foot span { display: inline-flex; align-items: center; gap: 8px; }
+.cc-foot span { display: inline-flex; align-items: center; gap: 8px; text-shadow: 0 0 6px rgba(10, 6, 10, 0.95), 0 1px 2px #000; }
+/* В скане стрелки и сетка цветов не работают, а строка подсказок наезжала на панель */
+.cc[data-mode='scan'] .cc-foot { display: none; }
 
 /* ---------- скан фото поверх головы ---------- */
 .scan-wrap {
@@ -418,7 +472,8 @@ svg.body-img { background: var(--bg-1); }
   .cc { grid-template-rows: 96px minmax(0, 1fr); }
   .cc-left { gap: 10px; padding-bottom: 116px; }
   .bodies { gap: 8px; }
-  .body-img { height: 92px; }
+  .body-pic { height: 100px; }
+  .body-img { object-fit: contain; object-position: 50% 100%; }
   .left-actions { margin-top: 2px; gap: 6px; }
   .gbtn { min-height: 40px; }
   .info { bottom: 18px; }
@@ -443,26 +498,49 @@ svg.body-img { background: var(--bg-1); }
     border-bottom: 1px solid var(--red-line);
   }
   .cc[data-mode='scan'] .cc-stage { position: relative; height: auto; background: none; border: 0; }
-  .cc[data-mode='scan'] .head { display: none; }
+  .cc[data-mode='scan'] .head, .cc[data-mode='scan'] .portrait-fallback { display: none; }
   .info { left: 16px; right: 16px; width: auto; bottom: 10px; padding: 8px 12px; }
   .info p { display: none; }
   .info-head b { font-size: 22px; }
-  .picker { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 60vh; }
+  .picker { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 60vh; background: rgb(18, 8, 12); }
+  .cc-stage:has(.picker) .info { visibility: hidden; }
   .picker-grid { grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); }
   .scan-wrap { position: relative; inset: auto; min-height: 100%; padding: 18px 16px 24px; }
   .scan-grid { grid-template-columns: 1fr; }
   .cc-left { order: 2; padding: 14px 16px 0; overflow: visible; }
   .cc-left h2 { font-size: 20px; }
-  .bodies { grid-template-columns: 1fr 1fr; justify-items: stretch; }
-  .body-card { width: auto; grid-template-columns: 56px 1fr; align-items: center; gap: 10px; }
-  .body-img { width: 56px; height: 66px; }
-  .body-tag { font-size: 13px; }
+  .bodies { grid-template-columns: 1fr 1fr; width: auto; }
+  .body-card { grid-template-columns: 60px minmax(0, 1fr); align-items: center; gap: 10px; }
+  .body-pic { height: 72px; }
+  .body-tag { flex-direction: column; gap: 0; padding: 0; font-size: 14px; }
   .left-actions { grid-template-columns: 1fr 1fr; width: auto; margin-top: 0; }
   .left-actions .shuffle { grid-column: 1 / -1; }
   .gbtn { justify-content: center; }
   .cc-list { order: 3; padding: 18px 16px 24px; }
   .cc-list h2 { text-align: left; margin: 0 0 12px; font-size: 20px; }
   .rows { overflow: visible; padding-right: 0; }
+  /* Строка в одну линию: ◁ [плашка] [сетка] ▷ — список вдвое короче, клетки остаются 48px */
+  .crow { grid-template-columns: 48px minmax(0, 1fr) 48px; column-gap: 3px; row-gap: 0; margin-bottom: 6px; }
+  .crow:has(.ctrl-grid) { grid-template-columns: 48px minmax(0, 1fr) 48px 48px; }
+  .row-ctrl { display: contents; }
+  .row-ctrl .ctrl-gap { display: none; }
+  .crow .row-ctrl button { height: auto; min-height: 48px; grid-row: 1; }
+  .row-ctrl button:first-child { grid-column: 1; }
+  .row-ctrl .ctrl-grid { grid-column: 3; }
+  .row-ctrl button:last-child { grid-column: -2; }
+  .row-head { grid-column: 2; grid-row: 1; min-height: 48px; padding: 0 12px; gap: 8px; }
+  .row-head:has(.row-sw) { padding-right: 3px; }
+  .row-label { font-size: 16px; }
+  .row-num { font-size: 18px; }
+  .row-num.small { font-size: 14px; }
+  .row-sw { width: 30px; margin: 3px 0; }
+  .rows-group { margin: 10px 0 8px; }
+  /* Описание варианта в одну строку, чтобы не закрывать голову: название и номер, справа флажок */
+  .info { display: flex; align-items: center; gap: 10px; }
+  .info > :first-child { flex: 1; min-width: 0; }
+  .info-done { margin: 0; padding: 0; border: 0; }
+  .done-btn { min-height: 40px; padding: 0 10px; font-size: 12px; }
+  .done-tail, .done-count { display: none; }
   /* Строка, к которой листаем стрелками, не прячется под прилипшей головой */
   .crow { scroll-margin-top: calc(min(46vh, 440px) + 8px); }
   .list-actions { padding: 12px 0 0; }
@@ -470,7 +548,7 @@ svg.body-img { background: var(--bg-1); }
   .toast-host { top: auto; bottom: 16px; }
 }
 @media (hover: none) {
-  .cc-foot, .gbtn kbd { display: none; }
+  .cc-foot, .gbtn kbd, .done-btn kbd { display: none; }
   .touch-only { display: inline; }
   .fine-only { display: none; }
 }

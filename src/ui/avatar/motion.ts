@@ -147,6 +147,124 @@ export class HandGuard {
   }
 }
 
+/**
+ * Поза ногтей: тыльная сторона поднятой кисти к камере. Клип ui_expose_hand_loop на
+ * скелете мужского меша держит кисть ребром к камере — ногтей не видно, и строка теряет
+ * смысл. Кисть доворачивается вокруг оси предплечья (пронация), не больше maxDeg; кости
+ * скрутки предплечья (*_Wrist_0..2_JNT) идут следом долями twist, чтобы запястье не
+ * перекручивалось «фантиком».
+ */
+export const NAIL_TWIST = { maxDeg: 75, flexDeg: 45, twist: [0.3, 0.6, 0.85], tau: 0.25 };
+
+/**
+ * Угол (рад) поворота вокруг оси axis, который ближе всего доводит back (нормаль тыла
+ * кисти) до toCam (направление на камеру); |угол| ≤ maxDeg. Векторы — единичные.
+ */
+export function twistToFace(axis: THREE.Vector3, back: THREE.Vector3, toCam: THREE.Vector3, maxDeg = NAIL_TWIST.maxDeg): number {
+  const b = back.clone().addScaledVector(axis, -back.dot(axis));
+  const c = toCam.clone().addScaledVector(axis, -toCam.dot(axis));
+  if (b.lengthSq() < 1e-8 || c.lengthSq() < 1e-8) return 0;
+  const ang = Math.atan2(axis.dot(new THREE.Vector3().crossVectors(b, c)), b.dot(c));
+  const m = THREE.MathUtils.degToRad(maxDeg);
+  return THREE.MathUtils.clamp(ang, -m, m);
+}
+
+/** Доворот поднятой кисти тылом к камере в позе ногтей (NAIL_TWIST). */
+export class NailTwist {
+  private arms: { side: 1 | -1; fore: THREE.Bone; hand: THREE.Bone; mid: THREE.Bone; index: THREE.Bone; pinky: THREE.Bone; twist: THREE.Bone[] }[] = [];
+  private w = 0;
+  private pE = new THREE.Vector3();
+  private pH = new THREE.Vector3();
+  private pM = new THREE.Vector3();
+  private pI = new THREE.Vector3();
+  private pP = new THREE.Vector3();
+  private axis = new THREE.Vector3();
+  private back = new THREE.Vector3();
+  private toCam = new THREE.Vector3();
+  private q = new THREE.Quaternion();
+
+  constructor(sk: MasterSkeleton) {
+    for (const [side, s, sign] of [
+      ['Left', 'l', 1],
+      ['Right', 'r', -1],
+    ] as const) {
+      const fore = sk.get(`${side}ForeArm`);
+      const hand = sk.get(`${side}Hand`);
+      const mid = sk.get(`${side}HandMiddle3`);
+      const index = sk.get(`${side}HandIndex1`);
+      const pinky = sk.get(`${side}HandPinky1`);
+      const twist = [0, 1, 2].map((k) => sk.get(`${s}_Wrist_${k}_JNT`)).filter((b): b is THREE.Bone => !!b);
+      if (fore && hand && mid && index && pinky) this.arms.push({ side: sign, fore, hand, mid, index, pinky, twist });
+    }
+  }
+
+  /**
+   * Кости, которые доворот менял в прошлом кадре: before — поворот до доворота, after — после.
+   * Кости без дорожек в клипах (скрутка предплечья) микшер не переписывает, и без отката
+   * доворот копился бы от кадра к кадру.
+   */
+  private touched = new Map<THREE.Bone, { before: THREE.Quaternion; after: THREE.Quaternion }>();
+
+  private turn(bone: THREE.Bone, axis: THREE.Vector3, angle: number) {
+    let t = this.touched.get(bone);
+    if (!t) this.touched.set(bone, (t = { before: new THREE.Quaternion(), after: new THREE.Quaternion() }));
+    // до первого доворота в этом кадре: повторный доворот той же кости не затирает before
+    if (!this.turned.has(bone)) t.before.copy(bone.quaternion);
+    this.turned.add(bone);
+    rotateWorld(bone, this.q.setFromAxisAngle(axis, angle));
+    t.after.copy(bone.quaternion);
+  }
+  private turned = new Set<THREE.Bone>();
+
+  /** Нормаль тыла кисти (мировые оси) и её середина → this.back, this.pH. */
+  private handBack(a: (typeof this.arms)[number]) {
+    a.hand.getWorldPosition(this.pH);
+    a.mid.getWorldPosition(this.pM);
+    a.index.getWorldPosition(this.pI);
+    a.pinky.getWorldPosition(this.pP);
+    // тыл кисти: (пальцы × поперёк ладони), у правой кисти — с обратным знаком
+    this.back
+      .crossVectors(this.pM.sub(this.pH).normalize(), this.pP.sub(this.pI).normalize())
+      .normalize()
+      .multiplyScalar(a.side);
+  }
+
+  /** После HandGuard: on — поза ногтей (рука поднята), camera — мировая позиция камеры. */
+  apply(dt: number, on: boolean, camera: THREE.Vector3) {
+    for (const [bone, t] of this.touched) if (bone.quaternion.equals(t.after)) bone.quaternion.copy(t.before);
+    this.touched.clear();
+    this.w += ((on ? 1 : 0) - this.w) * (1 - Math.exp(-dt / NAIL_TWIST.tau));
+    if (this.w < 1e-3 || !this.arms.length) return;
+    // поднятая кисть — та, что выше
+    let a = this.arms[0];
+    let best = -Infinity;
+    for (const arm of this.arms) {
+      arm.hand.getWorldPosition(this.pH);
+      if (this.pH.y > best) {
+        best = this.pH.y;
+        a = arm;
+      }
+    }
+    this.turned.clear();
+    a.fore.getWorldPosition(this.pE);
+    this.handBack(a);
+    this.axis.subVectors(this.pH, this.pE).normalize();
+    this.toCam.subVectors(camera, this.pH).normalize();
+    // 1) пронация вокруг оси предплечья (с костями скрутки)
+    const ang = twistToFace(this.axis, this.back, this.toCam) * this.w;
+    if (Math.abs(ang) > 1e-4) {
+      a.twist.forEach((b, i) => this.turn(b, this.axis, ang * (NAIL_TWIST.twist[i] ?? 1)));
+      this.turn(a.hand, this.axis, ang);
+    }
+    // 2) Предплечье смотрит почти в камеру — одной пронацией тыл кисти к ней не повернуть.
+    // Остаток добирает сгиб запястья (кратчайший поворот кисти), не больше flexDeg.
+    this.handBack(a);
+    const flex = Math.min(Math.acos(THREE.MathUtils.clamp(this.back.dot(this.toCam), -1, 1)), THREE.MathUtils.degToRad(NAIL_TWIST.flexDeg)) * this.w;
+    const ax = this.pE.crossVectors(this.back, this.toCam);
+    if (flex > 1e-4 && ax.lengthSq() > 1e-10) this.turn(a.hand, ax.normalize(), flex);
+  }
+}
+
 export class BodyAnimator {
   private mixer: THREE.AnimationMixer;
   private clips = new Map<string, THREE.AnimationClip>();
