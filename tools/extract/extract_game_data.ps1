@@ -6,6 +6,7 @@
   Пример:
     .\tools\extract\extract_game_data.ps1 -GamePath "G:\Cyberpunk 2077" -WolvenKit "C:\tools\wk\WolvenKit.CLI.exe" -Work "C:\tmp\cp-work"
     python -I tools\extract\build_catalog.py --work "C:\tmp\cp-work" --out src\data
+    python -I tools\extract\build_swatches.py --game "G:\Cyberpunk 2077" --work "C:\tmp\cp-work"
 #>
 param(
     [Parameter(Mandatory = $true)][string]$GamePath,

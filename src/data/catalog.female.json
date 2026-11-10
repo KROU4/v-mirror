@@ -64375,7 +64375,7 @@
       {
        "i": 19,
        "label": {
-        "ru": "Узор arasaka",
+        "ru": "Узор: Arasaka",
         "en": "Multilayer Arasaka"
        },
        "app": "he_000_pwa__basehead__19_multilayer_arasaka",
@@ -64391,7 +64391,7 @@
       {
        "i": 20,
        "label": {
-        "ru": "Узор arasaka чёрный",
+        "ru": "Узор: Arasaka, чёрный",
         "en": "Multilayer Arasaka Black"
        },
        "app": "he_000_pwa__basehead__20_multilayer_arasaka_black",
@@ -64423,7 +64423,7 @@
       {
        "i": 22,
        "label": {
-        "ru": "Узор cpu",
+        "ru": "Узор: процессор",
         "en": "Multilayer Cpu"
        },
        "app": "he_000_pwa__basehead__22_multilayer_cpu",
@@ -64439,7 +64439,7 @@
       {
        "i": 23,
        "label": {
-        "ru": "Узор cpu чёрный",
+        "ru": "Узор: процессор, чёрный",
         "en": "Multilayer Cpu Black"
        },
        "app": "he_000_pwa__basehead__23_multilayer_cpu_black",
@@ -64487,7 +64487,7 @@
       {
        "i": 26,
        "label": {
-        "ru": "Узор lizzard",
+        "ru": "Узор: ящерица",
         "en": "Multilayer Lizzard"
        },
        "app": "he_000_pwa__basehead__26_multilayer_lizzard",
@@ -64503,7 +64503,7 @@
       {
        "i": 27,
        "label": {
-        "ru": "Узор lizzard чёрный",
+        "ru": "Узор: ящерица, чёрный",
         "en": "Multilayer Lizzard Black"
        },
        "app": "he_000_pwa__basehead__27_multilayer_lizzard_black",
@@ -64519,7 +64519,7 @@
       {
        "i": 28,
        "label": {
-        "ru": "Узор ring",
+        "ru": "Узор: кольцо",
         "en": "Multilayer Ring"
        },
        "app": "he_000_pwa__basehead__28_multilayer_ring",
@@ -64535,7 +64535,7 @@
       {
        "i": 29,
        "label": {
-        "ru": "Узор ring чёрный",
+        "ru": "Узор: кольцо, чёрный",
         "en": "Multilayer Ring Black"
        },
        "app": "he_000_pwa__basehead__29_multilayer_ring_black",
@@ -64551,7 +64551,7 @@
       {
        "i": 30,
        "label": {
-        "ru": "Узор skull",
+        "ru": "Узор: череп",
         "en": "Multilayer Skull"
        },
        "app": "he_000_pwa__basehead__30_multilayer_skull",
@@ -64567,7 +64567,7 @@
       {
        "i": 31,
        "label": {
-        "ru": "Узор skull чёрный",
+        "ru": "Узор: череп, чёрный",
         "en": "Multilayer Skull Black"
        },
        "app": "he_000_pwa__basehead__31_multilayer_skull_black",
@@ -64583,7 +64583,7 @@
       {
        "i": 32,
        "label": {
-        "ru": "Узор spider",
+        "ru": "Узор: паук",
         "en": "Multilayer Spider"
        },
        "app": "he_000_pwa__basehead__32_multilayer_spider",
@@ -64599,7 +64599,7 @@
       {
        "i": 33,
        "label": {
-        "ru": "Узор spider чёрный",
+        "ru": "Узор: паук, чёрный",
         "en": "Multilayer Spider Black"
        },
        "app": "he_000_pwa__basehead__33_multilayer_spider_black",
@@ -64615,7 +64615,7 @@
       {
        "i": 34,
        "label": {
-        "ru": "Узор spiral",
+        "ru": "Узор: спираль",
         "en": "Multilayer Spiral"
        },
        "app": "he_000_pwa__basehead__34_multilayer_spiral",
@@ -64631,7 +64631,7 @@
       {
        "i": 35,
        "label": {
-        "ru": "Узор spiral чёрный",
+        "ru": "Узор: спираль, чёрный",
         "en": "Multilayer Spiral Black"
        },
        "app": "he_000_pwa__basehead__35_multilayer_spiral_black",
@@ -64647,7 +64647,7 @@
       {
        "i": 36,
        "label": {
-        "ru": "Узор target",
+        "ru": "Узор: мишень",
         "en": "Multilayer Target"
        },
        "app": "he_000_pwa__basehead__36_multilayer_target",
@@ -64663,7 +64663,7 @@
       {
        "i": 37,
        "label": {
-        "ru": "Узор target чёрный",
+        "ru": "Узор: мишень, чёрный",
         "en": "Multilayer Target Black"
        },
        "app": "he_000_pwa__basehead__37_multilayer_target_black",
@@ -64679,7 +64679,7 @@
       {
        "i": 38,
        "label": {
-        "ru": "Узор x ",
+        "ru": "Узор: крест X",
         "en": "Multilayer X Sign"
        },
        "app": "he_000_pwa__basehead__38_multilayer_x_sign",
@@ -64695,7 +64695,7 @@
       {
        "i": 39,
        "label": {
-        "ru": "Узор x  чёрный",
+        "ru": "Узор: крест X, чёрный",
         "en": "Multilayer X Sign Black"
        },
        "app": "he_000_pwa__basehead__39_multilayer_x_sign_black",
@@ -64711,7 +64711,7 @@
       {
        "i": 40,
        "label": {
-        "ru": "Узор arasaka logo",
+        "ru": "Узор: логотип Arasaka",
         "en": "Multilayer Arasaka Logo"
        },
        "app": "he_000_pwa__basehead__40_multilayer_arasaka_logo",
@@ -64727,7 +64727,7 @@
       {
        "i": 41,
        "label": {
-        "ru": "Узор arasaka logo чёрный",
+        "ru": "Узор: логотип Arasaka, чёрный",
         "en": "Multilayer Arasaka Logo Black"
        },
        "app": "he_000_pwa__basehead__41_multilayer_arasaka_logo_black",
@@ -64743,7 +64743,7 @@
       {
        "i": 42,
        "label": {
-        "ru": "Узор золотистый hexagon",
+        "ru": "Узор: золотой шестиугольник",
         "en": "Multilayer Golden Hexagon"
        },
        "app": "he_000_pwa__basehead__42_multilayer_golden_hexagon",
@@ -64759,7 +64759,7 @@
       {
        "i": 43,
        "label": {
-        "ru": "Узор золотистый hexagon чёрный",
+        "ru": "Узор: золотой шестиугольник, чёрный",
         "en": "Multilayer Golden Hexagon Black"
        },
        "app": "he_000_pwa__basehead__43_multilayer_golden_hexagon_black",
@@ -64775,7 +64775,7 @@
       {
        "i": 44,
        "label": {
-        "ru": "Узор mox",
+        "ru": "Узор: Mox",
         "en": "Multilayer Mox"
        },
        "app": "he_000_pwa__basehead__44_multilayer_mox",
@@ -64791,7 +64791,7 @@
       {
        "i": 45,
        "label": {
-        "ru": "Узор mox синий",
+        "ru": "Узор: Mox, синий",
         "en": "Multilayer Mox Blue"
        },
        "app": "he_000_pwa__basehead__45_multilayer_mox_blue",
@@ -64807,7 +64807,7 @@
       {
        "i": 46,
        "label": {
-        "ru": "Узор nicola",
+        "ru": "Узор: Nicola",
         "en": "Multilayer Nicola"
        },
        "app": "he_000_pwa__basehead__46_multilayer_nicola",
@@ -64823,7 +64823,7 @@
       {
        "i": 47,
        "label": {
-        "ru": "Узор nicola чёрный",
+        "ru": "Узор: Nicola, чёрный",
         "en": "Multilayer Nicola Black"
        },
        "app": "he_000_pwa__basehead__47_multilayer_nicola_black",
@@ -64839,7 +64839,7 @@
       {
        "i": 48,
        "label": {
-        "ru": "Узор jinguji",
+        "ru": "Узор: Jinguji",
         "en": "Multilayer Jinguji"
        },
        "app": "he_000_pwa__basehead__48_multilayer_jinguji",
@@ -64855,7 +64855,7 @@
       {
        "i": 49,
        "label": {
-        "ru": "Узор jinguji чёрный",
+        "ru": "Узор: Jinguji, чёрный",
         "en": "Multilayer Jinguji Black"
        },
        "app": "he_000_pwa__basehead__49_multilayer_jinguji_black",
@@ -64881,8 +64881,8 @@
         8
        ],
        "icon": "RebeccaPink",
-       "hex": "#5b7d2d",
-       "iris": "#5a8928"
+       "hex": "#bf146b",
+       "iris": "#33ac12"
       },
       {
        "i": 51,
@@ -64897,8 +64897,8 @@
         8
        ],
        "icon": "RebeccaGreen",
-       "hex": "#835c57",
-       "iris": "#2f8012"
+       "hex": "#199400",
+       "iris": "#b63f7f"
       },
       {
        "i": 52,
@@ -64913,8 +64913,8 @@
         8
        ],
        "icon": "RebeccaCyan",
-       "hex": "#783a35",
-       "iris": "#ba0b0b"
+       "hex": "#009a8a",
+       "iris": "#a21513"
       },
       {
        "i": 53,
@@ -64929,8 +64929,8 @@
         9
        ],
        "icon": "RebeccaRed",
-       "hex": "#36796e",
-       "iris": "#07c0ae"
+       "hex": "#8a0000",
+       "iris": "#0fafa0"
       },
       {
        "i": 54,
@@ -64945,8 +64945,8 @@
         8
        ],
        "icon": "RebeccaBlue",
-       "hex": "#845187",
-       "iris": "#585596"
+       "hex": "#1f5ca3",
+       "iris": "#b4497d"
       },
       {
        "i": 55,
@@ -64961,13 +64961,13 @@
         8
        ],
        "icon": "RebeccaBabyPink",
-       "hex": "#5a7396",
-       "iris": "#6b6693"
+       "hex": "#a41c5a",
+       "iris": "#389cb6"
       },
       {
        "i": 56,
        "label": {
-        "ru": "Узор valentinos",
+        "ru": "Узор: Valentinos",
         "en": "Multilayer Valentinos"
        },
        "app": "he_000_pwa__basehead__56_multilayer_valentinos",
@@ -64983,7 +64983,7 @@
       {
        "i": 57,
        "label": {
-        "ru": "Узор valentinos чёрный",
+        "ru": "Узор: Valentinos, чёрный",
         "en": "Multilayer Valentinos Black"
        },
        "app": "he_000_pwa__basehead__57_multilayer_valentinos_black",
@@ -64999,7 +64999,7 @@
       {
        "i": 58,
        "label": {
-        "ru": "Узор предупреждение ",
+        "ru": "Узор: знак предупреждения",
         "en": "Multilayer Warning Sign"
        },
        "app": "he_000_pwa__basehead__58_multilayer_warning_sign",
@@ -65015,7 +65015,7 @@
       {
        "i": 59,
        "label": {
-        "ru": "Узор предупреждение  чёрный",
+        "ru": "Узор: знак предупреждения, чёрный",
         "en": "Multilayer Warning Sign Black"
        },
        "app": "he_000_pwa__basehead__59_multilayer_warning_sign_black",
@@ -65063,7 +65063,7 @@
       {
        "i": 62,
        "label": {
-        "ru": "Cyber eye",
+        "ru": "Кибер-глаз",
         "en": "Cyber Eye"
        },
        "app": "he_000_pwa__basehead__62_cyber_eye",
@@ -65079,7 +65079,7 @@
       {
        "i": 63,
        "label": {
-        "ru": "Cyber eye чёрный",
+        "ru": "Кибер-глаз, чёрный",
         "en": "Cyber Eye Black"
        },
        "app": "he_000_pwa__basehead__63_cyber_eye_black",
@@ -65095,7 +65095,7 @@
       {
        "i": 64,
        "label": {
-        "ru": "Double eye",
+        "ru": "Двойной глаз",
         "en": "Double Eye"
        },
        "app": "he_000_pwa__basehead__64_double_eye",
@@ -65111,7 +65111,7 @@
       {
        "i": 65,
        "label": {
-        "ru": "Double eye чёрный",
+        "ru": "Двойной глаз, чёрный",
         "en": "Double Eye Black"
        },
        "app": "he_000_pwa__basehead__65_double_eye_black",
@@ -65127,7 +65127,7 @@
       {
        "i": 66,
        "label": {
-        "ru": "Ring оранжевый",
+        "ru": "Кольцо, оранжевое",
         "en": "Ring Orange"
        },
        "app": "he_000_pwa__basehead__66_ring_orange",
@@ -65143,7 +65143,7 @@
       {
        "i": 67,
        "label": {
-        "ru": "Ring зелёный",
+        "ru": "Кольцо, зелёное",
         "en": "Ring Green"
        },
        "app": "he_000_pwa__basehead__67_ring_green",
@@ -65159,7 +65159,7 @@
       {
        "i": 68,
        "label": {
-        "ru": "Stand clear",
+        "ru": "«Не подходить»",
         "en": "Stand Clear"
        },
        "app": "he_000_pwa__basehead__68_stand_clear",
@@ -65175,7 +65175,7 @@
       {
        "i": 69,
        "label": {
-        "ru": "Stand clear чёрный",
+        "ru": "«Не подходить», чёрный",
         "en": "Stand Clear Black"
        },
        "app": "he_000_pwa__basehead__69_stand_clear_black",
@@ -65191,7 +65191,7 @@
       {
        "i": 70,
        "label": {
-        "ru": "Circle розовый",
+        "ru": "Круг, розовый",
         "en": "Circle Pink"
        },
        "app": "he_000_pwa__basehead__70_circle_pink",
@@ -65207,7 +65207,7 @@
       {
        "i": 71,
        "label": {
-        "ru": "Circle оранжевый",
+        "ru": "Круг, оранжевый",
         "en": "Circle Orange"
        },
        "app": "he_000_pwa__basehead__71_circle_orange",
@@ -75567,7 +75567,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -75823,7 +75823,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -76079,7 +76079,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -76335,7 +76335,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -76591,7 +76591,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -76847,7 +76847,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -77103,7 +77103,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -77359,7 +77359,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -77615,7 +77615,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -77871,7 +77871,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -78127,7 +78127,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -78383,7 +78383,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -78639,7 +78639,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -78895,7 +78895,7 @@
       {
        "i": 10,
        "label": {
-        "ru": "Mixed2",
+        "ru": "Смешанный 2",
         "en": "Mixed2"
        },
        "app": "i0_000_pwa__earring__10_mixed2",
@@ -116139,7 +116139,7 @@
       {
        "i": 1,
        "label": {
-        "ru": "Blemishes light1",
+        "ru": "Изъяны, светлые 1",
         "en": "Blemishes Light1"
        },
        "app": "hx_000_pwa__basehead_pimples_01__brown_02",
@@ -116154,7 +116154,7 @@
       {
        "i": 2,
        "label": {
-        "ru": "Blemishes коричневый",
+        "ru": "Изъяны, коричневые",
         "en": "Blemishes Brown"
        },
        "app": "hx_000_pwa__basehead_pimples_01__brown_01",
@@ -116169,7 +116169,7 @@
       {
        "i": 3,
        "label": {
-        "ru": "Blemishes стандарт",
+        "ru": "Изъяны, стандарт",
         "en": "Blemishes Default"
        },
        "app": "hx_000_pwa__basehead_pimples_01__black_02",
@@ -116184,7 +116184,7 @@
       {
        "i": 4,
        "label": {
-        "ru": "Blemishes чёрный",
+        "ru": "Изъяны, чёрные",
         "en": "Blemishes Black"
        },
        "app": "hx_000_pwa__basehead_pimples_01__black_01",
@@ -116199,7 +116199,7 @@
       {
        "i": 5,
        "label": {
-        "ru": "Blemishes light2",
+        "ru": "Изъяны, светлые 2",
         "en": "Blemishes Light2"
        },
        "app": "hx_000_pwa__basehead_pimples_01__red_02",
@@ -116214,7 +116214,7 @@
       {
        "i": 6,
        "label": {
-        "ru": "Blemishes красный",
+        "ru": "Изъяны, красные",
         "en": "Blemishes Red"
        },
        "app": "hx_000_pwa__basehead_pimples_01__red_01",
@@ -116245,7 +116245,7 @@
       {
        "i": 1,
        "label": {
-        "ru": "Blemishes light1",
+        "ru": "Изъяны, светлые 1",
         "en": "Blemishes Light1"
        },
        "app": "hx_000_pwa__basehead_pimples_01__brown_02",
@@ -116260,7 +116260,7 @@
       {
        "i": 2,
        "label": {
-        "ru": "Blemishes коричневый",
+        "ru": "Изъяны, коричневые",
         "en": "Blemishes Brown"
        },
        "app": "hx_000_pwa__basehead_pimples_01__brown_01",
@@ -116275,7 +116275,7 @@
       {
        "i": 3,
        "label": {
-        "ru": "Blemishes стандарт",
+        "ru": "Изъяны, стандарт",
         "en": "Blemishes Default"
        },
        "app": "hx_000_pwa__basehead_pimples_01__black_02",
@@ -116290,7 +116290,7 @@
       {
        "i": 4,
        "label": {
-        "ru": "Blemishes чёрный",
+        "ru": "Изъяны, чёрные",
         "en": "Blemishes Black"
        },
        "app": "hx_000_pwa__basehead_pimples_01__black_01",
@@ -116305,7 +116305,7 @@
       {
        "i": 5,
        "label": {
-        "ru": "Blemishes light2",
+        "ru": "Изъяны, светлые 2",
         "en": "Blemishes Light2"
        },
        "app": "hx_000_pwa__basehead_pimples_01__red_02",
@@ -116320,7 +116320,7 @@
       {
        "i": 6,
        "label": {
-        "ru": "Blemishes красный",
+        "ru": "Изъяны, красные",
         "en": "Blemishes Red"
        },
        "app": "hx_000_pwa__basehead_pimples_01__red_01",
@@ -116351,7 +116351,7 @@
       {
        "i": 1,
        "label": {
-        "ru": "Blemishes light1",
+        "ru": "Изъяны, светлые 1",
         "en": "Blemishes Light1"
        },
        "app": "hx_000_pwa__basehead_pimples_01__brown_02",
@@ -116366,7 +116366,7 @@
       {
        "i": 2,
        "label": {
-        "ru": "Blemishes коричневый",
+        "ru": "Изъяны, коричневые",
         "en": "Blemishes Brown"
        },
        "app": "hx_000_pwa__basehead_pimples_01__brown_01",
@@ -116381,7 +116381,7 @@
       {
        "i": 3,
        "label": {
-        "ru": "Blemishes стандарт",
+        "ru": "Изъяны, стандарт",
         "en": "Blemishes Default"
        },
        "app": "hx_000_pwa__basehead_pimples_01__black_02",
@@ -116396,7 +116396,7 @@
       {
        "i": 4,
        "label": {
-        "ru": "Blemishes чёрный",
+        "ru": "Изъяны, чёрные",
         "en": "Blemishes Black"
        },
        "app": "hx_000_pwa__basehead_pimples_01__black_01",
@@ -116411,7 +116411,7 @@
       {
        "i": 5,
        "label": {
-        "ru": "Blemishes light2",
+        "ru": "Изъяны, светлые 2",
         "en": "Blemishes Light2"
        },
        "app": "hx_000_pwa__basehead_pimples_01__red_02",
@@ -116426,7 +116426,7 @@
       {
        "i": 6,
        "label": {
-        "ru": "Blemishes красный",
+        "ru": "Изъяны, красные",
         "en": "Blemishes Red"
        },
        "app": "hx_000_pwa__basehead_pimples_01__red_01",
@@ -116469,7 +116469,7 @@
       {
        "i": 0,
        "label": {
-        "ru": " бледный",
+        "ru": "бледный",
         "en": "Ca Pale"
        },
        "app": "n0_000_pwa_fpp__neck__01_ca_pale",
@@ -116482,7 +116482,7 @@
       {
        "i": 1,
        "label": {
-        "ru": " бледный 00 тёплый слоновая кость",
+        "ru": "бледный 00 тёплый слоновая кость",
         "en": "Ca Pale 00 Warm Ivory"
        },
        "app": "n0_000_pwa_fpp__neck__01_ca_pale_00_warm_ivory",
@@ -116495,7 +116495,7 @@
       {
        "i": 2,
        "label": {
-        "ru": " известняк",
+        "ru": "известняк",
         "en": "Ca Limestone"
        },
        "app": "n0_000_pwa_fpp__neck__02_ca_limestone",
@@ -116508,7 +116508,7 @@
       {
        "i": 3,
        "label": {
-        "ru": " известняк 00 бежевый",
+        "ru": "известняк 00 бежевый",
         "en": "Ca Limestone 00 Beige"
        },
        "app": "n0_000_pwa_fpp__neck__02_ca_limestone_00_beige",
@@ -116521,7 +116521,7 @@
       {
        "i": 4,
        "label": {
-        "ru": " сенна",
+        "ru": "сенна",
         "en": "Ca Senna"
        },
        "app": "n0_000_pwa_fpp__neck__03_ca_senna",
@@ -116534,7 +116534,7 @@
       {
        "i": 5,
        "label": {
-        "ru": " сенна 00 янтарный",
+        "ru": "сенна 00 янтарный",
         "en": "Ca Senna 00 Amber"
        },
        "app": "n0_000_pwa_fpp__neck__03_ca_senna_00_amber",
@@ -116547,7 +116547,7 @@
       {
        "i": 6,
        "label": {
-        "ru": " сенна 01 медовый",
+        "ru": "сенна 01 медовый",
         "en": "Ca Senna 01 Honey"
        },
        "app": "n0_000_pwa_fpp__neck__03_ca_senna_01_honey",
@@ -116560,7 +116560,7 @@
       {
        "i": 7,
        "label": {
-        "ru": " сенна 02 бронзовый",
+        "ru": "сенна 02 бронзовый",
         "en": "Ca Senna 02 Band"
        },
        "app": "n0_000_pwa_fpp__neck__03_ca_senna_02_band",
@@ -116573,7 +116573,7 @@
       {
        "i": 8,
        "label": {
-        "ru": " миндаль",
+        "ru": "миндаль",
         "en": "Ca Almond"
        },
        "app": "n0_000_pwa_fpp__neck__04_ca_almond",
@@ -116586,7 +116586,7 @@
       {
        "i": 9,
        "label": {
-        "ru": " миндаль 00 умбра",
+        "ru": "миндаль 00 умбра",
         "en": "Ca Almond 00 Umber"
        },
        "app": "n0_000_pwa_fpp__neck__04_ca_almond_00_umber",
@@ -116599,7 +116599,7 @@
       {
        "i": 10,
        "label": {
-        "ru": " эспрессо",
+        "ru": "эспрессо",
         "en": "Bl Espresso"
        },
        "app": "n0_000_pwa_fpp__neck__05_bl_espresso",
@@ -116612,7 +116612,7 @@
       {
        "i": 11,
        "label": {
-        "ru": " тёмный",
+        "ru": "тёмный",
         "en": "Bl Dark"
        },
        "app": "n0_000_pwa_fpp__neck__06_bl_dark",
@@ -119357,7 +119357,7 @@
       {
        "i": 1,
        "label": {
-        "ru": "Holstered arms data female",
+        "ru": "Положение рук (служебное)",
         "en": "Holstered Arms Data Female"
        },
        "app": "holstered_arms_data_female",
@@ -120025,7 +120025,7 @@
       {
        "i": 40,
        "label": {
-        "ru": "Neokitsh lines",
+        "ru": "Неокитч, линии",
         "en": "Neokitsh Lines"
        },
        "app": "a0_000_pwa_base__nails_02_neokitch_lines__multilayer",
@@ -120055,7 +120055,7 @@
       {
        "i": 42,
        "label": {
-        "ru": "6th street",
+        "ru": "6th Street",
         "en": "6th Street"
        },
        "app": "a0_000_pwa_base__nails_03_6th_street__multilayer",
@@ -120190,7 +120190,7 @@
       {
        "i": 54,
        "label": {
-        "ru": "Tiger claws",
+        "ru": "Tiger Claws",
         "en": "Tiger Claws"
        },
        "app": "a0_000_pwa_base__nails_03_tiger_claws__multilayer",
@@ -120205,7 +120205,7 @@
       {
        "i": 55,
        "label": {
-        "ru": "Voodoo boys",
+        "ru": "Voodoo Boys",
         "en": "Voodoo Boys"
        },
        "app": "a0_000_pwa_base__nails_03_voodoo_boys__multilayer",
@@ -120220,7 +120220,7 @@
       {
        "i": 56,
        "label": {
-        "ru": "Предупреждение signs",
+        "ru": "Знаки предупреждения",
         "en": "Warning Signs"
        },
        "app": "a0_000_pwa_base__nails_03_warning_signs__multilayer",

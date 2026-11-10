@@ -456,6 +456,40 @@ def build(gender: str, cc: Path, ru, en, atlas_colors, atlas_index, hairs) -> di
     }
 
 
+def apply_ru_labels(cat):
+    """Russian labels the game leaves half-English ("Узор skull чёрный", "Cyber eye"):
+    tools/extract/ru_labels.json (en label -> ru). Double spaces of the game strings go too."""
+    fixes = json.loads((Path(__file__).with_name("ru_labels.json")).read_text(encoding="utf-8"))["labels"]
+    for slot in cat["slots"]:
+        for var in slot["variants"]:
+            for o in var["options"]:
+                lab = o.get("label")
+                if not lab:
+                    continue
+                if lab.get("en") in fixes:
+                    lab["ru"] = fixes[lab["en"]]
+                lab["ru"] = re.sub(r"\s{2,}", " ", lab["ru"]).strip()
+
+
+def two_tone_eye_hex(cat, swatches_path):
+    """Two-tone iris thumbnails (Rebecca lenses: pink outer, green ring) have a centre average
+    that is neither colour, so the label and the hex disagreed (Rebecca Pink #5b7d2d). The hex
+    of such an option is the dominant outer colour of its swatch (build_swatches.py output);
+    the ring colour stays in "iris"."""
+    if not swatches_path.exists():
+        return
+    keys = json.loads(swatches_path.read_text(encoding="utf-8")).get("keys", {})
+    for slot in cat["slots"]:
+        if slot["id"] != "eyes_color":
+            continue
+        for var in slot["variants"]:
+            for o in var["options"]:
+                d = keys.get(o.get("icon", ""))
+                if d and "rebecca" in str(o.get("app", "")).lower() and d.get("kind") == "radial" and d.get("pattern") != "iris" and len(d.get("stops", [])) >= 3:
+                    o["hex"] = d["stops"][0]
+                    o["iris"] = d["stops"][2]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--work", required=True, help="папка с результатами extract_game_data.ps1")
@@ -477,6 +511,8 @@ def main():
 
     for gender in ("male", "female"):
         cat = build(gender, work / "cc_json" / f"{gender}_cco_ep1.inkcharcustomization.json", ru, en, atlas_colors, atlas_index, hairs)
+        two_tone_eye_hex(cat, out / f"swatches.{gender}.json")
+        apply_ru_labels(cat)
         (out / f"catalog.{gender}.json").write_text(json.dumps(cat, ensure_ascii=False, indent=1), encoding="utf-8")
         st = cat["stats"]
         print(f"{gender}: slots={st['slots']} visibleVariants={st['variantsVisible']}/{st['variantsTotal']} "

@@ -84,7 +84,9 @@ const ROLE_GAIN: Record<string, number> = {
   Rim_Top: 0.9,
   // выше — по краю завитка уха женщины горят ярко-розовые точки
   Rim_Left_Head: 1.15,
-  Rim_Left_Body: 0.85,
+  // 0,85 давало неоновую розовую линию по краю пениса, бёдер и рук на общем плане;
+  // в игре контровой тела — мягкая цветная кайма
+  Rim_Left_Body: 0.5,
   Main_Face: 1.6,
   Main_Top: 0.9,
   Main_Eyes: 1.8,
@@ -97,7 +99,12 @@ export class LightRig {
   readonly group = new THREE.Group();
   private lamps: { spec: LampSpec; light: THREE.SpotLight }[] = [];
 
-  constructor() {
+  /**
+   * lite — телефон или мало памяти: контровые карты 1024 (они и так сужены focus 0,4–0,45),
+   * верхний Main_Top без тени. Это три прохода теней вместо четырёх и вчетверо меньше
+   * пикселей в двух из них.
+   */
+  constructor(lite = false) {
     this.group.name = 'creator_lights';
     for (const s of LAMPS) {
       const l = new THREE.SpotLight(s.color, s.lm * LM_TO_CD * (ROLE_GAIN[s.name] ?? 1));
@@ -106,10 +113,11 @@ export class LightRig {
       l.penumbra = THREE.MathUtils.clamp(1 - s.inn / s.out, 0.2, 1);
       l.decay = 2;
       l.distance = 0;
-      const sh = s.shadow;
+      const sh = lite && s.name === 'Main_Top' ? undefined : s.shadow;
       if (sh) {
         l.castShadow = true;
-        l.shadow.mapSize.set(sh.size, sh.size);
+        const size = lite && s.name.startsWith('Rim_') ? Math.min(sh.size, 1024) : sh.size;
+        l.shadow.mapSize.set(size, size);
         l.shadow.camera.near = 0.2;
         l.shadow.camera.far = 9;
         l.shadow.bias = -0.0004;

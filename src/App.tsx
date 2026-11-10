@@ -14,15 +14,35 @@ import {
 import { morphInfo, MORPH_SLOTS, type MorphSlot } from './model/descriptors';
 import { LINES, LINE_OF_SLOT } from './ui/lines';
 import { pad2 } from './ui/format';
-import Portrait from './ui/Portrait';
-import AvatarViewer, { DEFAULT_YAW } from './ui/avatar/AvatarViewer';
+import AvatarViewer, { DEFAULT_YAW, faceYaw, type AvatarStatus } from './ui/avatar/AvatarViewer';
+import { NOT_IN_3D } from './ui/avatar/look';
 import { isCloseupFocus } from './ui/avatar/slots';
 import type { ScanProvenance } from './scan/ScanPanel';
+import { hairDescription } from './model/hair';
+import { browDescription } from './model/brows';
+import { LANGS, useI18n, type Lang, type T } from './i18n';
+import { slotHasSwatches, Swatch, usePackState } from './ui/SwatchChip';
+import { PackConnect, PackHero, portraitUrl } from './ui/PackPanel';
+import Modal from './ui/Modal';
+import KeyPanel from './scan/KeyPanel';
+import { useOrSettings } from './scan/openrouter';
+import {
+  IconArrow,
+  IconBust,
+  IconCheck,
+  IconClose,
+  IconCube,
+  IconGrid,
+  IconKey,
+  IconReset,
+  IconScan,
+  IconShuffle,
+  IconTriLeft,
+  IconTriRight,
+} from './ui/Icons';
+
 // Панель скана тянет MediaPipe и данные подбора — грузим её только при первом открытии
 const ScanPanel = lazy(() => import('./scan/ScanPanel'));
-import { hairLabel } from './model/hair';
-import { browDescription } from './model/brows';
-import { IconArrow, IconBust, IconCheck, IconClose, IconGrid, IconReset, IconScan, IconShuffle, IconTriLeft, IconTriRight } from './ui/Icons';
 
 const store = {
   get<T>(k: string, d: T): T {
@@ -54,17 +74,15 @@ function initialStates(): Record<Gender, CharacterState> {
 }
 
 const isMorph = (id: string): id is MorphSlot => (MORPH_SLOTS as string[]).includes(id);
-/** Натуральные зубы (вариант 00) в каталоге без цвета: образец — цвет эмали, а не чёрный. */
-const NATURAL_TEETH = '#d9cfbd';
-const swatchOf = (o: Option | undefined) => o?.iris ?? o?.hex ?? (o?.app && /_ht_000__basehead$/.test(o.app) ? NATURAL_TEETH : undefined);
-const hasSwatches = (vs: VisibleSlot) => vs.variant.options.some((o) => o.hex || o.iris);
 /** Тип тела в игре — две плитки по порядку; подпись говорит, какое тело, номер — как в игре. */
-const BODY: Record<Gender, { name: string; n: string; img: string }> = {
-  male: { name: 'Мужской', n: '01', img: '/game/renders/v_pma.png' },
-  female: { name: 'Женский', n: '02', img: '/game/renders/v_pwa.png' },
-};
+const BODY_N: Record<Gender, string> = { male: '01', female: '02' };
+const bodyName = (g: Gender, t: T) => t(g === 'male' ? 'body.male' : 'body.female');
+const srcName = (src: ScanProvenance['src'], t: T) => t(src === 'llm' ? 'src.llm' : src === 'local' ? 'src.local' : 'src.manual');
+
+type Dialog = 'pack' | 'key' | null;
 
 export default function App() {
+  const { lang, t, loc, setLang } = useI18n();
   const [states, setStates] = useState(initialStates);
   const [gender, setGender] = useState<Gender>(() => {
     const h = decodeState(new URLSearchParams(location.hash.slice(1)).get('v') ?? '');
@@ -79,6 +97,8 @@ export default function App() {
   const [yaw, setYaw] = useState(DEFAULT_YAW);
   /** Q/E: V вращается, пока клавиша зажата (как в игре), без ограничения угла */
   const [spin, setSpin] = useState(0);
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [avatar, setAvatar] = useState<AvatarStatus>('no-pack');
   // Отметки «выставлено» и точки подбора по фото у каждого тела свои
   const [doneAll, setDoneAll] = useState<Record<Gender, Record<string, boolean>>>({ male: {}, female: {} });
   const [provAll, setProvAll] = useState<Record<Gender, Record<string, ScanProvenance>>>({ male: {}, female: {} });
@@ -108,6 +128,12 @@ export default function App() {
     () => ({ slotId: cur?.slot.id, group: cur?.slot.group, variantName: cur?.variant.name }),
     [cur?.slot.id, cur?.slot.group, cur?.variant.name],
   );
+  const curHasSw = !!cur && slotHasSwatches(gender, cur.slot.id, cur.variant);
+  // Переход на крупный план лица: V, развёрнутая в профиль или спиной, поворачивается к камере
+  const closeup = isCloseupFocus(focus.slotId, focus.group, focus.variantName);
+  useEffect(() => {
+    if (closeup) setYaw((y) => faceYaw(y));
+  }, [closeup, focus.slotId]);
 
   // Состояние из ссылки уже применено — убираем хеш, иначе перезагрузка затрёт последующие правки
   useEffect(() => {
@@ -135,7 +161,9 @@ export default function App() {
     }
     const b = box.getBoundingClientRect();
     const r = el.getBoundingClientRect();
-    if (r.top < b.top) box.scrollTop -= b.top - r.top + 8;
+    // сверху список затухает (--rows-fade): строка встаёт ниже затухания
+    const fade = parseFloat(getComputedStyle(box).paddingTop) || 0;
+    if (r.top < b.top + fade) box.scrollTop -= b.top + fade - r.top + 8;
     else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom + 8;
   }, [cur?.slot.id]);
 
@@ -151,7 +179,7 @@ export default function App() {
   );
 
   /** Любая новая правка делает отмену массовой замены неактуальной — убираем кнопку. */
-  const dropUndo = useCallback(() => setToast((t) => (t?.undo ? null : t)), []);
+  const dropUndo = useCallback(() => setToast((x) => (x?.undo ? null : x)), []);
 
   const switchGender = useCallback(
     (g: Gender) => {
@@ -187,8 +215,8 @@ export default function App() {
   );
 
   const shuffle = useCallback(
-    () => replaceAll(randomize(gender, 3, Math.random, true, state), 'Лицо собрано случайно, тело не тронуто'),
-    [replaceAll, gender, state],
+    () => replaceAll(randomize(gender, 3, Math.random, true, state), t('toast.random')),
+    [replaceAll, gender, state, t],
   );
 
   const choose = useCallback(
@@ -252,31 +280,34 @@ export default function App() {
     const url = `${location.origin}${location.pathname}#v=${encodeState(state)}`;
     try {
       await navigator.clipboard.writeText(url);
-      flash('Ссылка на персонажа скопирована');
+      flash(t('toast.linkCopied'));
     } catch {
       // Буфер недоступен — кладём ссылку в адресную строку, чтобы её можно было скопировать вручную
       history.replaceState(null, '', url);
-      flash('Ссылка в адресной строке — скопируйте её');
+      flash(t('toast.linkInBar'));
     }
-  }, [state, flash]);
+  }, [state, flash, t]);
 
   const copySheet = useCallback(async () => {
-    const lines = [`V-MIRROR · тип тела ${BODY[gender].n} (${BODY[gender].name.toLowerCase()}) · Cyberpunk 2077 2.5`];
+    const lines = [t('sheet.head', { n: BODY_N[gender], name: bodyName(gender, t).toLowerCase() })];
     for (const line of LINES) {
       const rows = sheet.filter((r) => LINE_OF_SLOT.get(r.slotId)?.id === line.id);
       if (!rows.length) continue;
-      lines.push('', line.label.ru.toUpperCase());
-      for (const r of rows) lines.push(`  ${r.label.ru}: ${pad2(r.number)} из ${pad2(r.total)}${r.value.ru && !/^\d+$/.test(r.value.ru) ? ` (${r.value.ru})` : ''}`);
+      lines.push('', loc(line.label).toUpperCase());
+      for (const r of rows) {
+        const v = loc(r.value);
+        lines.push(`  ${t('sheet.row', { label: loc(r.label), n: pad2(r.number), total: pad2(r.total) })}${v && !/^\d+$/.test(v) ? ` (${v})` : ''}`);
+      }
     }
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
-      flash('Список настроек скопирован');
+      flash(t('toast.listCopied'));
     } catch {
-      flash('Не удалось скопировать — браузер запретил доступ к буферу');
+      flash(t('toast.copyFailed'));
     }
-  }, [gender, sheet, flash]);
+  }, [gender, sheet, flash, t, loc]);
 
-  const resetAll = useCallback(() => replaceAll(defaultState(gender), 'Все настройки сброшены к значениям игры'), [replaceAll, gender]);
+  const resetAll = useCallback(() => replaceAll(defaultState(gender), t('toast.reset')), [replaceAll, gender, t]);
 
   /** Отметка «выставлено в игре» у выбранной строки (кнопка в описании варианта или X). */
   const toggleDone = useCallback(() => {
@@ -289,9 +320,11 @@ export default function App() {
   // Клавиши как в игре: ↑↓ строка, ←→ вариант, Q/E поворот головы; плюс R, C, L, G, Esc
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target;
+      const tg = e.target;
       if (e.altKey || e.ctrlKey || e.metaKey) return;
-      if (t instanceof Element && t.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (tg instanceof Element && tg.closest('input, textarea, select, [contenteditable="true"]')) return;
+      // Открытое окно (ассеты, ключ) — клавиши редактора не работают, Esc закрывает окно само
+      if (document.querySelector('dialog[open]')) return;
       const k = e.key.toLowerCase();
       if (k === 'escape') {
         // Скан остаётся смонтированным, поэтому Esc закрывает его без потери фото и ответа модели
@@ -304,14 +337,14 @@ export default function App() {
         return setSpin(k === 'q' || k === 'й' ? -1 : 1);
       }
       if (mode !== 'edit' || !cur) return;
-      const inPicker = t instanceof Element && !!t.closest('.picker-grid');
+      const inPicker = tg instanceof Element && !!tg.closest('.picker-grid');
       if (e.key === 'ArrowRight') { e.preventDefault(); stepRow(cur, 1); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); stepRow(cur, -1); }
       else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         const dir = e.key === 'ArrowDown' ? 1 : -1;
         if (inPicker) {
-          const grid = (t as Element).closest('.picker-grid')!;
+          const grid = (tg as Element).closest('.picker-grid')!;
           const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').length || 1;
           stepRow(cur, dir * cols);
         } else moveRow(dir);
@@ -319,11 +352,11 @@ export default function App() {
       else if (k === 'c' || k === 'с') copySheet();
       else if (k === 'l' || k === 'д') share();
       else if (k === 'x' || k === 'ч') toggleDone();
-      else if ((k === 'g' || k === 'п') && hasSwatches(cur)) setPicker((p) => !p);
+      else if ((k === 'g' || k === 'п') && curHasSw) setPicker((p) => !p);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [mode, cur, picker, stepRow, moveRow, shuffle, copySheet, share, closePicker, goMode, toggleDone]);
+  }, [mode, cur, curHasSw, picker, stepRow, moveRow, shuffle, copySheet, share, closePicker, goMode, toggleDone]);
 
   useEffect(() => {
     const onUp = (e: KeyboardEvent) => {
@@ -345,20 +378,24 @@ export default function App() {
     setProv(next.gender, provenance);
     setDone(next.gender, {});
     goMode('edit');
-    flash('Подбор применён — строки с точкой подобраны по фото');
+    flash(t('toast.applied'));
   };
+
+  const closeDialog = useCallback(() => setDialog(null), []);
 
   let lastGroup = '';
   return (
-    <div className="cc" data-mode={mode}>
+    <div className="cc" data-mode={mode} data-avatar={avatar}>
       <div className="cc-frame" aria-hidden="true" />
 
       <div className="cc-proto" aria-hidden="true">
         <b>V-MIRROR</b>
-        <span>Локальный редактор · данные из файлов игры 2.5 · номера совпадают с игрой</span>
+        <span>{t('proto.text')}</span>
       </div>
 
-      <header className="cc-title" data-closeup={isCloseupFocus(focus.slotId, focus.group, focus.variantName) || undefined}>
+      <UtilBar lang={lang} setLang={setLang} onPack={() => setDialog('pack')} onKey={() => setDialog('key')} />
+
+      <header className="cc-title" data-closeup={closeup || undefined}>
         <h1>
           <span className="cc-chip" aria-hidden="true" />
           <span className="cc-bits" aria-hidden="true">
@@ -370,27 +407,27 @@ export default function App() {
             <br />
             0110101
           </span>
-          <span className="cc-name">Выбор внешности Ви</span>
+          <span className="cc-name">{t('title.name')}</span>
         </h1>
-        <p>Выставьте эти номера в редакторе игры — и V будет такой же</p>
+        <p>{t('title.sub')}</p>
       </header>
 
-      <aside className="cc-left" aria-label="Тип тела и действия">
-        <h2>Тип тела</h2>
-        <div className="bodies" role="group" aria-label="Тип тела">
+      <aside className="cc-left" aria-label={t('left.aria')}>
+        <h2>{t('left.title')}</h2>
+        <div className="bodies" role="group" aria-label={t('left.title')}>
           {(['male', 'female'] as Gender[]).map((g) => (
             <BodyCard key={g} g={g} active={gender === g} onPick={() => switchGender(g)} />
           ))}
         </div>
         <div className="left-actions">
           <button className={`gbtn ${mode === 'scan' ? 'on' : 'accent'}`} onClick={() => goMode(mode === 'scan' ? 'edit' : 'scan')} aria-pressed={mode === 'scan'}>
-            <IconScan /> {mode === 'scan' ? 'К редактору' : 'Скан фото'}
+            <IconScan /> {mode === 'scan' ? t('act.back') : t('act.scan')}
           </button>
           <button className="gbtn" onClick={resetAll}>
-            <IconReset /> Сброс
+            <IconReset /> {t('act.reset')}
           </button>
-          <button className="gbtn shuffle" onClick={shuffle} title="Случайное лицо, тело не меняется">
-            <kbd>R</kbd> Случайно
+          <button className="gbtn shuffle" onClick={shuffle} title={t('act.randomTitle')}>
+            <kbd>R</kbd> {t('act.random')}
             <IconShuffle />
           </button>
         </div>
@@ -403,62 +440,72 @@ export default function App() {
           yaw={yaw}
           onYaw={setYaw}
           spin={spin}
-          fallback={<Portrait state={state} className="portrait-fallback" />}
+          lang={lang}
+          onStatus={setAvatar}
+          fallback={<PackHero gender={gender} state={state} webglError={avatar === 'error'} onMore={() => setDialog('pack')} />}
         />
         {scanMounted && (
-          <section className="scan-wrap" aria-label="Скан фото" hidden={mode !== 'scan'}>
-            <button className="scan-close" onClick={() => goMode('edit')} aria-label="Закрыть скан фото">
+          <section className="scan-wrap" aria-label={t('scan.aria')} hidden={mode !== 'scan'}>
+            <button className="scan-close" onClick={() => goMode('edit')} aria-label={t('scan.close')}>
               <IconClose />
             </button>
-            <Suspense fallback={<p className="muted">Загружаю модуль скана…</p>}>
-              <ScanPanel gender={gender} base={state} onApply={applyScan} onGender={switchGender} />
+            <Suspense
+              fallback={
+                <div className="scan-loading" role="status">
+                  <span>{t('scan.loading')}</span>
+                  <i />
+                </div>
+              }
+            >
+              <ScanPanel gender={gender} base={state} in3d={avatar === 'ready' || avatar === 'loading'} onApply={applyScan} onGender={switchGender} onKeySettings={() => setDialog('key')} />
             </Suspense>
           </section>
         )}
         {mode === 'edit' && cur && (
           <>
-            <InfoBox vs={cur} gender={gender} prov={prov[cur.slot.id]} done={!!done[cur.slot.id]} onDone={toggleDone} progress={`${doneCount} из ${slots.length}`} />
-            {picker && hasSwatches(cur) && <Picker vs={cur} prov={prov[cur.slot.id]} onChoose={(i) => choose(cur, i)} onClose={closePicker} />}
+            <InfoBox vs={cur} gender={gender} in3d={avatar === 'ready' || avatar === 'loading'} prov={prov[cur.slot.id]} done={!!done[cur.slot.id]} onDone={toggleDone} doneCount={doneCount} total={slots.length} />
+            {picker && curHasSw && <Picker vs={cur} gender={gender} prov={prov[cur.slot.id]} onChoose={(i) => choose(cur, i)} onClose={closePicker} />}
           </>
         )}
       </main>
 
-      <section className="cc-list" aria-label="Создание образа Ви">
-        <h2>Создание образа Ви</h2>
+      <section className="cc-list" aria-label={t('list.title')}>
+        <h2>{t('list.title')}</h2>
         <ol className="rows" ref={listRef}>
           {slots.map((vs) => {
             const id = vs.slot.id;
             const sel = cur?.slot.id === id;
-            const sw = hasSwatches(vs) ? swatchOf(vs.option) ?? '#000' : undefined;
+            const hasSw = slotHasSwatches(gender, id, vs.variant);
             const pv = prov[id];
             const num = pad2(displayNumber(vs.variant, vs.value));
+            const label = loc(vs.slot.label);
             const group = vs.slot.group;
             const showGroup = group !== lastGroup && lastGroup !== '';
             lastGroup = group;
             return [
               showGroup && (
                 <li key={`g:${group}`} className="rows-group" aria-hidden="true">
-                  {GROUP_LABEL[group].ru}
+                  {loc(GROUP_LABEL[group])}
                 </li>
               ),
               <li key={id} data-slot={id} className={`crow ${sel ? 'on' : ''} ${done[id] ? 'done' : ''}`}>
                 <button className="row-head" aria-current={sel} onClick={() => select(id)}>
                   <span className="row-label">
-                    {vs.slot.label.ru}
-                    {done[id] && <span className="vh">, выставлено в игре</span>}
+                    {label}
+                    {done[id] && <span className="vh">{t('row.done')}</span>}
                   </span>
-                  {pv && <span className="row-scan" title={`Подобрано по фото (${pv.src === 'llm' ? 'модель' : 'замер'})`} />}
+                  {pv && <span className="row-scan" title={t('row.scanned', { src: srcName(pv.src, t) })} />}
                   <span className="row-val">
                     {done[id] && <IconCheck className="row-done" />}
-                    <span className={sw ? 'row-num small' : 'row-num'}>{num}</span>
-                    {sw && <i className="row-sw" style={{ background: sw }} />}
+                    <span className={hasSw ? 'row-num small' : 'row-num'}>{num}</span>
+                    {hasSw && <Swatch gender={gender} slotId={id} option={vs.option} className="row-sw" />}
                   </span>
                 </button>
                 {/* Стрелки дублируют клавиши ←→ выбранной строки, поэтому Tab идёт по строкам, а не по 90 клеткам */}
                 <div className="row-ctrl">
                   <button
                     tabIndex={-1}
-                    aria-label={`${vs.slot.label.ru}: предыдущий вариант`}
+                    aria-label={t('row.prev', { slot: label })}
                     onClick={() => {
                       select(id);
                       stepRow(vs, -1);
@@ -467,11 +514,11 @@ export default function App() {
                     <IconTriLeft />
                   </button>
                   {/* Как в игре: у строк без сетки средняя плашка пустая, стрелки стоят в одну колонку */}
-                  {!sw && <span className="ctrl-gap" aria-hidden="true" />}
-                  {sw && (
+                  {!hasSw && <span className="ctrl-gap" aria-hidden="true" />}
+                  {hasSw && (
                     <button
                       className="ctrl-grid"
-                      aria-label={`${vs.slot.label.ru}: все цвета`}
+                      aria-label={t('row.grid', { slot: label })}
                       aria-expanded={sel && picker}
                       onClick={() => {
                         select(id);
@@ -483,7 +530,7 @@ export default function App() {
                   )}
                   <button
                     tabIndex={-1}
-                    aria-label={`${vs.slot.label.ru}: следующий вариант`}
+                    aria-label={t('row.next', { slot: label })}
                     onClick={() => {
                       select(id);
                       stepRow(vs, 1);
@@ -498,28 +545,28 @@ export default function App() {
         </ol>
         <div className="list-actions">
           <button className="gbtn" onClick={copySheet}>
-            <kbd>C</kbd> Копировать список
+            <kbd>C</kbd> {t('list.copy')}
           </button>
           <button className="gbtn" onClick={share}>
-            <kbd>L</kbd> Ссылка
+            <kbd>L</kbd> {t('list.link')}
           </button>
         </div>
       </section>
 
-      <footer className="cc-foot" aria-label="Управление">
+      <footer className="cc-foot" aria-label={t('foot.aria')}>
         <span>
-          <kbd>Q</kbd> Повернуть <kbd>E</kbd>
+          <kbd>Q</kbd> {t('foot.rotate')} <kbd>E</kbd>
         </span>
         <span>
-          <kbd aria-label="Вверх"><IconArrow dir="up" /></kbd>
-          <kbd aria-label="Вниз"><IconArrow dir="down" /></kbd> Выбрать
+          <kbd aria-label={t('key.up')}><IconArrow dir="up" /></kbd>
+          <kbd aria-label={t('key.down')}><IconArrow dir="down" /></kbd> {t('foot.select')}
         </span>
         <span>
-          <kbd aria-label="Влево"><IconArrow dir="left" /></kbd>
-          <kbd aria-label="Вправо"><IconArrow dir="right" /></kbd> Изменить
+          <kbd aria-label={t('key.left')}><IconArrow dir="left" /></kbd>
+          <kbd aria-label={t('key.right')}><IconArrow dir="right" /></kbd> {t('foot.change')}
         </span>
         <span className="foot-g">
-          <kbd>G</kbd> Сетка цветов
+          <kbd>G</kbd> {t('foot.grid')}
         </span>
       </footer>
 
@@ -529,96 +576,176 @@ export default function App() {
             <span>{toast.text}</span>
             {toast.undo && (
               <button className="toast-undo" onClick={toast.undo}>
-                Отменить
+                {t('toast.undo')}
               </button>
             )}
           </div>
         )}
       </div>
+
+      <Modal open={dialog === 'pack'} title={t('pack.title')} closeLabel={t('or.close')} onClose={closeDialog}>
+        <p className="kp-lead">{t('pack.lead')}</p>
+        <PackConnect />
+      </Modal>
+      <Modal open={dialog === 'key'} title={t('or.title')} closeLabel={t('or.close')} onClose={closeDialog}>
+        <KeyPanel />
+        <div className="modal-foot">
+          <button type="button" className="btn primary" onClick={closeDialog}>
+            {t('or.done')}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
 
-/** Плитка типа тела: портрет V, отрендеренный тем же 3D-движком (tools/render-portraits.cjs). */
-function BodyCard({ g, active, onPick }: { g: Gender; active: boolean; onPick: () => void }) {
-  const [noImg, setNoImg] = useState(false);
-  const b = BODY[g];
+/** Шапка: живое 3D (набор ассетов), ключ OpenRouter и язык интерфейса. */
+function UtilBar({ lang, setLang, onPack, onKey }: { lang: Lang; setLang: (l: Lang) => void; onPack: () => void; onKey: () => void }) {
+  const { t } = useI18n();
+  const pack = usePackState();
+  const or = useOrSettings();
+  const packState =
+    pack.status === 'ready' && !pack.busy ? t('pack.chipReady') : pack.status === 'connecting' || pack.busy ? t('pack.chipBusy') : pack.status === 'error' ? t('pack.chipError') : t('pack.chipNone');
+  const packLabel = t('pack.chipAria', { state: packState });
+  const keyLabel = t('or.chipAria', { state: or.key ? t('or.stateSet') : t('or.stateUnset') });
+  const keyOk = or.check.s === 'ok';
+  const keyBad = or.check.s === 'fail';
   return (
-    <button className="body-card" aria-pressed={active} onClick={onPick} aria-label={`Тип тела ${b.n}: ${b.name.toLowerCase()}`}>
+    <nav className="cc-util" aria-label={t('util.aria')}>
+      <button type="button" className="util-btn" data-state={pack.status} onClick={onPack} aria-label={packLabel} title={packLabel}>
+        <IconCube />
+        <span className="util-text">
+          {t('pack.chip')} <b>{packState}</b>
+        </span>
+        <i className="util-dot" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="util-btn"
+        data-state={!or.key ? 'none' : keyBad ? 'error' : keyOk ? 'ready' : 'set'}
+        onClick={onKey}
+        aria-label={keyLabel}
+        title={keyLabel}
+      >
+        <IconKey />
+        <span className="util-text">{t('or.chip')}</span>
+        <i className="util-dot" aria-hidden="true" />
+      </button>
+      <div className="util-lang" role="group" aria-label={t('lang.group')}>
+        {LANGS.map((l) => (
+          <button key={l} type="button" lang={l} aria-pressed={lang === l} onClick={() => setLang(l)} title={t(l === 'ru' ? 'lang.ru' : 'lang.en')}>
+            {l.toUpperCase()}
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+/** Плитка типа тела: портрет V, отрендеренный 3D-движком приложения (public/portraits). */
+function BodyCard({ g, active, onPick }: { g: Gender; active: boolean; onPick: () => void }) {
+  const { t } = useI18n();
+  const [noImg, setNoImg] = useState(false);
+  const name = bodyName(g, t);
+  return (
+    <button className="body-card" aria-pressed={active} onClick={onPick} aria-label={t('body.aria', { n: BODY_N[g], name: name.toLowerCase() })}>
       <span className="body-pic" aria-hidden="true">
-        {noImg ? <IconBust className="body-img body-ph" /> : <img className="body-img" src={b.img} alt="" draggable={false} onError={() => setNoImg(true)} />}
+        {noImg ? <IconBust className="body-img body-ph" /> : <img className="body-img" src={portraitUrl(g)} alt="" draggable={false} onError={() => setNoImg(true)} />}
         <i className="body-fx" />
       </span>
       <span className="body-tag" aria-hidden="true">
-        <span>{b.name}</span>
-        <b>{b.n}</b>
+        <span>{name}</span>
+        <b>{BODY_N[g]}</b>
       </span>
     </button>
   );
 }
 
-function optionCaption(slotId: string, o: Option | undefined, gender: Gender): string {
+function optionCaption(slotId: string, o: Option | undefined, gender: Gender, lang: Lang): string {
   if (!o) return '';
-  if (slotId === 'hairstyle') return hairLabel(o, gender);
-  if (slotId === 'eyebrows') return browDescription(o)?.ru ?? '';
-  if (isMorph(slotId)) return morphInfo(gender, slotId).options.find((m) => m.i === o.i)?.text.ru ?? '';
-  const l = o.label.ru;
+  if (slotId === 'hairstyle') return hairDescription(gender, o)[lang];
+  if (slotId === 'eyebrows') return browDescription(o)?.[lang] ?? '';
+  if (isMorph(slotId)) return morphInfo(gender, slotId).options.find((m) => m.i === o.i)?.text[lang] ?? '';
+  const l = o.label[lang] || o.label.ru;
   return /^\d+$/.test(l) ? '' : l;
 }
 
 function InfoBox({
   vs,
   gender,
+  in3d,
   prov,
   done,
   onDone,
-  progress,
+  doneCount,
+  total,
 }: {
   vs: VisibleSlot;
   gender: Gender;
+  /** the live 3D model is on screen (the 2D portrait draws these rows itself) */
+  in3d: boolean;
   prov?: ScanProvenance;
   done: boolean;
   onDone: () => void;
-  progress: string;
+  doneCount: number;
+  total: number;
 }) {
-  const caption = optionCaption(vs.slot.id, vs.option, gender);
+  const { t, loc, lang } = useI18n();
+  const caption = optionCaption(vs.slot.id, vs.option, gender, lang);
+  const label = loc(vs.slot.label);
   return (
     <div className="info">
       <div aria-live="polite">
         <div className="info-head">
-          <span>{vs.slot.label.ru}</span>
+          <span>{label}</span>
           <b>
             {pad2(displayNumber(vs.variant, vs.value))}
             <small> / {pad2(vs.variant.options.length)}</small>
           </b>
         </div>
         {caption && <p>{caption}</p>}
+        {in3d && NOT_IN_3D.has(vs.slot.id) && <p className="info-not3d">{t('info.not3d')}</p>}
         {prov && (
           <p className="info-prov">
-            По фото: вариант {pad2(displayNumber(vs.variant, prov.value))} · {prov.src === 'llm' ? 'модель' : prov.src === 'local' ? 'замер' : 'вручную'} · уверенность {Math.round(prov.conf * 100)}%
-            {prov.why ? ` — ${prov.why}` : ''}
+            {t('info.prov', { n: pad2(displayNumber(vs.variant, prov.value)), src: srcName(prov.src, t), p: Math.round(prov.conf * 100) })}
+            {prov.why ? ` — ${loc(prov.why)}` : ''}
           </p>
         )}
       </div>
       {/* Отметка для переноса в игру: какие строки уже выставлены в редакторе игры */}
       <div className="info-done">
-        <button className="done-btn" role="checkbox" aria-checked={done} aria-label={`${vs.slot.label.ru}: выставлено в игре`} onClick={onDone}>
+        <button className="done-btn" role="checkbox" aria-checked={done} aria-label={t('info.doneAria', { slot: label })} onClick={onDone}>
           <span className="done-mark" aria-hidden="true">
             {done && <IconCheck />}
           </span>
           <span>
-            Выставлено<span className="done-tail"> в игре</span>
+            {t('info.doneShort')}
+            <span className="done-tail">{t('info.doneTail')}</span>
           </span>
           <kbd aria-hidden="true">X</kbd>
         </button>
-        <span className="done-count">Всего {progress}</span>
+        <span className="done-count">{t('info.count', { done: doneCount, total })}</span>
       </div>
     </div>
   );
 }
 
-function Picker({ vs, prov, onChoose, onClose }: { vs: VisibleSlot; prov?: ScanProvenance; onChoose: (i: number) => void; onClose: () => void }) {
+function Picker({
+  vs,
+  gender,
+  prov,
+  onChoose,
+  onClose,
+}: {
+  vs: VisibleSlot;
+  gender: Gender;
+  prov?: ScanProvenance;
+  onChoose: (i: number) => void;
+  onClose: () => void;
+}) {
+  const { t, loc } = useI18n();
   const gridRef = useRef<HTMLDivElement>(null);
+  const label = loc(vs.slot.label);
   // Фокус идёт за выбранной ячейкой: при открытии и при смене варианта стрелками
   useEffect(() => {
     const g = gridRef.current;
@@ -632,30 +759,31 @@ function Picker({ vs, prov, onChoose, onClose }: { vs: VisibleSlot; prov?: ScanP
     gridRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
   }, [vs.slot.id]);
   return (
-    <div className="picker" role="dialog" aria-label={`${vs.slot.label.ru}: выбор цвета`}>
+    <div className="picker" role="dialog" aria-label={t('picker.aria', { slot: label })}>
       <div className="picker-head">
-        <span>{vs.slot.label.ru}</span>
-        <button onClick={onClose} aria-label="Закрыть сетку цветов">
+        <span>{label}</span>
+        <button onClick={onClose} aria-label={t('picker.close')}>
           <IconClose />
         </button>
       </div>
-      <div className="picker-grid" role="radiogroup" aria-label={vs.slot.label.ru} ref={gridRef}>
+      <div className="picker-grid" role="radiogroup" aria-label={label} ref={gridRef}>
         {vs.variant.options.map((o, k) => {
-          const sw = swatchOf(o) ?? '#000';
+          const name = loc(o.label);
           return (
             <button
               key={o.i}
               role="radio"
               aria-checked={o.i === vs.value}
               tabIndex={o.i === vs.value ? 0 : -1}
-              aria-label={`${pad2(k + 1)}${o.label.ru && !/^\d+$/.test(o.label.ru) ? ` — ${o.label.ru}` : ''}`}
+              aria-label={`${pad2(k + 1)}${name && !/^\d+$/.test(name) ? ` — ${name}` : ''}`}
+              title={name && !/^\d+$/.test(name) ? name : undefined}
               className="cell"
               onClick={() => onChoose(o.i)}
               onDoubleClick={onClose}
             >
-              <span className="sw" style={{ background: sw }} />
+              <Swatch gender={gender} slotId={vs.slot.id} option={o} className="sw" />
               <span className="n">{pad2(k + 1)}</span>
-              {prov?.value === o.i && <span className="pick" title="Подобрано по фото" />}
+              {prov?.value === o.i && <span className="pick" title={t('picker.scanned')} />}
             </button>
           );
         })}

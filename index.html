@@ -1,15 +1,46 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-    <meta name="description" content="Подбор настроек внешности V в Cyberpunk 2077 2.5 по фотографии: полный редактор мужского и женского V и лист номеров для игры." />
-    <title>V-MIRROR — внешность V по фото</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0d12'/%3E%3Cpath d='M7 8l9 17 9-17' fill='none' stroke='%23f5d90a' stroke-width='4' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <meta name="theme-color" content="#0a0b0f" />
+    <title>V-MIRROR — V's look from a photo</title>
+    <meta
+      name="description"
+      content="Cyberpunk 2077 2.5 character creator replica that turns a photo into V's settings: slot numbers exactly as in the game, a sheet to copy, and live 3D from your own game files."
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- the default V portrait is the largest element of the first screen without an asset pack:
+         fetch it with the HTML instead of after the app script has run -->
+    <link rel="preload" as="image" type="image/webp" href="/portraits/v_pma.webp" fetchpriority="high" />
+    <link rel="canonical" href="%SITE_URL%" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="V-MIRROR" />
+    <meta property="og:title" content="V-MIRROR — V's look from a photo" />
+    <meta
+      property="og:description"
+      content="Fan-made Cyberpunk 2077 2.5 character creator replica: match V to a photo and copy the slot numbers into the game."
+    />
+    <meta property="og:url" content="%SITE_URL%" />
+    <meta property="og:image" content="%SITE_URL%og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      /* first paint while the app (and the 2.5 catalog) loads */
+      html, body { margin: 0; height: 100%; background: #0a0b0f; }
+      .boot { height: 100%; display: grid; place-content: center; gap: 12px; justify-items: center; color: #c4555a;
+        font: 700 13px/1 system-ui, sans-serif; letter-spacing: 0.3em; }
+      .boot i { display: block; width: 160px; height: 3px; background: linear-gradient(90deg, transparent, #5ef2ff, transparent);
+        animation: boot 1.2s linear infinite; }
+      @keyframes boot { from { background-position: -160px 0; } to { background-position: 160px 0; } }
+      @media (prefers-reduced-motion: reduce) { .boot i { animation: none; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <noscript>V-MIRROR needs JavaScript. / Для работы V-MIRROR нужен JavaScript.</noscript>
+    <div id="root"><div class="boot" aria-hidden="true">V-MIRROR<i></i></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

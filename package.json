@@ -3,15 +3,18 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Генератор настроек внешности V (Cyberpunk 2077 2.5) по фотографии",
+  "description": "Web replica of the Cyberpunk 2077 2.5 character creator that turns a reference photo into V's appearance settings",
   "scripts": {
     "predev": "node tools/setup-assets.mjs",
     "dev": "vite",
     "prebuild": "node tools/setup-assets.mjs",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node tools/audit-dist.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -b",
+    "pack": "node tools/extract/pack.mjs",
+    "pack:optimize": "node tools/extract/pack.mjs --only optimize,index --out",
+    "audit:dist": "node tools/audit-dist.mjs",
     "catalog": "python -I tools/extract/build_catalog.py --out src/data --work"
   },
   "dependencies": {

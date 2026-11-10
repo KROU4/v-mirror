@@ -1,63 +1,72 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import { displayNumber, getIndex, type Gender } from '../model/catalog';
+import { displayNumber, getIndex, type Gender, type Loc } from '../model/catalog';
 import { slotValue, type CharacterState } from '../model/state';
 import { analyzePhoto, type PhotoAnalysis } from './analyze';
+import { getLandmarker } from './landmarker';
 import { applySuggestions, localSuggestions, mergeSuggestions, type Source, type Suggestion } from './match';
-import { buildPrompt, callOpenRouter, DEFAULT_MODELS, listVisionModels, parseLlm, photoToDataUrl, type ModelInfo } from './llm';
-import { IconCopy, IconDownload, IconUpload } from '../ui/Icons';
+import { buildPrompt, callOpenRouter, LlmError, parseLlm, photoToDataUrl } from './llm';
+import { defaultModel, useOrSettings } from './openrouter';
+import KeyPanel, { orErrorText, useModels } from './KeyPanel';
+import { IconCopy, IconDownload, IconKey, IconUpload } from '../ui/Icons';
 import { pad2 } from '../ui/format';
+import { Swatch } from '../ui/SwatchChip';
+import { NOT_IN_3D } from '../ui/avatar/look';
+import { useI18n, type T } from '../i18n';
 
 export interface ScanProvenance {
   src: Source;
   conf: number;
-  why?: string;
+  why?: string | Loc;
   value: number;
 }
 
-const ls = {
-  get: (k: string, d = '') => {
-    try {
-      return localStorage.getItem(k) ?? d;
-    } catch {
-      return d;
-    }
-  },
-  set: (k: string, v: string) => {
-    try {
-      localStorage.setItem(k, v);
-    } catch {
-      /* без сохранения */
-    }
-  },
-};
+const parseErrorText = (e: unknown, t: T) =>
+  e instanceof LlmError
+    ? t(e.code === 'noJson' ? 'llm.noJson' : 'llm.brokenJson')
+    : t('scan.err.generic', { msg: (e as Error)?.message ?? String(e) });
 
 type Tab = 'model' | 'manual';
 const CONTOUR = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
   33, 160, 158, 133, 153, 144, 362, 385, 387, 263, 373, 380, 61, 40, 0, 270, 291, 321, 17, 91, 1, 98, 327, 168, 468, 473, 70, 105, 107, 336, 334, 300];
 
+/** Длинная сторона снимка для детектора лица и замера цветов, px. */
+export const ANALYSIS_MAX_PX = 2048;
+
 export default function ScanPanel({
   gender,
   base,
+  in3d,
   onApply,
   onGender,
+  onKeySettings,
 }: {
   gender: Gender;
   base: CharacterState;
+  /** на сцене 3D-модель (как у InfoBox): только тогда строки без 3D помечаются */
+  in3d: boolean;
   onApply: (s: CharacterState, p: Record<string, ScanProvenance>) => void;
   onGender: (g: Gender) => void;
+  onKeySettings: () => void;
 }) {
+  const { t, loc, lang } = useI18n();
+  const or = useOrSettings();
+  // Список моделей — только когда ключ сохранён: без ключа скан к openrouter.ai не обращается
+  const { models } = useModels(!!or.key);
+  const key = or.key;
+  const model = or.model || defaultModel(models);
+  const modelName = models?.find((m) => m.id === model)?.name ?? model;
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<PhotoAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const [over, setOver] = useState(false);
   // Ответ модели привязан к полу, для которого строился промпт: номера вариантов у типов тела разные
-  const [llmRaw, setLlm] = useState<{ gender: Gender; sugg: Suggestion[]; bodyType?: Gender; notes?: string } | null>(null);
+  const [llmRaw, setLlm] = useState<{ gender: Gender; sugg: Suggestion[]; bodyType?: Gender; notes?: string; hints?: Loc[] } | null>(null);
   const llm = llmRaw && llmRaw.gender === gender ? llmRaw : null;
   const llmStale = !!llmRaw && llmRaw.gender !== gender;
-  const [tab, setTab] = useState<Tab>(() => (ls.get('vm.orKey') ? 'model' : 'manual'));
-  const [key, setKey] = useState(() => ls.get('vm.orKey'));
-  const [model, setModel] = useState(() => ls.get('vm.orModel', DEFAULT_MODELS[0]));
-  const [models, setModels] = useState<ModelInfo[] | null>(null);
+  const [tab, setTab] = useState<Tab>(() => (or.key ? 'model' : 'manual'));
+  // Ключ вводят прямо во вкладке: поле не пропадает после первого символа
+  const [inlineKey] = useState(() => !or.key);
   const [manual, setManual] = useState('');
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,7 +76,7 @@ export default function ScanPanel({
   const photoSeq = useRef(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [asking, setAsking] = useState<string | null>(null);
-  const busy = asking ?? (analyzing ? 'Ищу лицо и замеряю черты…' : null);
+  const busy = asking ?? (analyzing ? t('scan.busyFace') : null);
 
   useEffect(
     () => () => {
@@ -83,16 +92,17 @@ export default function ScanPanel({
     setAsking(null);
   }, [gender]);
 
-  useEffect(() => ls.set('vm.orKey', key), [key]);
-  useEffect(() => ls.set('vm.orModel', model), [model]);
+  // Короткая отметка «промпт скопирован» гаснет сама
   useEffect(() => {
-    listVisionModels().then(setModels).catch(() => setModels([]));
-  }, []);
+    if (!note) return;
+    const id = window.setTimeout(() => setNote(null), 2200);
+    return () => window.clearTimeout(id);
+  }, [note]);
 
   const local = useMemo(() => (analysis ? localSuggestions(gender, analysis) : []), [analysis, gender]);
   const merged = useMemo(() => mergeSuggestions(local, llm?.sugg ?? []), [local, llm]);
   const preview = useMemo(() => applySuggestions(base, merged), [base, merged]);
-  const prompt = useMemo(() => buildPrompt(gender, analysis), [gender, analysis]);
+  const prompt = useMemo(() => buildPrompt(gender, analysis, lang), [gender, analysis, lang]);
 
   const load = useCallback((url: string) => {
     photoSeq.current++;
@@ -112,7 +122,7 @@ export default function ScanPanel({
   const onFile = (f: File | undefined | null) => {
     if (!f) return;
     if (!f.type.startsWith('image/')) {
-      setError('Нужен файл изображения: JPG, PNG или WebP.');
+      setError(t('scan.notImage'));
       return;
     }
     const url = URL.createObjectURL(f);
@@ -120,36 +130,53 @@ export default function ScanPanel({
     objUrlRef.current = url;
   };
 
-  // Для автоматической проверки и отладки: загрузить фото по URL
+  // Только в разработке: загрузить фото по URL для автоматической проверки
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     (window as unknown as { __vmLoad?: (u: string) => void }).__vmLoad = load;
   }, [load]);
+
+  // Детектор лица (wasm и модель) загружаем сразу при открытии скана, в простое, пока
+  // пользователь выбирает фото: это сеть и асинхронная компиляция wasm. Сборка графа на
+  // видеокарте (первый detect, ≈ 2 с главного потока) идёт уже по выбранному фото, под
+  // индикатором «Ищу лицо», а не неожиданно, пока человек тянется к кнопке «Закрыть»
+  useEffect(() => {
+    const warm = () => void getLandmarker().catch(() => {});
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(warm, { timeout: 1500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(warm, 300);
+    return () => window.clearTimeout(id);
+  }, []);
 
   const runAnalysis = useCallback(async () => {
     const img = imgRef.current;
     if (!img || !img.naturalWidth) return;
     const seq = photoSeq.current;
-    // Снимок пикселей сразу: если фото сменят во время анализа, размеры и пиксели не перемешаются
+    // Снимок пикселей сразу: если фото сменят во время анализа, размеры и пиксели не перемешаются.
+    // Не больше ANALYSIS_MAX_PX по длинной стороне: фото телефона на 48–200 Мп дали бы холст
+    // в сотни мегабайт (iOS Safari рисует пустой холст больше 16,7 Мп — «лицо не найдено»),
+    // а точки лица нормализованы, и замер всё равно идёт по уменьшенной копии
+    const scale = Math.min(1, ANALYSIS_MAX_PX / Math.max(img.naturalWidth, img.naturalHeight));
     const snap = document.createElement('canvas');
-    snap.width = img.naturalWidth;
-    snap.height = img.naturalHeight;
-    snap.getContext('2d')!.drawImage(img, 0, 0);
+    snap.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    snap.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    snap.getContext('2d')!.drawImage(img, 0, 0, snap.width, snap.height);
     setAnalyzing(true);
     setError(null);
     try {
+      // дать браузеру нарисовать индикатор до тяжёлой работы детектора
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
       const a = await analyzePhoto(snap);
       if (seq === photoSeq.current) setAnalysis(a);
     } catch (e) {
       if (seq !== photoSeq.current) return;
-      setError(
-        (e as Error).message === 'NO_FACE'
-          ? 'Лицо не найдено. Нужен снимок анфас, лицо целиком в кадре, без сильного наклона.'
-          : `Не удалось проанализировать фото: ${(e as Error).message}`,
-      );
+      setError((e as Error).message === 'NO_FACE' ? t('scan.noFace') : t('scan.analyzeFailed', { msg: (e as Error).message }));
     } finally {
       if (seq === photoSeq.current) setAnalyzing(false);
     }
-  }, []);
+  }, [t]);
 
   // Точки лица поверх фото
   useEffect(() => {
@@ -179,16 +206,16 @@ export default function ScanPanel({
     const seq = photoSeq.current;
     const g = gender;
     const pack = prompt;
-    setAsking(`Модель ${model} изучает фото…`);
+    setAsking(t('scan.busyModel', { model: modelName }));
     setError(null);
     try {
       const dataUrl = await photoToDataUrl(img);
       const text = await callOpenRouter({ key: key.trim(), model, imageDataUrl: dataUrl, prompt: pack.text, signal: ac.signal });
       if (ac.signal.aborted || seq !== photoSeq.current) return;
       const res = parseLlm(g, text, pack.slots);
-      setLlm({ gender: g, sugg: res.suggestions, bodyType: res.bodyType, notes: res.notes });
+      setLlm({ gender: g, sugg: res.suggestions, bodyType: res.bodyType, notes: res.notes, hints: res.hints });
     } catch (e) {
-      if ((e as Error).name !== 'AbortError' && !ac.signal.aborted) setError((e as Error).message);
+      if ((e as Error).name !== 'AbortError' && !ac.signal.aborted) setError(e instanceof LlmError ? parseErrorText(e, t) : orErrorText(e, t));
     } finally {
       if (abortRef.current === ac) {
         setAsking(null);
@@ -197,15 +224,27 @@ export default function ScanPanel({
     }
   };
 
+  const cancelAsk = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setAsking(null);
+  };
+
   const parseManual = () => {
     try {
       const res = parseLlm(gender, manual, prompt.slots);
-      setLlm({ gender, sugg: res.suggestions, bodyType: res.bodyType, notes: res.notes });
+      setLlm({ gender, sugg: res.suggestions, bodyType: res.bodyType, notes: res.notes, hints: res.hints });
       setError(null);
     } catch (e) {
-      setError(`Ответ не разобран: ${(e as Error).message}`);
+      setError(t('scan.parseFailed', { msg: parseErrorText(e, t) }));
     }
   };
+
+  const copyPrompt = () =>
+    navigator.clipboard
+      .writeText(prompt.text)
+      .then(() => setNote(t('scan.promptCopied')))
+      .catch(() => setError(t('scan.noClipboard')));
 
   const downloadPhoto = async () => {
     if (!imgRef.current) return;
@@ -230,22 +269,27 @@ export default function ScanPanel({
     .filter((r) => r.slot && r.v)
     .sort((a, b) => a.slot!.order - b.slot!.order);
 
-  const freeModels = models?.filter((m) => m.free) ?? [];
-  const paidModels = models?.filter((m) => !m.free).slice(0, 40) ?? [];
+  const measures: [string, string | undefined][] = analysis
+    ? [
+        [t('scan.c.skin'), analysis.colors.skin?.hex],
+        [t('scan.c.iris'), analysis.colors.iris?.hex],
+        [t('scan.c.hair'), analysis.colors.hair?.hex],
+        [t('scan.c.brows'), analysis.colors.brows?.hex],
+        [t('scan.c.lips'), analysis.colors.lips?.hex],
+      ]
+    : [];
 
   return (
     <div className="scan">
       <div>
-        <h1 style={{ margin: 0, font: '400 30px/1.05 var(--font-sign)' }}>Скан фото → настройки V</h1>
-        <p className="muted" style={{ marginTop: 6, maxWidth: '70ch' }}>
-          Лицо измеряется прямо в браузере: фото никуда не уходит, пока вы сами не отправите его модели. Лучше всего работает снимок анфас при ровном дневном свете.
-        </p>
+        <h1 className="scan-title">{t('scan.title')}</h1>
+        <p className="muted scan-lead">{t('scan.lead')}</p>
       </div>
       <div className="scan-grid">
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div className="scan-col">
           {imgUrl ? (
             <div className="photo">
-              <img ref={imgRef} src={imgUrl} alt="Загруженное фото" crossOrigin="anonymous" onLoad={runAnalysis} onError={() => setError('Не удалось открыть изображение.')} />
+              <img ref={imgRef} src={imgUrl} alt={t('scan.photoAlt')} crossOrigin="anonymous" onLoad={runAnalysis} onError={() => setError(t('scan.badImage'))} />
               <canvas ref={canvasRef} aria-hidden="true" />
             </div>
           ) : (
@@ -264,24 +308,24 @@ export default function ScanPanel({
             >
               <IconUpload />
               <b>
-                <span className="fine-only">Перетащите фото сюда</span>
-                <span className="touch-only">Выберите фото</span>
+                <span className="fine-only">{t('scan.dropDrag')}</span>
+                <span className="touch-only">{t('scan.dropPick')}</span>
               </b>
-              <span className="fine-only">или нажмите, чтобы выбрать файл</span>
-              <span className="muted">JPG, PNG, WebP · одно лицо, анфас</span>
+              <span className="fine-only">{t('scan.dropOr')}</span>
+              <span className="muted">{t('scan.dropHint')}</span>
               <input className="vh" type="file" accept="image/*" onChange={(e: ChangeEvent<HTMLInputElement>) => onFile(e.target.files?.[0])} />
             </label>
           )}
           {imgUrl && (
             <div className="row">
               <label className="btn">
-                <IconUpload /> Другое фото
+                <IconUpload /> {t('scan.other')}
                 <input className="vh" type="file" accept="image/*" onChange={(e: ChangeEvent<HTMLInputElement>) => onFile(e.target.files?.[0])} />
               </label>
-              <div className="seg" role="group" aria-label="Для какого V подбирать">
+              <div className="seg" role="group" aria-label={t('scan.forWhom')}>
                 {(['male', 'female'] as Gender[]).map((g) => (
                   <button key={g} aria-pressed={gender === g} onClick={() => onGender(g)}>
-                    {g === 'male' ? 'Мужской' : 'Женский'}
+                    {g === 'male' ? t('body.male') : t('body.female')}
                   </button>
                 ))}
               </div>
@@ -289,37 +333,35 @@ export default function ScanPanel({
           )}
           {analysis && (
             <div className="panel">
-              <h3>Замеры</h3>
-              <div className="row" style={{ gap: 14 }}>
-                {(
-                  [
-                    ['Кожа', analysis.colors.skin?.hex],
-                    ['Радужка', analysis.colors.iris?.hex],
-                    ['Волосы', analysis.colors.hair?.hex],
-                    ['Брови', analysis.colors.brows?.hex],
-                    ['Губы', analysis.colors.lips?.hex],
-                  ] as const
-                ).map(([n, hex]) =>
+              <h3>{t('scan.measures')}</h3>
+              <div className="row measures">
+                {measures.map(([n, hex]) =>
                   hex ? (
-                    <span key={n} className="row" style={{ gap: 6 }}>
-                      <i style={{ width: 16, height: 16, borderRadius: 4, background: hex, display: 'inline-block', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.2)' }} />
+                    <span key={n} className="measure">
+                      <i style={{ background: hex }} />
                       <span className="muted">{n}</span>
                     </span>
                   ) : null,
                 )}
               </div>
-              {Math.abs(analysis.yaw) > 12 && <p className="status warn" style={{ marginBottom: 0 }}>Голова повёрнута на {Math.abs(analysis.yaw).toFixed(0)}° — форма лица измерена неточно.</p>}
+              {analysis.monochrome && <p className="status warn">{t('scan.mono')}</p>}
+              {Math.abs(analysis.yaw) > 12 && <p className="status warn">{t('scan.yaw', { deg: Math.abs(analysis.yaw).toFixed(0) })}</p>}
             </div>
           )}
         </div>
 
-        <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+        <div className="scan-col">
           {busy && (
             <div className="panel" role="status">
               <div className="status">{busy}</div>
-              <div className="bar" style={{ marginTop: 10 }}>
+              <div className="bar">
                 <i />
               </div>
+              {asking && (
+                <button type="button" className="btn ghost scan-cancel" onClick={cancelAsk}>
+                  {t('scan.cancel')}
+                </button>
+              )}
             </div>
           )}
           {error && (
@@ -329,11 +371,11 @@ export default function ScanPanel({
           )}
           {!imgUrl && !error && (
             <div className="panel">
-              <h3>Как это работает</h3>
+              <h3>{t('scan.how')}</h3>
               <ol className="steps">
-                <li>Детектор находит 478 точек лица и измеряет пропорции глаз, носа, рта и челюсти — так же, как измерен каждый вариант головы V в игре.</li>
-                <li>Цвета кожи, радужки, волос и бровей сравниваются с образцами игры.</li>
-                <li>Модель (по вашему ключу OpenRouter) уточняет то, что не измерить линейкой: причёску, бороду, шрамы, веснушки.</li>
+                <li>{t('scan.how1')}</li>
+                <li>{t('scan.how2')}</li>
+                <li>{t('scan.how3')}</li>
               </ol>
             </div>
           )}
@@ -342,113 +384,110 @@ export default function ScanPanel({
             <div className="panel">
               <div className="tabs" role="tablist">
                 <button role="tab" aria-selected={tab === 'model'} onClick={() => setTab('model')}>
-                  Нейросеть OpenRouter
+                  {t('scan.tabModel')}
                 </button>
                 <button role="tab" aria-selected={tab === 'manual'} onClick={() => setTab('manual')}>
-                  Ручной ответ
+                  {t('scan.tabManual')}
                 </button>
               </div>
               {tab === 'model' ? (
-                <div>
-                  <div className="field">
-                    <label htmlFor="or-key">Ключ OpenRouter (хранится только в этом браузере)</label>
-                    <input id="or-key" className="input" type="password" autoComplete="off" placeholder="sk-or-v1-…" value={key} onChange={(e) => setKey(e.target.value)} />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="or-model">Модель с поддержкой изображений</label>
-                    <select id="or-model" className="select" value={model} onChange={(e) => setModel(e.target.value)}>
-                      {!models?.some((m) => m.id === model) && <option value={model}>{model}</option>}
-                      {freeModels.length > 0 && (
-                        <optgroup label="Бесплатные">
-                          {freeModels.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {paidModels.length > 0 && (
-                        <optgroup label="Платные (по возрастанию цены)">
-                          {paidModels.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name} · ${(m.pricePrompt * 1e6).toFixed(2)}/1M
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                  </div>
+                <div role="tabpanel">
+                  {key && !inlineKey ? (
+                    <div className="row scan-model">
+                      <span className="muted">{t('scan.usingModel', { model: modelName })}</span>
+                      <button type="button" className="btn ghost" onClick={onKeySettings}>
+                        <IconKey /> {t('scan.keyEdit')}
+                      </button>
+                    </div>
+                  ) : (
+                    <KeyPanel compact />
+                  )}
                   <div className="row">
                     <button className="btn primary" disabled={!key.trim() || !!busy} onClick={askModel}>
-                      Уточнить нейросетью
+                      {t('scan.ask')}
                     </button>
-                    {!key.trim() && <span className="muted">Без ключа работает только локальный замер.</span>}
+                    {!key.trim() && <span className="muted">{t('scan.noKey')}</span>}
                   </div>
                 </div>
               ) : (
-                <div>
-                  <p className="muted" style={{ marginTop: 0 }}>
-                    Скопируйте промпт и фото в любую мультимодальную модель (ChatGPT, Claude, Gemini), затем вставьте её JSON-ответ ниже.
-                  </p>
-                  <div className="row" style={{ marginBottom: 10 }}>
-                    <button className="btn" onClick={() => navigator.clipboard.writeText(prompt.text).catch(() => setError('Буфер обмена недоступен'))}>
-                      <IconCopy /> Копировать промпт
+                <div role="tabpanel">
+                  <p className="muted">{t('scan.manualLead')}</p>
+                  <div className="row">
+                    <button className="btn" onClick={copyPrompt}>
+                      <IconCopy /> {t('scan.copyPrompt')}
                     </button>
                     <button className="btn" onClick={downloadPhoto}>
-                      <IconDownload /> Скачать фото
+                      <IconDownload /> {t('scan.downloadPhoto')}
                     </button>
+                    <span className="status ok" role="status">
+                      {note}
+                    </span>
                   </div>
                   <div className="field">
-                    <label htmlFor="manual">Ответ модели (JSON)</label>
-                    <textarea id="manual" className="input textarea" value={manual} onChange={(e) => setManual(e.target.value)} placeholder='{"slots":{"hairstyle":{"n":12,"conf":0.7}}}' />
+                    <label htmlFor="manual">{t('scan.answerLabel')}</label>
+                    <textarea
+                      id="manual"
+                      className="input textarea"
+                      value={manual}
+                      onChange={(e) => setManual(e.target.value)}
+                      placeholder={t('scan.answerPlaceholder')}
+                      spellCheck={false}
+                    />
                   </div>
                   <button className="btn primary" disabled={!manual.trim()} onClick={parseManual}>
-                    Разобрать ответ
+                    {t('scan.parse')}
                   </button>
                 </div>
               )}
               {llm?.bodyType && llm.bodyType !== gender && (
-                <p className="status" style={{ marginBottom: 0 }}>
-                  Модель считает, что ближе {llm.bodyType === 'male' ? 'мужской' : 'женский'} тип тела.{' '}
+                <p className="status">
+                  {t('scan.bodyHint', { type: llm.bodyType === 'male' ? t('scan.bodyMale') : t('scan.bodyFemale') })}{' '}
                   <button className="btn ghost" onClick={() => onGender(llm.bodyType!)}>
-                    Переключить
+                    {t('scan.switch')}
                   </button>
                 </p>
               )}
-              {llmStale && (
-                <p className="status" style={{ marginBottom: 0 }}>
-                  Ответ модели относился к другому типу тела, его номера здесь не подходят. Запросите модель заново.
-                </p>
+              {llmStale && <p className="status">{t('scan.stale')}</p>}
+              {llm?.notes && <p className="muted">{llm.notes}</p>}
+              {llm?.hints && (
+                <ul className="scan-hints">
+                  {llm.hints.map((h) => (
+                    <li key={h.en}>{loc(h)}</li>
+                  ))}
+                </ul>
               )}
-              {llm?.notes && <p className="muted" style={{ marginBottom: 0 }}>{llm.notes}</p>}
             </div>
           )}
 
           {analysis && rows.length > 0 && (
             <div className="panel">
-              <h3>Подбор</h3>
+              <h3>{t('scan.results')}</h3>
               <ul className="result-list">
                 {rows.map(({ s, slot, v }) => (
                   <li key={s.slotId}>
-                    <span className="conf" title={`Уверенность ${Math.round(s.conf * 100)}%`}>
+                    <span className="conf" title={t('scan.conf', { p: Math.round(s.conf * 100) })}>
                       <i style={{ width: 6 + s.conf * 16, height: 6 + s.conf * 16, opacity: 0.35 + s.conf * 0.65 }} />
+                      <span className="vh">{t('scan.conf', { p: Math.round(s.conf * 100) })}</span>
                     </span>
                     <span>
-                      {slot!.label.ru} <span className="src">{s.src === 'llm' ? 'модель' : 'замер'}</span>
-                      {s.why && <span className="why">{s.why}</span>}
+                      {loc(slot!.label)} <span className="src">{s.src === 'llm' ? t('src.llm') : t('src.local')}</span>
+                      {in3d && NOT_IN_3D.has(s.slotId) && <span className="not3d">{t('scan.not3d')}</span>}
+                      {s.why && <span className="why">{loc(s.why)}</span>}
                     </span>
-                    <span className="num" style={{ font: '500 22px/1 var(--font-sign)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                      {(v!.option?.iris ?? v!.option?.hex) && <i style={{ width: 14, height: 14, borderRadius: 3, background: v!.option?.iris ?? v!.option?.hex }} />}
+                    <span className="num">
+                      {(v!.option?.iris || v!.option?.hex || v!.option?.icon) && (
+                        <Swatch gender={gender} slotId={s.slotId} option={v!.option} className="num-sw" />
+                      )}
                       {pad2(displayNumber(v!.variant, v!.value))}
                     </span>
                   </li>
                 ))}
               </ul>
-              <div className="row" style={{ marginTop: 14 }}>
+              <div className="row">
                 <button className="btn primary" onClick={apply}>
-                  Применить к V
+                  {t('scan.apply')}
                 </button>
-                <span className="muted">Меняются только слоты из этого списка.</span>
+                <span className="muted">{t('scan.applyNote')}</span>
               </div>
             </div>
           )}

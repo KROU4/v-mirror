@@ -3,8 +3,13 @@ import {
   acesFilmicRGB,
   CAP_STUBBLE,
   capCoverage,
+  catchlight,
+  creaseSpecular,
+  EYE_CATCHLIGHT,
   EYE_IRIS,
   NOSE_EVEN,
+  NOSE_SCATTER,
+  SKIN_CREASE,
   noseEven,
   noseFoldFade,
   SKIN_FALLOFF,
@@ -12,7 +17,39 @@ import {
   SKIN_NORMAL_SCALE,
   skinScatter,
   skinToneMap,
+  Materials,
+  texturesOf,
 } from './materials';
+import * as THREE from 'three';
+import type { AssetStore, BrowColour, BrowStyle, HairManifest, HairMaterial } from './assets';
+
+describe('texturesOf sees the textures of shader patches', () => {
+  // A texture missing from texturesOf is freed by the memory trim while the material still
+  // samples it: brow gradients and hair ramps then uploaded from a closed ImageBitmap (black).
+  const store = {
+    texture: (rel: string) => Promise.resolve(Object.assign(new THREE.Texture(), { name: rel })),
+    maybeTexture: (rel: string | null | undefined) => Promise.resolve(rel ? Object.assign(new THREE.Texture(), { name: rel }) : null),
+  } as unknown as AssetStore;
+  const names = (m: THREE.Material) => [...texturesOf(m)].map((t) => t.name).sort();
+
+  it('brows: strands, shadow layer and gradient (a decal: no normal map, lit as the skin under it)', async () => {
+    const mats = new Materials(store, null);
+    const style = { diffuseRGBA: 'd.png', secondaryAlpha: 's.png', normal: 'n.png' } as BrowStyle;
+    const colour = { DiffuseAlpha: 1, GradientMapIntensity: 2, SecondaryDiffuseColor: '#3e312a', SecondaryDiffuseAlphaIntensity: 0.6, gradientMapPng: 'g.png' } as BrowColour;
+    expect(names(await mats.brows(style, colour, 'g.png'))).toEqual(['d.png', 'g.png', 's.png']);
+  });
+
+  it('hair cards: packed map, alpha and the colour ramp', async () => {
+    const mats = new Materials(store, null);
+    const hm = {
+      cardSets: { long01: { packed: 'p.png', alpha: 'a' } },
+      profiles: { brown: { ramp: 'r.png' } },
+      textures: { a: { file: 'a.png' } },
+    } as unknown as HairManifest;
+    const m = { type: 'hairCards', cardSet: 'long01', profile: 'brown' } as HairMaterial;
+    expect(names(await mats.hairCards(hm, m, 'core', true))).toEqual(['a.png', 'p.png', 'r.png']);
+  });
+});
 
 const s2l = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const l2s = (c: number) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
@@ -164,5 +201,55 @@ describe('CAP_STUBBLE (щетина выбритой части)', () => {
   it('точка щетины помещается в ячейку', () => {
     expect(CAP_STUBBLE.radius).toBeLessThan(0.5);
     expect(CAP_STUBBLE.scale).toBeGreaterThan(100);
+  });
+});
+
+describe('EYE_CATCHLIGHT (одна искра в глазу)', () => {
+  const dir = (() => {
+    const l = Math.hypot(...EYE_CATCHLIGHT.dir);
+    return EYE_CATCHLIGHT.dir.map((v) => v / l) as [number, number, number];
+  })();
+  const rot = (deg: number): [number, number, number] => {
+    // луч, отклонённый от направления искры на deg градусов (поворот вокруг оси X)
+    const a = (deg * Math.PI) / 180;
+    const [x, y, z] = dir;
+    return [x, y * Math.cos(a) - z * Math.sin(a), y * Math.sin(a) + z * Math.cos(a)];
+  };
+
+  it('полная яркость в центре, ноль за краем', () => {
+    expect(catchlight(dir)).toBeCloseTo(1);
+    expect(catchlight(rot(EYE_CATCHLIGHT.outerDeg + 1))).toBe(0);
+    const mid = catchlight(rot((EYE_CATCHLIGHT.innerDeg + EYE_CATCHLIGHT.outerDeg) / 2));
+    // мягкий край: между внутренним и внешним радиусом яркость спадает
+    expect(mid).toBeGreaterThan(0.2);
+    expect(mid).toBeLessThan(0.95);
+  });
+
+  it('искра сверху слева, со стороны камеры; блики ламп почти погашены', () => {
+    expect(dir[0]).toBeLessThan(0);
+    expect(dir[1]).toBeGreaterThan(0);
+    expect(dir[2]).toBeGreaterThan(0.5);
+    expect(EYE_CATCHLIGHT.direct).toBeLessThan(0.25);
+    // пятно небольшое: угловой радиус отражения не больше 10°
+    expect(EYE_CATCHLIGHT.outerDeg).toBeLessThanOrEqual(10);
+  });
+});
+
+describe('нос и складки кожи', () => {
+  it('заворот на носу менее красный, но не гаснет', () => {
+    const s = skinScatter();
+    const avg = (s.x + s.y + s.z) / 3;
+    const nose = [s.x, s.y, s.z].map((v) => v + (avg * NOSE_SCATTER.gain - v) * NOSE_SCATTER.neutral);
+    expect(nose[0] / nose[1]).toBeLessThan(s.x / s.y);
+    expect(nose[0] / nose[1]).toBeLessThan(1.4);
+    expect(nose[0] + nose[1] + nose[2]).toBeGreaterThan(0.7 * (s.x + s.y + s.z));
+  });
+
+  it('блик в глубокой складке карты нормалей гаснет, на порах и ровной коже — полный', () => {
+    expect(creaseSpecular(1)).toBe(1);
+    expect(creaseSpecular(Math.cos((15 * Math.PI) / 180))).toBe(1);
+    expect(creaseSpecular(0.5)).toBe(SKIN_CREASE.floor);
+    expect(creaseSpecular(0.87)).toBeGreaterThan(SKIN_CREASE.floor);
+    expect(creaseSpecular(0.87)).toBeLessThan(1);
   });
 });

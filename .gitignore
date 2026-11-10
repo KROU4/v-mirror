@@ -5,11 +5,37 @@ dist/
 .env
 .env.*
 !.env.example
-# локальные выгрузки из игры — не коммитим (ассеты CDPR)
-tools/local/
-game-cache/
 .claude/docker-keep-running
 .omc/
-public/mediapipe/
-*.tsbuildinfo
 .impeccable/review/
+*.tsbuildinfo
+__pycache__/
+*.pyc
+
+# Downloaded at build time (tools/setup-assets.mjs)
+public/mediapipe/
+
+# Game files never go into git (CDPR assets). The local asset pack and anything
+# built by `npm run pack` stay on your disk; see docs/ASSET_PACK.md.
+tools/local/
+game-cache/
+*.work/
+/v-mirror-pack*/
+/pack*/
+pack.json
+*.glb
+*.gltf
+*.ktx2
+*.dds
+*.tga
+*.xbm
+*.mesh
+*.morphtarget
+*.anims
+*.mlmask
+*.mlsetup
+*.archive
+
+# Local tooling of the author (not needed to run or build the project)
+.claude/
+.impeccable/

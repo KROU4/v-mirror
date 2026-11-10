@@ -147,11 +147,15 @@ export class MasterSkeleton {
   /**
    * Кость, которой нет в json: её мировая поза берётся из inverse bind matrix меша,
    * родитель — Head (динамические пряди волос в редакторе неподвижны относительно головы).
+   * Кости «болтания» пениса (dyng_penis_*) висят на Hips, и у каждого меша свои: их позы
+   * привязки в разных glb расходятся до 5 мм (intimate.json, loaderNotes).
    */
-  private extraBone(name: string, inverseBind: THREE.Matrix4): THREE.Bone {
-    let bone = this.extras.get(name);
+  private extraBone(name: string, inverseBind: THREE.Matrix4, owner: string): THREE.Bone {
+    const hips = name.startsWith('dyng_penis') && this.bones.has('Hips');
+    const key = hips ? owner + '|' + name : name;
+    let bone = this.extras.get(key);
     if (bone) return bone;
-    const parentName = this.bones.has('Head') ? 'Head' : this.root.name;
+    const parentName = hips ? 'Hips' : this.bones.has('Head') ? 'Head' : this.root.name;
     const parent = this.bones.get(parentName)!;
     const world = inverseBind.clone().invert();
     const local = this.bindWorld.get(parentName)!.clone().invert().multiply(world);
@@ -159,19 +163,20 @@ export class MasterSkeleton {
     bone.name = name;
     local.decompose(bone.position, bone.quaternion, bone.scale);
     parent.add(bone);
-    this.extras.set(name, bone);
+    this.extras.set(key, bone);
     return bone;
   }
 
   /**
    * Привязать skinned-меш из glb к общему скелету. Обратные матрицы привязки меша
-   * остаются его собственными (совпадают с json до 0,26 мм).
+   * остаются его собственными (совпадают с json до 0,26 мм). owner — имя файла меша
+   * (для собственных костей наготы).
    */
-  bind(mesh: THREE.SkinnedMesh) {
+  bind(mesh: THREE.SkinnedMesh, owner = mesh.uuid) {
     patchSkinning8();
     eightInfluences(mesh.geometry);
     const src = mesh.skeleton;
-    const bones = src.bones.map((b, i) => this.bones.get(b.name) ?? this.extraBone(b.name, src.boneInverses[i]));
+    const bones = src.bones.map((b, i) => this.bones.get(b.name) ?? this.extraBone(b.name, src.boneInverses[i], owner));
     mesh.bind(new THREE.Skeleton(bones, src.boneInverses.map((m) => m.clone())), IDENTITY);
     mesh.frustumCulled = false;
   }

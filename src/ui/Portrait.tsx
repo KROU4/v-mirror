@@ -14,7 +14,7 @@ function shade(hex: string | undefined, k: number, fallback = '#8a6a55'): string
 
 type HairKind = 'none' | 'buzz' | 'short' | 'long' | 'dreads';
 
-export default function Portrait({ state, className }: { state: CharacterState; className?: string }) {
+export default function Portrait({ state, className, label }: { state: CharacterState; className?: string; label?: string }) {
   const p = useMemo(() => {
     const val = (id: string) => slotValue(state, id);
     const sel: Partial<Record<MorphSlot, number>> = {};
@@ -116,7 +116,7 @@ export default function Portrait({ state, className }: { state: CharacterState; 
     );
 
   return (
-    <svg className={className} viewBox="0 0 220 264" role="img" aria-label="Схематичный портрет персонажа">
+    <svg className={className} viewBox="0 0 220 264" role="img" aria-label={label ?? 'V'}>
       <defs>
         <clipPath id="frame">
           <rect width="220" height="264" rx="10" />

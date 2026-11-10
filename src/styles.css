@@ -169,7 +169,7 @@ kbd svg { width: 15px; height: 15px; }
   background: radial-gradient(ellipse 75% 70% at 50% 38%, rgba(128, 32, 44, 0.6), rgba(22, 9, 14, 0.95) 78%);
 }
 .body-img {
-  display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; transform-origin: 50% 30%;
+  display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 42%; transform-origin: 50% 40%;
   filter: grayscale(0.75) brightness(0.6) contrast(1.05);
   transition: filter 220ms var(--ease), transform 600ms var(--ease);
 }
@@ -202,7 +202,8 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
 .body-card[aria-pressed='true'] .body-img { filter: none; }
 .body-card[aria-pressed='true'] .body-tag b { color: var(--cream); }
 .body-card[aria-pressed='true'] .body-fx { opacity: 0.35; }
-.left-actions { display: grid; gap: 8px; margin-top: 8px; width: 170px; }
+.left-actions { display: grid; gap: 8px; margin-top: 8px; width: 180px; }
+.left-actions .gbtn { padding: 0 12px; gap: 8px; }
 
 /* Кнопка в стиле игры: плашка со срезанными углами, клавиша слева */
 .gbtn {
@@ -243,6 +244,7 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
 .info-head small { font-size: 15px; color: var(--ink-3); }
 .info p { margin: 6px 0 0; color: var(--cream-2); font-size: 14px; line-height: 1.35; }
 .info .info-prov { color: var(--cyan); }
+.info .info-not3d { color: var(--ink-3); font-size: 13px; }
 /* Отметка «выставлено в игре» выбранной строки и общий счёт — вместо квадратов в каждой строке */
 .info-done {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -295,9 +297,14 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
 /* ---------- правая колонка: строки редактора ---------- */
 .cc-list { grid-area: list; position: relative; z-index: 2; display: flex; flex-direction: column; min-height: 0; padding: 0 var(--list-pad) 104px 0; }
 .cc-list h2 { text-align: right; margin: -40px 16px 14px 0; }
+/* Прокрученная строка уходит под заголовок в затухание, а не обрезается по середине надписи;
+   отступ сверху равен затуханию, поэтому в начале списка первая строка видна целиком */
 .rows {
-  list-style: none; margin: 0; padding: 0 14px 0 0; flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  --rows-fade: 22px;
+  list-style: none; margin: calc(-1 * var(--rows-fade)) 0 0; padding: var(--rows-fade) 14px 0 0; flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain;
+  scrollbar-gutter: stable; scroll-padding-top: var(--rows-fade);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--rows-fade));
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--rows-fade));
 }
 .rows::-webkit-scrollbar { width: 4px; }
 .rows::-webkit-scrollbar-thumb { background: var(--red); }
@@ -363,12 +370,15 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
 .cc-foot span { display: inline-flex; align-items: center; gap: 8px; text-shadow: 0 0 6px rgba(10, 6, 10, 0.95), 0 1px 2px #000; }
 /* В скане стрелки и сетка цветов не работают, а строка подсказок наезжала на панель */
 .cc[data-mode='scan'] .cc-foot { display: none; }
+/* Под сканом V не видна: на крупном плане её плечо выглядывало из-под панели слева внизу */
+.cc[data-mode='scan'] .cc-stage > .head { visibility: hidden; }
 
 /* ---------- скан фото поверх головы ---------- */
 .scan-wrap {
   position: absolute; z-index: 5; overflow: auto; padding: 22px 26px 30px;
   top: 104px; bottom: 16px; left: calc(var(--left-w) + 8px); right: calc(var(--list-w) + var(--list-pad) + 12px);
-  background: rgba(16, 6, 10, 0.95); border: 1px solid var(--red-line);
+  /* opaque: the live 3D V behind the scan would show through and fight the text */
+  background: rgb(16, 6, 10); border: 1px solid var(--red-line);
 }
 .scan-wrap[hidden] { display: none; }
 .scan-close { position: sticky; float: right; top: 0; z-index: 1; width: 44px; height: 44px; margin: -10px -14px 0 8px; display: grid; place-items: center; border: 0; background: transparent; color: var(--red-text); }
@@ -401,6 +411,9 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
 .input:focus, .select:focus { border-color: var(--cyan); outline: none; box-shadow: 0 0 0 3px rgba(94, 242, 255, 0.16); }
 .input::placeholder { color: #b9827b; }
 .textarea { min-height: 120px; resize: vertical; font: 13px/1.4 ui-monospace, Consolas, monospace; }
+.textarea::placeholder { color: var(--ink-3); opacity: 1; }
+.scan-hints { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; color: var(--cream-2); font-size: 13px; }
+.scan-hints li::marker { color: var(--red-text); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .muted { color: var(--ink-3); font-size: 13px; }
 .status { display: flex; align-items: center; gap: 10px; color: var(--cream-2); }
@@ -433,6 +446,7 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
 .conf i { display: block; border-radius: 50%; background: var(--cyan); }
 .result-list .src { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
 .result-list .why { display: block; color: var(--ink-3); font-size: 12.5px; }
+.result-list .not3d { margin-left: 6px; font-size: 11px; letter-spacing: 0.04em; color: var(--ink-3); border: 1px solid currentColor; padding: 0 4px; }
 
 /* ---------- уведомление ---------- */
 /* Под заголовком, чтобы не закрывать описание варианта и подсказки внизу */
@@ -465,6 +479,7 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
   .info { width: min(320px, calc(100% - 80px)); left: 30px; }
   .cc-foot { font-size: 15px; gap: 18px; bottom: 26px; }
   .foot-g { display: none !important; }
+  .gbtn.shuffle svg { display: none; }
   .row-label { font-size: 19px; }
 }
 /* Невысокий экран (ноутбук 720–820 px): плитки ниже, колонка без прокрутки */
@@ -518,7 +533,7 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
   .gbtn { justify-content: center; }
   .cc-list { order: 3; padding: 18px 16px 24px; }
   .cc-list h2 { text-align: left; margin: 0 0 12px; font-size: 20px; }
-  .rows { overflow: visible; padding-right: 0; }
+  .rows { overflow: visible; padding: 0; margin: 0; -webkit-mask-image: none; mask-image: none; }
   /* Строка в одну линию: ◁ [плашка] [сетка] ▷ — список вдвое короче, клетки остаются 48px */
   .crow { grid-template-columns: 48px minmax(0, 1fr) 48px; column-gap: 3px; row-gap: 0; margin-bottom: 6px; }
   .crow:has(.ctrl-grid) { grid-template-columns: 48px minmax(0, 1fr) 48px 48px; }
@@ -556,6 +571,192 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
   .row-ctrl button, .row-ctrl .ctrl-gap { height: 44px; }
   .btn, .seg button, .tabs button { min-height: 44px; }
   .toast-undo { min-height: 44px; padding: 0 16px; }
+}
+
+/* ---------- образцы цвета: миниатюра игры из набора или CSS-приближение ---------- */
+.swatch { position: relative; display: block; overflow: hidden; background-repeat: no-repeat; }
+.swatch > img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; transition: opacity 120ms var(--ease); }
+/* Ячейка сетки повторяет срез угла миниатюр редактора игры */
+.cell .sw { position: absolute; inset: 3px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%); }
+.num-sw { width: 22px; height: 22px; flex: none; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%); }
+
+/* ---------- шапка: 3D, ключ OpenRouter, язык ---------- */
+.cc-util {
+  position: absolute; top: 3px; right: calc(var(--list-pad) + 14px); z-index: 6;
+  display: flex; align-items: center; gap: 8px;
+}
+.util-btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px;
+  border: 1px solid var(--red-line); background: rgba(18, 8, 12, 0.72); color: var(--red-text);
+  font-size: 13px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+  transition: color 160ms var(--ease), border-color 160ms var(--ease), background 160ms var(--ease);
+}
+.util-btn svg { width: 16px; height: 16px; flex: none; }
+.util-btn b { font-weight: 500; color: var(--cream-2); }
+.util-btn:hover { border-color: var(--red); color: var(--cream); background: var(--red-fill-hi); }
+.util-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1.5px currentColor; }
+.util-btn[data-state='ready'] .util-dot { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); color: var(--cyan); }
+.util-btn[data-state='set'] .util-dot { background: var(--cyan-dim); box-shadow: none; }
+.util-btn[data-state='error'] .util-dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+.util-btn[data-state='connecting'] .util-dot { animation: blink 0.9s steps(2) infinite; }
+/* Без набора ассетов кнопка 3D — бирюзовое приглашение, как «Скан фото» */
+.cc-util .util-btn:first-child[data-state='none'] { border-color: var(--cyan-dim); color: var(--cyan); background: rgba(14, 44, 52, 0.7); }
+.cc-util .util-btn:first-child[data-state='none'] b { color: var(--cyan); }
+.cc-util .util-btn:first-child[data-state='none']:hover { border-color: var(--cyan); background: rgba(20, 70, 80, 0.9); }
+@keyframes blink { 50% { opacity: 0.2; } }
+.util-lang { display: inline-flex; height: 32px; border: 1px solid var(--red-line); background: rgba(18, 8, 12, 0.72); }
+.util-lang button {
+  min-width: 38px; padding: 0 8px; border: 0; background: transparent; color: var(--ink-3);
+  font-size: 13px; font-weight: 500; letter-spacing: 0.08em;
+}
+.util-lang button + button { border-left: 1px solid var(--red-line); }
+.util-lang button:hover { color: var(--cream); }
+.util-lang button[aria-pressed='true'] { background: var(--red-fill-hi); color: var(--cream); box-shadow: inset 0 -2px 0 var(--red-hi); }
+
+/* ---------- сцена без набора ассетов: портрет V и приглашение ---------- */
+.hero {
+  position: absolute; z-index: 1; top: 104px; bottom: 168px;
+  left: calc(var(--left-w) + 24px); right: calc(var(--list-w) + var(--list-pad) + 24px);
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+}
+.hero-fig { position: relative; flex: 1 1 auto; min-height: 120px; width: 100%; margin: 0; display: flex; justify-content: center; align-items: flex-end; }
+/* Края кадра рендера растворяются: снизу и по бокам у плеч */
+.hero-img, .hero-svg, .hero-fx {
+  --hero-mask: radial-gradient(ellipse 58% 64% at 50% 38%, #000 66%, transparent 100%);
+  -webkit-mask-image: var(--hero-mask); mask-image: var(--hero-mask);
+}
+.hero-img, .hero-svg {
+  display: block; height: 100%; max-height: 720px; width: auto; max-width: 100%; object-fit: contain; object-position: 50% 100%;
+}
+.hero-fig::before {
+  content: ''; position: absolute; left: 50%; bottom: 8%; width: min(70%, 560px); aspect-ratio: 1; transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(140, 34, 46, 0.42), transparent 68%); pointer-events: none;
+}
+/* Скан-линии поверх иллюстрации: это картинка, а не живая сцена */
+.hero-fx {
+  position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(8, 2, 4, 0.16) 0 1px, transparent 1px 4px);
+}
+.hero-card {
+  position: relative; z-index: 1; width: min(560px, 100%); margin-top: -64px; padding: 16px 18px 18px;
+  display: grid; gap: 10px; background: rgba(16, 6, 10, 0.9); border: 1px solid var(--red-line); backdrop-filter: blur(6px);
+  animation: hero-in 420ms var(--ease) 250ms both;
+}
+@keyframes hero-in { from { opacity: 0; transform: translateY(6px); } }
+.hero-card h2 { margin: 0; font-size: 20px; font-weight: 500; line-height: 1.1; letter-spacing: 0.04em; text-transform: uppercase; color: var(--cyan-soft); }
+.hero-lead { margin: 0; color: var(--cream-2); font-size: 14px; line-height: 1.4; }
+.hero-mobile, .hero-more { display: none; }
+.hero-card .status { margin: 0; }
+
+/* ---------- окна: набор ассетов, ключ OpenRouter ---------- */
+.modal {
+  padding: 0; border: 0; background: transparent; color: inherit;
+  width: 100%; height: 100%; max-width: none; max-height: none; inset: 0;
+  display: grid; place-items: center;
+}
+.modal:not([open]) { display: none; }
+.modal::backdrop { background: rgba(5, 2, 4, 0.74); backdrop-filter: blur(3px); }
+.modal-panel {
+  width: min(620px, calc(100% - 32px)); max-height: calc(100% - 48px); overflow: auto; overscroll-behavior: contain;
+  background: rgba(18, 8, 12, 0.98); border: 1px solid var(--red-line-hi); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: modal-in 180ms var(--ease);
+}
+@keyframes modal-in { from { opacity: 0; transform: translateY(8px); } }
+.modal-head {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 6px 4px 6px 20px; border-bottom: 1px solid var(--red-line); background: rgb(18, 8, 12);
+}
+.modal-head h2 { margin: 0; font-size: 20px; font-weight: 500; line-height: 1.1; letter-spacing: 0.04em; text-transform: uppercase; color: var(--cyan-soft); }
+.modal-x { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border: 0; background: transparent; color: var(--red-text); }
+.modal-x:hover { color: var(--cream); }
+.modal-x svg { width: 20px; height: 20px; }
+.modal-body { display: grid; gap: 14px; padding: 16px 20px 20px; }
+.modal-foot { display: flex; justify-content: flex-end; }
+
+.keypanel, .packconnect { display: grid; gap: 14px; }
+.keypanel .field { margin: 0; }
+.kp-lead { margin: 0; color: var(--cream-2); font-size: 14px; line-height: 1.45; }
+.kp-how { display: grid; gap: 10px; justify-items: start; padding: 12px 14px; border: 1px solid var(--rail-2); background: rgba(40, 10, 17, 0.5); }
+.kp-how h3 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; color: var(--red-text); }
+.kp-key { display: flex; gap: 8px; }
+.kp-key .input { flex: 1; min-width: 0; letter-spacing: 0.02em; }
+.kp-get { margin: 0; }
+.kp-remember { display: flex; align-items: center; gap: 8px; color: var(--cyan-grey); font-size: 13px; cursor: pointer; min-height: 32px; }
+.kp-remember input { width: 16px; height: 16px; margin: 0; accent-color: var(--cyan); }
+.kp-privacy { margin: 0; padding: 10px 12px; border: 1px dashed var(--cyan-dim); color: var(--cyan-grey); font-size: 13px; line-height: 1.45; }
+p.status { margin: 0; font-size: 14px; line-height: 1.4; }
+.status.ok { color: var(--cyan); }
+.spin {
+  display: inline-block; width: 12px; height: 12px; flex: none; border-radius: 50%;
+  border: 2px solid var(--cyan-dim); border-top-color: var(--cyan); animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+a.btn { text-decoration: none; }
+/* Команда для терминала — моноширинным, чтобы её можно было скопировать без ошибок */
+code {
+  padding: 1px 5px; border: 1px solid var(--rail-2); background: rgba(8, 2, 4, 0.8); color: var(--cream);
+  font: 12.5px/1.5 ui-monospace, Consolas, monospace; overflow-wrap: anywhere;
+}
+
+/* ---------- скан фото: раскладка без встроенных стилей ---------- */
+.scan-title { margin: 0; font: 400 30px/1.05 var(--font); font-stretch: 92%; }
+.scan-lead { margin: 6px 0 0; max-width: 70ch; }
+.scan-col { display: grid; gap: 14px; min-width: 0; align-content: start; }
+.measures { gap: 14px; }
+.measure { display: inline-flex; align-items: center; gap: 6px; }
+.measure i { display: inline-block; width: 16px; height: 16px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
+.panel > * + * { margin-top: 10px; }
+.panel [role='tabpanel'] { display: grid; gap: 12px; }
+.panel [role='tabpanel'] .field { margin: 0; }
+.panel [role='tabpanel'] > p { margin: 0; }
+.scan-model { justify-content: space-between; }
+.scan-cancel { justify-self: start; }
+.result-list .num { display: inline-flex; align-items: center; gap: 8px; font: 500 22px/1 var(--font); font-stretch: 92%; }
+.scan-loading {
+  display: grid; gap: 10px; justify-items: center; padding: 80px 0;
+  font-size: 14px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cyan);
+}
+.scan-loading i { display: block; height: 3px; width: 160px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); animation: scanbar 1.2s linear infinite; }
+
+/* ---------- ошибка отрисовки ---------- */
+.crash { min-height: 100%; display: grid; place-content: center; justify-items: start; gap: 12px; padding: 24px; max-width: 560px; margin: 0 auto; }
+.crash h1 { margin: 0; font-size: 26px; font-weight: 400; letter-spacing: 0.03em; text-transform: uppercase; color: var(--cyan-soft); }
+.crash p { margin: 0; color: var(--cream-2); }
+
+/* ---------- адаптив новых элементов ---------- */
+/* Подписи в шапке — только на широком экране: иначе они наезжают на заголовок экрана */
+@media (max-width: 1760px) {
+  .util-text { display: none; }
+  .util-btn { padding: 0 9px; }
+}
+@media (max-height: 840px) and (min-width: 901px) {
+  .hero { top: 92px; bottom: 150px; }
+  .hero .steps, .hero-lead { display: none; }
+  .hero-card { margin-top: -40px; }
+}
+@media (max-width: 900px) {
+  .cc-util { order: -1; position: relative; top: auto; right: auto; justify-content: flex-end; padding: 10px 16px 0; }
+  .cc-frame::before { top: 52px; }
+  /* Телефон: портрет на всю сцену, приглашение — тонкой полосой сверху, лицо не закрыто */
+  .hero { inset: 0 0 60px; justify-content: flex-start; }
+  .hero-fig { position: absolute; inset: 0; }
+  .hero-img, .hero-svg { max-height: none; }
+  .hero-card {
+    position: absolute; left: 16px; right: 16px; top: 8px; width: auto; margin: 0;
+    display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px;
+  }
+  .hero-card h2, .hero-lead, .hero-full { display: none; }
+  .hero-mobile { display: block; flex: 1; min-width: 0; margin: 0; font-size: 12.5px; line-height: 1.3; color: var(--cream-2); }
+  .hero-card .status { flex: 1; font-size: 12.5px; }
+  .hero-more { display: inline-flex; flex: none; min-height: 40px; padding: 0 10px; font-size: 13px; }
+  .modal-panel { width: calc(100% - 16px); max-height: calc(100% - 16px); }
+  .modal-body { padding: 14px 14px 18px; }
+  .kp-key { flex-wrap: wrap; }
+  .scan-title { font-size: 24px; }
+}
+@media (pointer: coarse) {
+  .util-btn, .util-lang { height: 44px; }
+  .util-lang button { min-width: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

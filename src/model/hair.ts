@@ -30,6 +30,26 @@ export function hairDescription(gender: Gender, o: Option): Loc {
   return TAG[o.tags[0]] ?? { ru: 'причёска', en: 'hairstyle' };
 }
 
+/**
+ * Описания всех вариантов списка, уникальные в пределах пола. Несколько строк редактора игры
+ * используют один и тот же меш (например, хвост 27/28/36): у повторов указываем, с каким
+ * номером они совпадают, чтобы модель не выбирала между одинаковыми подписями вслепую.
+ */
+export function hairDescriptions(gender: Gender, opts: Option[]): Loc[] {
+  const seen = new Map<string, number[]>();
+  return opts.map((o, k) => {
+    const d = hairDescription(gender, o);
+    const same = seen.get(d.en);
+    if (!same) {
+      seen.set(d.en, [k + 1]);
+      return d;
+    }
+    const list = same.join(', ');
+    same.push(k + 1);
+    return { ru: `${d.ru} (тот же меш, что у ${list})`, en: `${d.en} (same mesh as ${list})` };
+  });
+}
+
 export function hairLabel(o: Option, gender: Gender = 'male'): string {
   return hairDescription(gender, o).ru;
 }

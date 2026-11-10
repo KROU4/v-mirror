@@ -75,7 +75,8 @@ const GEO_SIGNALS: Record<MorphSlot, Signal[]> = {
   ],
   mouth: [
     S('width', (g) => g.all?.out, ['широкий рот', 'wide mouth'], ['узкий рот', 'narrow mouth']),
-    S('full', (g) => g.all?.fwd, ['полные выступающие губы', 'full lips'], ['тонкие губы', 'thin lips']),
+    // Выступ губ вперёд в 3D: спереди он почти не виден, полноту губ задают фронтальные признаки ниже
+    S('proj', (g) => g.all?.fwd, ['губы выступают вперёд', 'protruding lips'], ['губы втянуты', 'receding lips']),
     S('height', (g) => g.center?.dHeight, ['высокие губы', 'tall lips'], ['плоские губы', 'flat lips']),
     S('corners', (g) => g.side?.up, ['уголки рта приподняты', 'upturned corners'], ['уголки рта опущены', 'downturned corners']),
   ],
@@ -95,6 +96,8 @@ const FEATURE_TEXT: Partial<Record<FeatureName, { pos: Loc; neg: Loc }>> = {
   eyeTilt: { pos: { ru: 'миндалевидные, с подъёмом', en: 'upswept, almond' }, neg: { ru: 'опущенные внешние уголки', en: 'downturned' } },
   eyeSpacing: { pos: { ru: 'широко посажены', en: 'wide-set' }, neg: { ru: 'близко посажены', en: 'close-set' } },
 };
+
+const LIPS_TEXT = { pos: { ru: 'полные губы', en: 'full lips' }, neg: { ru: 'тонкие губы', en: 'thin lips' } };
 
 interface Stats {
   mean: number;
@@ -156,6 +159,11 @@ export function morphInfo(gender: Gender, slot: MorphSlot): MorphSlotInfo {
       const zz = geoZ[s.key];
       if (Math.abs(zz) >= 0.8) parts.push({ w: Math.abs(zz), t: zz > 0 ? s.pos : s.neg });
     }
+    if (slot === 'mouth') {
+      // «Полные/тонкие» — по видимой высоте губ спереди, как их видят пользователь и модель
+      const lips = (z.upperLip ?? 0) + (z.lowerLip ?? 0);
+      if (Math.abs(lips) >= 1.6) parts.push({ w: Math.abs(lips) / 1.4, t: lips > 0 ? LIPS_TEXT.pos : LIPS_TEXT.neg });
+    }
     if (slot === 'eyes') {
       for (const [f, tx] of Object.entries(FEATURE_TEXT) as [FeatureName, { pos: Loc; neg: Loc }][]) {
         const zz = z[f] ?? 0;
@@ -208,7 +216,7 @@ export function shapeParams(gender: Gender, sel: Partial<Record<MorphSlot, numbe
     noseWidth: clamp1(n?.geoZ.width ?? 0),
     noseLength: clamp1(-(n?.geoZ.tip ?? 0)),
     mouthWidth: clamp1(m?.geoZ.width ?? 0),
-    lipFull: clamp1(m?.geoZ.full ?? 0),
+    lipFull: clamp1(((m?.z.upperLip ?? 0) + (m?.z.lowerLip ?? 0)) / 2),
     jawWidth: clamp1(j?.geoZ.width ?? 0),
     chinLen: clamp1(j?.geoZ.chinLen ?? 0),
     earOut: clamp1(r?.geoZ.protrude ?? 0),

@@ -43,6 +43,21 @@ describe('lookOf', () => {
   });
 });
 
+describe('lookOf: борода', () => {
+  it('без бороды beardApp = null, со стилем — app части бороды и цвет', () => {
+    const s0 = defaultState('male');
+    const beard = slotValue(s0, 'beard')!;
+    expect(lookOf(setSlot(s0, 'beard', beard.variant.options[0].i)).beardApp).toBeNull();
+    const s1 = setSlot(s0, 'beard', beard.variant.options[3].i);
+    const look = lookOf(s1);
+    expect(look.beardApp).toMatch(/^hb_000_pma__/);
+    expect(look.beardColour).toMatch(/^\d+_/);
+  });
+  it('у женского тела бороды нет', () => {
+    expect(lookOf(defaultState('female')).beardApp).toBeNull();
+  });
+});
+
 describe('morphTargetMatches', () => {
   it('точное имя и имя с суффиксом', () => {
     expect(morphTargetMatches('h011', 'h011')).toBe(true);

@@ -8,7 +8,6 @@ import type {
   BodyTexSet,
   BrowColour,
   BrowStyle,
-  DecalMat,
   EyeEntry,
   HairManifest,
   HairMaterial,
@@ -17,6 +16,7 @@ import type {
   SkinGender,
   TeethEntry,
 } from './assets';
+import type { IntimateDecalMat, IntimateSkinMat } from './intimate';
 
 type Shader = THREE.WebGLProgramParametersWithUniforms;
 
@@ -54,7 +54,7 @@ const SKIN_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_frag
   .replace(
     'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
     `#ifdef SKIN_SSS
-	reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * mix( 1.0, 0.2, lightBehind( directLight.direction.z ) );
+	reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * mix( 1.0, 0.2, lightBehind( directLight.direction.z ) ) * gCrease;
 #else
 	reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;
 #endif`,
@@ -85,24 +85,35 @@ const SKIN_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_frag
 	// диффузный свет — по смягчённой нормали (свет под кожей размывает рельеф карты)
 	float softNL = dot( gSoftN, directLight.direction );
 	float wrapNL = saturate( ( softNL + 0.4 ) / 1.4 );
-	vec3 sssIrr = mix( vec3( saturate( softNL ) ), vec3( wrapNL ), uScatter ) * lightCol;
+	vec3 sssIrr = mix( vec3( saturate( softNL ) ), vec3( wrapNL ), gScatter ) * lightCol;
 	reflectedLight.directDiffuse += sssIrr * diffuseBRDF * ( 1.0 - F );
 #else
 	reflectedLight.directDiffuse += irradiance * diffuseBRDF * ( 1.0 - F );
 #endif`,
   );
-if (!SKIN_LIGHTS.includes('sssIrr') || !SKIN_LIGHTS.includes('mouthK *= uMouthLight') || !SKIN_LIGHTS.includes('mix( 1.0, 0.2, lightBehind')) console.warn('avatar: шейдер кожи не пропатчен (изменился three.js)');
+if (!SKIN_LIGHTS.includes('sssIrr') || !SKIN_LIGHTS.includes('mouthK *= uMouthLight') || !SKIN_LIGHTS.includes('* gCrease;')) console.warn('avatar: шейдер кожи не пропатчен (изменился three.js)');
 
 /**
  * Блик прядей: от ламп из-за спины (контровые, холодный циан-белый) — слабый и в цвет
  * пряди. Белый скользящий блик GGX на тёмно-каштановых прядях читается серебристой сединой.
  */
-const HAIR_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_fragment).replace(
-  'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
-  `vec3 hairSpecK = mix( vec3( 1.0 ), 0.2 * gHairTint, lightBehind( directLight.direction.z ) );
+/** Доля цвета ламп в свете на волосах (остальное — их яркость без оттенка). */
+export const HAIR_LIGHT_HUE = 0.35;
+const HAIR_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_fragment)
+  .replace(
+    'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
+    `vec3 hairSpecK = mix( vec3( 1.0 ), 0.2 * gHairTint, lightBehind( directLight.direction.z ) );
 	reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * hairSpecK;`,
-);
-if (!HAIR_LIGHTS.includes('hairSpecK')) console.warn('avatar: шейдер волос не пропатчен (изменился three.js)');
+  )
+  .replace(
+    'vec3 irradiance = dotNL * directLight.color;',
+    // Голубые заполняющие (Fill_Left, Fill_Upper) и циан контрового Rim_Right сдвигали
+    // каштановые пряди в оливковый и бирюзовый (тон 28–31° против 21° у образца цвета);
+    // кожу от этого бережёт её тональная компрессия с сохранением оттенка. Волосам свет
+    // ламп доходит наполовину обесцвеченным: яркость та же, оттенок остаётся за прядью
+    `vec3 irradiance = dotNL * mix( vec3( dot( directLight.color, vec3( 0.2126, 0.7152, 0.0722 ) ) ), directLight.color, ${HAIR_LIGHT_HUE.toFixed(2)} );`,
+  );
+if (!HAIR_LIGHTS.includes('hairSpecK') || !HAIR_LIGHTS.includes('vec3( 0.2126, 0.7152, 0.0722 ) ) ), directLight.color')) console.warn('avatar: шейдер волос не пропатчен (изменился three.js)');
 
 /**
  * Скальп-декаль (выбритые виски, линия роста волос): как кожа — контровые лампы из-за спины
@@ -144,29 +155,23 @@ float stubbleDots( vec2 p, float r ) {
 	return mix( d, min( 1.0, 3.14159 * r * r ), smoothstep( 0.35, 1.0, w ) );
 }`;
 
-/**
- * Ткань белья: в игре бельё матовое, а ORM даёт ему шероховатость латекса — на чашках
- * крупные белые пятна блика. Контровые лампы (из-за спины V) на ткани — слабая кайма,
- * а не неоновая полоса по краю чашки.
- */
-const CLOTH_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_fragment)
-  .replace(
-    'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
-    'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * mix( 1.0, 0.15, lightBehind( directLight.direction.z ) );',
-  )
-  .replace('vec3 irradiance = dotNL * directLight.color;', 'vec3 irradiance = dotNL * directLight.color * mix( 1.0, 0.25, lightBehind( directLight.direction.z ) );');
-if (!CLOTH_LIGHTS.includes('mix( 1.0, 0.25, lightBehind')) console.warn('avatar: шейдер ткани не пропатчен (изменился three.js)');
-const CLOTH_ROUGH_MIN = 0.75;
 
 /**
  * Брови: блик контровых ламп (холодный циан-белый, скользящий) на тонких волосках читается
  * серебристо-белым хвостом брови — как у кожи и волос, от ламп из-за спины он почти гаснет.
+ * В игре брови — декаль поверх кожи и освещены как кожа под ними: контровые лампы (циан и
+ * пурпур из-за спины) доходят до них только у силуэта (rimMask, как у кожи). Без маски брови на
+ * лбу, обращённом к камере, получали полный холодный контровой свет, который кожа под ними не
+ * получает, и читались серо-голубыми — светлее кожи на смуглых тонах.
  */
-const BROW_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_fragment).replace(
-  'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
-  'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * mix( 1.0, 0.1, lightBehind( directLight.direction.z ) );',
-);
-if (!BROW_LIGHTS.includes('mix( 1.0, 0.1, lightBehind')) console.warn('avatar: шейдер бровей не пропатчен (изменился three.js)');
+const BROW_LIGHTS = (RIM_MASK_GLSL + THREE.ShaderChunk.lights_physical_pars_fragment)
+  .replace(
+    'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;',
+    'reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation * mix( 1.0, 0.1, lightBehind( directLight.direction.z ) );',
+  )
+  .replace('vec3 irradiance = dotNL * directLight.color;', 'vec3 irradiance = dotNL * directLight.color * rimMask( directLight.direction.z, geometryNormal.z );');
+if (!BROW_LIGHTS.includes('mix( 1.0, 0.1, lightBehind') || !BROW_LIGHTS.includes('rimMask( directLight.direction.z, geometryNormal.z )'))
+  console.warn('avatar: шейдер бровей не пропатчен (изменился three.js)');
 
 /** Оттенок кожи skin.mt в линейном пространстве: multiply, при отрицательной шкале — overlay. */
 const TINT_GLSL = `
@@ -211,7 +216,9 @@ const TINT_GLSL = `
  * острым гребнем, и он давал ту же полоску послабее. В полосе |u − 0,5| ≈ u ± half,
  * v0…v1 доля детального рельефа гаснет на fade, основной карты — на mapFade.
  */
-export const NOSE_FOLD = { u: 0.028, half: 0.012, soft: 0.008, v0: 0.215, v1: 0.325, vSoft: 0.015, fade: 0.9, mapFade: 0.7 };
+// С mapFade 0,7 оставшаяся треть гребня всё ещё ловила Fill- и контровые лампы светлой
+// линией (без карты нормалей линии нет — проверено отключением карты): гасим полностью.
+export const NOSE_FOLD = { u: 0.028, half: 0.014, soft: 0.008, v0: 0.215, v1: 0.325, vSoft: 0.015, fade: 1, mapFade: 1 };
 
 /** Доля детального рельефа (1 — полный) в точке UV головы. Как блок SKIN_NOSE в DETAIL_GLSL. */
 export function noseFoldFade(u: number, v: number, f = NOSE_FOLD): number {
@@ -285,6 +292,25 @@ const HAIR_ALBEDO = new THREE.Vector3(0.8, 0.74, 0.7);
  */
 export const EYE_IRIS = { normal: 0.3, envMap: 0.35 };
 
+/**
+ * Блик в глазу. С лаком (clearcoat) каждая из 15 ламп редактора давала свою точку на
+ * роговице, а блик базового слоя на рельефе радужки — россыпь искр. В кадре игры у V одна
+ * чистая «искра» от ключевой лампы сверху слева. Здесь прямые блики ламп на глазу почти
+ * погашены (direct), а искра — одно пятно отражения в осях камеры: направление dir,
+ * угловой радиус от inner (полная яркость) до outer (край), сила strength.
+ */
+export const EYE_CATCHLIGHT = { dir: [-0.42, 0.5, 0.76] as const, innerDeg: 5, outerDeg: 8, strength: 0.9, direct: 0.12 };
+
+/** Яркость искры (0..1) для отражённого луча r (единичный, оси камеры). Как в шейдере глаза. */
+export function catchlight(r: readonly [number, number, number], c = EYE_CATCHLIGHT): number {
+  const l = Math.hypot(...c.dir);
+  const d = (r[0] * c.dir[0] + r[1] * c.dir[1] + r[2] * c.dir[2]) / l;
+  const lo = Math.cos((c.outerDeg * Math.PI) / 180);
+  const hi = Math.cos((c.innerDeg * Math.PI) / 180);
+  const t = Math.min(1, Math.max(0, (d - lo) / (hi - lo)));
+  return t * t * (3 - 2 * t);
+}
+
 /** Доля непрозрачности нижнего ряда ресниц. */
 const LOWER_LASH_ALPHA = 0.55;
 
@@ -328,6 +354,26 @@ interface SkinPatch {
 }
 
 /**
+ * Нос мужчины в полутени выходил красно-бурым, «обгоревшим»: «завёрнутый» свет кожи
+ * (SKIN_FALLOFF, больше всего красного) на стенках и крыльях носа ложится поверх и без того
+ * красноватого альбедо. Внутри эллипса носа доля neutral заворота становится серой (той же
+ * силы × gain): тень носа остаётся мягкой, но не краснее щёк.
+ */
+export const NOSE_SCATTER = { neutral: 0.65, gain: 0.9 };
+
+/**
+ * Блик в складках карты нормалей: при cos(нормаль карты, нормаль геометрии) ниже from он
+ * гаснет до floor, выше to — полный. Поры и мелкий рельеф (наклон до ~20°) не затронуты.
+ */
+export const SKIN_CREASE = { from: 0.8, to: 0.94, floor: 0.25 };
+
+/** Доля блика кожи в точке с данным cos между нормалью карты и геометрии (как в шейдере). */
+export function creaseSpecular(cosNormal: number, c = SKIN_CREASE): number {
+  const t = Math.min(1, Math.max(0, (cosNormal - c.from) / (c.to - c.from)));
+  return c.floor + (1 - c.floor) * t * t * (3 - 2 * t);
+}
+
+/**
  * Нос в UV головы (одинаково у обоих полов): эллипс от переносицы до крыльев. Шероховатость
  * карты на спинке и крыльях носа почти зеркальная, и от фронтальных ламп на стенках носа
  * блестел стеклянный «мокрый» блик; в кадре игры нос матовый, как щёки: внутри эллипса
@@ -339,6 +385,8 @@ const NOSE_GLSL = `
 	vec2 nq = ( vMapUv - vec2( 0.5, 0.285 ) ) / vec2( 0.085, 0.09 );
 	gNose = 1.0 - smoothstep( 0.6, 1.0, length( nq ) );
 	roughnessFactor = max( roughnessFactor, mix( uRoughMin, 0.8, gNose ) );
+	// тёплый «завёрнутый» свет на стенках и крыльях носа без примеси красного (NOSE_SCATTER)
+	gScatter = mix( uScatter, vec3( dot( uScatter, vec3( 0.3333 ) ) * ${NOSE_SCATTER.gain.toFixed(2)} ), ${NOSE_SCATTER.neutral.toFixed(2)} * gNose );
 }
 #endif`;
 
@@ -351,7 +399,7 @@ const NOSE_GLSL = `
  * а насыщенность — только если нос краснее щёк. У женского альбедо нос уже как щёки, и
  * поправка его почти не меняет. Щёки берутся с мелкого мипа карты в двух точках UV.
  */
-export const NOSE_EVEN = { amount: 1, maxLift: 1.35, chroma: 0.75 };
+export const NOSE_EVEN = { amount: 1, maxLift: 1.35, chroma: 0.9 };
 const NOSE_CHEEKS_UV: readonly [number, number][] = [
   [0.38, 0.32],
   [0.62, 0.32],
@@ -444,11 +492,13 @@ float gMouthDepth = 0.0;
 float gEarMask = 0.0;
 float gNose = 0.0;
 uniform float uSoftN; uniform vec3 uNoseEven;
-vec3 gSoftN = vec3( 0.0, 0.0, 1.0 );`,
+vec3 gSoftN = vec3( 0.0, 0.0, 1.0 );
+vec3 gScatter = vec3( 0.0 );
+float gCrease = 1.0;`,
       )
       .replace('#include <lights_physical_pars_fragment>', SKIN_LIGHTS)
       // губы и веки в карте почти зеркальные — в кадре игры они лишь влажно блестят
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = max( roughnessFactor, uRoughMin );' + NOSE_GLSL)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = max( roughnessFactor, uRoughMin );\ngScatter = uScatter;' + NOSE_GLSL)
       .replace(
         '#include <lights_physical_fragment>',
         `#include <lights_physical_fragment>
@@ -462,7 +512,12 @@ material.specularF90 *= 1.0 - 0.7 * gNose;
       .replace('#include <map_fragment>', '#include <map_fragment>\n' + NOSE_ALBEDO_GLSL + TINT_GLSL)
       .replace(
         '#include <normal_fragment_maps>',
-        THREE.ShaderChunk.normal_fragment_maps.replace('mapN.xy *= normalScale;', DETAIL_GLSL) + '\ngSoftN = normalize( mix( normal, nonPerturbedNormal, uSoftN ) );',
+        THREE.ShaderChunk.normal_fragment_maps.replace('mapN.xy *= normalScale;', DETAIL_GLSL) +
+          `
+gSoftN = normalize( mix( normal, nonPerturbedNormal, uSoftN ) );
+// Глубокие складки карты нормалей (ямка над грудиной, складка у крыла носа) круто наклонены
+// к геометрии и ловят скользящий блик ламп «стеклянным» штрихом — там блик гаснет
+gCrease = mix( ${SKIN_CREASE.floor.toFixed(2)}, 1.0, smoothstep( ${SKIN_CREASE.from.toFixed(2)}, ${SKIN_CREASE.to.toFixed(2)}, dot( normal, nonPerturbedNormal ) ) );`,
       )
       .replace('#include <tonemapping_fragment>', SKIN_TONEMAP_GLSL);
   };
@@ -590,22 +645,109 @@ const SKIN_TONEMAP_GLSL = `
 }
 #endif`;
 
+/**
+ * Uniform patch of a material's shader: kept on userData so texturesOf (and the memory trim
+ * that relies on it) sees the textures it samples. A texture missing there is freed while the
+ * material still draws with it, and its closed ImageBitmap uploads as an empty black texture.
+ */
+function keepUniforms(mat: THREE.Material, u: Record<string, { value: unknown }>) {
+  mat.userData.uniforms = u;
+}
+
 /** Фабрика материалов одного движка: всё кешируется по ключу, текстуры — через AssetStore. */
+/** Все текстуры материала: карты three и текстуры в uniform патчей шейдера (userData). */
+export function texturesOf(m: THREE.Material, out = new Set<THREE.Texture>()): Set<THREE.Texture> {
+  const visit = (v: unknown, depth: number) => {
+    if (!v || typeof v !== 'object' || depth > 3) return;
+    if ((v as THREE.Texture).isTexture) {
+      out.add(v as THREE.Texture);
+      return;
+    }
+    if (Array.isArray(v)) return;
+    for (const x of Object.values(v as Record<string, unknown>)) visit(x, depth + 1);
+  };
+  for (const v of Object.values(m)) if (v && typeof v === 'object' && (v as THREE.Texture).isTexture) out.add(v as THREE.Texture);
+  visit(m.userData, 0);
+  const u = (m as THREE.ShaderMaterial).uniforms;
+  if (u) visit(u, 0);
+  return out;
+}
+
+/**
+ * Брови: множитель кадра для тёмной брови не больше этого (кожа под бровью темнеет хотя бы
+ * до 35 %). Без предела на тонах 11–12 значок кожи темнее альбедо брови, и брови пропадали.
+ */
+export const BROW_DARK_MAX = 0.35;
+
 export class Materials {
   private cache = new Map<string, Promise<THREE.Material>>();
+  /** готовые материалы и когда их последний раз просили (для вытеснения) */
+  private ready = new Map<string, THREE.Material>();
+  private used = new Map<string, number>();
+  private tick = 0;
+  private env: THREE.Texture | null = null;
+  private envReady: Promise<void>;
+  /**
+   * env — окружение для бликов глаз, зубов и ногтей. Его сборка (PMREM) занимает ~0,8 с
+   * главного потока, поэтому движок отдаёт её промисом и строит в простое, пока грузятся
+   * файлы V; материалы ждут его перед созданием (envMap входит в программу шейдера).
+   */
   constructor(
     private store: AssetStore,
-    private env: THREE.Texture | null,
-  ) {}
+    env: THREE.Texture | null | Promise<THREE.Texture | null>,
+  ) {
+    this.envReady = Promise.resolve(env).then(
+      (t) => void (this.env = t),
+      () => void (this.env = null),
+    );
+  }
+
+  /** Сколько программ шейдеров нужно материалам в кеше (для проверки производительности). */
+  get size() {
+    return this.cache.size;
+  }
+
+  /** Сколько материалов ещё собирается (их текстуры чистке памяти трогать нельзя). */
+  get pending() {
+    return this.cache.size - this.ready.size;
+  }
 
   private once<T extends THREE.Material>(key: string, make: () => Promise<T>): Promise<T> {
+    this.used.set(key, ++this.tick);
     let p = this.cache.get(key);
     if (!p) {
-      p = make();
-      p.catch(() => this.cache.delete(key));
+      p = this.envReady.then(make);
+      const mine = p;
+      p.then(
+        (m) => {
+          if (this.cache.get(key) === mine) this.ready.set(key, m);
+        },
+        () => {
+          if (this.cache.get(key) === mine) this.cache.delete(key);
+        },
+      );
       this.cache.set(key, p);
     }
     return p as Promise<T>;
+  }
+
+  /**
+   * Освободить материалы, которых нет ни на одном живом меше и которые не входят в keep
+   * последних запрошенных. Возвращает текстуры оставшихся материалов: их AssetStore не трогает.
+   */
+  trim(live: Set<THREE.Material> = new Set(), keep = 32): Set<THREE.Texture> {
+    const recent = new Set([...this.used].sort((a, b) => b[1] - a[1]).slice(0, keep).map(([k]) => k));
+    for (const [key, m] of this.ready) {
+      if (live.has(m) || recent.has(key)) continue;
+      this.ready.delete(key);
+      this.cache.delete(key);
+      this.used.delete(key);
+      m.dispose();
+    }
+    const tex = new Set<THREE.Texture>();
+    for (const m of this.ready.values()) texturesOf(m, tex);
+    for (const m of live) texturesOf(m, tex);
+    return tex;
   }
 
   // ---------------------------------------------------------------- кожа
@@ -709,11 +851,34 @@ export class Materials {
         metalnessMap: e.eyeball.shader === 'multilayered_baked' ? orm : null,
         roughness: 1,
         metalness: e.eyeball.shader === 'multilayered_baked' ? 1 : 0,
-        clearcoat: 1,
-        clearcoatRoughness: 0.04,
         envMap: this.env,
         envMapIntensity: EYE_IRIS.envMap,
       });
+      const c = EYE_CATCHLIGHT;
+      const dir = new THREE.Vector3(...c.dir).normalize();
+      const u = {
+        uCatchDir: { value: dir },
+        uCatchCos: { value: new THREE.Vector2(Math.cos((c.outerDeg * Math.PI) / 180), Math.cos((c.innerDeg * Math.PI) / 180)) },
+        uCatch: { value: c.strength },
+        uDirectSpec: { value: c.direct },
+      };
+      mat.onBeforeCompile = (s: Shader) => {
+        Object.assign(s.uniforms, u);
+        s.fragmentShader = s.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform vec3 uCatchDir; uniform vec2 uCatchCos; uniform float uCatch; uniform float uDirectSpec;')
+          .replace(
+            '#include <lights_fragment_end>',
+            `#include <lights_fragment_end>
+{
+	// блики ламп на рельефе радужки — почти погашены; вместо них одна искра ключевой лампы
+	reflectedLight.directSpecular *= uDirectSpec;
+	vec3 rv = reflect( normalize( -vViewPosition ), normalize( nonPerturbedNormal ) );
+	float k = smoothstep( uCatchCos.x, uCatchCos.y, dot( rv, uCatchDir ) );
+	reflectedLight.directSpecular += vec3( uCatch * k );
+}`,
+          );
+      };
+      mat.customProgramCacheKey = () => 'eyeball_catch';
       return mat;
     });
   }
@@ -836,7 +1001,20 @@ export class Materials {
           .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLashLow = lashLow;');
         s.fragmentShader = s.fragmentShader
           .replace('#include <common>', '#include <common>\nuniform float uLowAlpha; uniform float uLowTip;\nvarying float vLashLow;')
-          .replace('#include <alphamap_fragment>', LASH_ALPHA);
+          .replace('#include <alphamap_fragment>', LASH_ALPHA)
+          // Свет на ресницах — только яркостью: тёмные волоски под голубыми Fill-лампами
+          // иначе отливают бирюзой (у мужчины ресницы выглядели зелёно-синими)
+          .replace(
+            '#include <lights_fragment_end>',
+            `#include <lights_fragment_end>
+{
+	vec3 W = vec3( 0.2126, 0.7152, 0.0722 );
+	float lit = dot( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse, W );
+	float base = max( dot( diffuseColor.rgb, W ), 1e-4 );
+	reflectedLight.directDiffuse = diffuseColor.rgb * ( lit / base );
+	reflectedLight.indirectDiffuse = vec3( 0.0 );
+}`,
+          );
       };
       if (import.meta.env.DEV && !THREE.ShaderLib.lambert.fragmentShader.includes('#include <alphamap_fragment>')) console.warn('avatar: шейдер ресниц не пропатчен');
       mat.customProgramCacheKey = () => 'lashes:' + (single ? 1 : 0);
@@ -844,23 +1022,33 @@ export class Materials {
     });
   }
 
-  brows(style: BrowStyle, colour: BrowColour, gradient: string): Promise<THREE.MeshStandardMaterial> {
-    return this.once(`brow:${style.diffuseRGBA}:${gradient}:${colour.SecondaryDiffuseColor}`, async () => {
-      const [diff, sec, normal, grad] = await Promise.all([
+  /**
+   * Брови — декаль поверх кожи, как в игре: там декаль заменяет альбедо кожи и освещается
+   * светом кожи (с её подповерхностным рассеянием и тоном). Здесь это умножение кадра на
+   * отношение «цвет брови / альбедо кожи» (не больше 1) с долей альфы: тёмная бровь всегда
+   * темнее кожи под ней, оттенок и свет — от кожи. Отдельно освещённые брови (свой блик, без
+   * рассеяния) читались серыми и на тонах 10–12 светлее кожи, а светлая подложка
+   * (SecondaryDiffuseColor) рисовала бледные штрихи у кончиков стиля 12.
+   * skinHex — значок тона кожи (средний цвет кожи лба в sRGB).
+   */
+  brows(style: BrowStyle, colour: BrowColour, gradient: string, skinHex = '#a8886b'): Promise<THREE.MeshBasicMaterial> {
+    return this.once(`brow:${style.diffuseRGBA}:${gradient}:${colour.SecondaryDiffuseColor}:${skinHex}`, async () => {
+      const [diff, sec, grad] = await Promise.all([
         this.store.texture(style.diffuseRGBA, 'data'),
         this.store.texture(style.secondaryAlpha, 'data'),
-        this.store.maybeTexture(style.normal, 'data'),
         this.store.texture(gradient, 'color', { lut: true }),
       ]);
-      const mat = new THREE.MeshStandardMaterial({
+      const mat = new THREE.MeshBasicMaterial({
         name: 'brows',
         map: diff,
-        normalMap: normal,
-        normalScale: new THREE.Vector2(0.4, 0.4),
         transparent: true,
         depthWrite: false,
-        roughness: 0.6,
-        metalness: 0,
+        toneMapped: false,
+        // кадр × множитель: кожа под бровью только темнеет
+        blending: THREE.CustomBlending,
+        blendEquation: THREE.AddEquation,
+        blendSrc: THREE.DstColorFactor,
+        blendDst: THREE.ZeroFactor,
         polygonOffset: true,
         polygonOffsetFactor: -1,
         polygonOffsetUnits: -4,
@@ -872,15 +1060,16 @@ export class Materials {
         uDiffAlpha: { value: colour.DiffuseAlpha },
         uSecInt: { value: colour.SecondaryDiffuseAlphaIntensity },
         uSecColor: { value: lin(colour.SecondaryDiffuseColor) },
+        uSkin: { value: lin(skinHex) },
       };
+      keepUniforms(mat, u);
       mat.onBeforeCompile = (s: Shader) => {
         Object.assign(s.uniforms, u);
         s.fragmentShader = s.fragmentShader
-          .replace('#include <lights_physical_pars_fragment>', BROW_LIGHTS)
           .replace(
             '#include <common>',
             `#include <common>
-uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform float uDiffAlpha; uniform float uSecInt; uniform vec3 uSecColor;`,
+uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform float uDiffAlpha; uniform float uSecInt; uniform vec3 uSecColor; uniform vec3 uSkin;`,
           )
           .replace(
             '#include <map_fragment>',
@@ -889,13 +1078,28 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
 	float aS = d.a * uDiffAlpha;
 	vec3 cS = texture2D( uGrad, vec2( d.r, 0.5 ) ).rgb * uGradInt;
 	float aB = texture2D( uSec, vMapUv ).g * uSecInt;
-	float a = aS + aB * ( 1.0 - aS );
+	float a = clamp( aS + aB * ( 1.0 - aS ), 0.0, 1.0 );
 	vec3 c = ( cS * aS + uSecColor * aB * ( 1.0 - aS ) ) / max( a, 1e-4 );
-	diffuseColor = vec4( c, a * opacity );
+	// Светлота — отношение яркостей брови и кожи; оттенок брови — только в меру её
+	// насыщенности: значок кожи теплее и насыщеннее реального альбедо, и полное отношение
+	// цветов уводило натуральные коричневые брови в серо-голубой
+	const vec3 LUM = vec3( 0.2126, 0.7152, 0.0722 );
+	float rel = dot( c, LUM ) / max( dot( uSkin, LUM ), 1e-4 );
+	float mx = max( c.r, max( c.g, c.b ) );
+	float sat = ( mx - min( c.r, min( c.g, c.b ) ) ) / max( mx, 1e-4 );
+	vec3 hueC = c / max( dot( c, LUM ), 1e-4 );
+	vec3 hueS = uSkin / max( dot( uSkin, LUM ), 1e-4 );
+	vec3 k = rel * mix( vec3( 1.0 ), hueC / hueS, smoothstep( 0.45, 0.85, sat ) );
+	// Тёмные волоски (каштан, чёрный, мерло) и на тёмной коже темнее её: пряди затеняют друг
+	// друга. На тонах 11–12 альбедо такой брови светлее кожи, и без предела бровь пропадала.
+	// Светлые брови (блонд, платина, пастель) предела не имеют
+	float darkHair = 1.0 - smoothstep( 0.05, 0.16, dot( c, LUM ) );
+	k = clamp( min( k, vec3( mix( 1.0, ${g4(BROW_DARK_MAX)}, darkHair ) ) ), 0.0, 1.0 );
+	diffuseColor = vec4( mix( vec3( 1.0 ), k, a * opacity ), 1.0 );
 }`,
           );
       };
-      mat.customProgramCacheKey = () => 'brows';
+      mat.customProgramCacheKey = () => 'brows_mul';
       return mat;
     });
   }
@@ -943,7 +1147,105 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
     });
   }
 
-  // ---------------------------------------------------------------- руки и бельё
+  // ---------------------------------------------------------------- нагота (body/intimate.json)
+  /**
+   * Кожа частей наготы (соски, «нет гениталий», пенис, вагина у мужского тела): как тело —
+   * альбедо уже под тон, ORM.G — шероховатость. Части лежат на коже тела вплотную, поэтому
+   * чуть сдвинуты к камере по глубине.
+   */
+  intimateSkin(name: string, m: IntimateSkinMat): Promise<THREE.MeshPhysicalMaterial> {
+    return this.once('intimate_skin:' + name, async () => {
+      const [map, normal, orm] = await Promise.all([
+        this.store.texture(m.albedo, 'color'),
+        this.store.maybeTexture(m.normal, 'data'),
+        this.store.maybeTexture(m.orm, 'data'),
+      ]);
+      const mat = new THREE.MeshPhysicalMaterial({
+        name: 'intimate_skin',
+        map,
+        normalMap: normal,
+        normalScale: new THREE.Vector2(...SKIN_NORMAL_SCALE),
+        roughnessMap: orm,
+        roughness: SKIN.roughness,
+        metalness: 0,
+        specularIntensity: SKIN.specular,
+        envMap: this.env,
+        envMapIntensity: 0.12,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -2,
+      });
+      patchSkin(mat, { scatter: SKIN.scatter.clone(), roughMin: 0.6 }, 'body');
+      return mat;
+    });
+  }
+
+  /**
+   * Декаль наготы (тату, шрамы, лобковые волосы; mesh_decal.mt): цвет = DiffuseColor ×
+   * diffuse.rgb, прозрачность = diffuse.a × DiffuseAlpha, рельеф — карта нормалей с долей
+   * NormalAlpha. pubic — тёмный ореол текстуры волос (щетина) гасится по яркости
+   * (pubicHaloAlpha): с цветными волосами он читается серым пятном.
+   */
+  intimateDecal(name: string, m: IntimateDecalMat, pubic: boolean): Promise<THREE.MeshStandardMaterial> {
+    return this.once('intimate_decal:' + name, async () => {
+      const [map, normal, rough] = await Promise.all([
+        this.store.texture(m.diffuse, 'color'),
+        this.store.maybeTexture(m.normal, 'data'),
+        this.store.maybeTexture(m.roughness, 'data'),
+      ]);
+      const na = THREE.MathUtils.clamp(m.normalAlpha ?? 0, 0, 1);
+      const mat = new THREE.MeshStandardMaterial({
+        name: 'intimate_decal',
+        map,
+        color: lin(m.diffuseColor ?? '#ffffff'),
+        opacity: THREE.MathUtils.clamp(m.diffuseAlpha ?? 1, 0, 1),
+        transparent: true,
+        depthWrite: false,
+        normalMap: na > 0 ? normal : null,
+        normalScale: new THREE.Vector2(na, na),
+        // шрамы: маска шероховатости игры (RoughnessMetalnessAlpha) — рубец чуть глаже кожи
+        roughness: rough ? 0.55 : 0.75,
+        metalness: 0,
+        envMap: this.env,
+        envMapIntensity: 0.1,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -4,
+      });
+      if (pubic) {
+        mat.onBeforeCompile = (s: Shader) => {
+          s.fragmentShader = s.fragmentShader
+            .replace('#include <lights_physical_pars_fragment>', BROW_LIGHTS)
+            .replace(
+              '#include <map_fragment>',
+              `#include <map_fragment>
+#ifdef USE_MAP
+{
+	float lm = saturate( dot( sampledDiffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.05 );
+	diffuseColor.a *= lm * lm * ( 3.0 - 2.0 * lm );
+}
+#endif`,
+            );
+        };
+        mat.customProgramCacheKey = () => 'intimate_pubic';
+      }
+      return mat;
+    });
+  }
+
+  /** Освободить материал наготы (строка переключена, меш скрыт надолго). */
+  releaseIntimate(name: string) {
+    for (const key of ['intimate_skin:' + name, 'intimate_decal:' + name]) {
+      const p = this.cache.get(key);
+      if (!p) continue;
+      this.cache.delete(key);
+      this.ready.delete(key);
+      this.used.delete(key);
+      p.then((m) => m.dispose()).catch(() => {});
+    }
+  }
+
+  // ---------------------------------------------------------------- руки
   nails(n: NailMat): Promise<THREE.MeshPhysicalMaterial> {
     return this.once('nail:' + n.albedo, async () => {
       const [map, orm, normal] = await Promise.all([
@@ -967,56 +1269,23 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
     });
   }
 
-  standard(name: string, base: string, orm: string | undefined, normal: string | undefined, metal = true, cloth = false): Promise<THREE.MeshStandardMaterial> {
-    return this.once('std:' + base + (cloth ? ':cloth' : ''), async () => {
+  /** Металл импланта (персональный разъём на руке): ORM — шероховатость и металличность. */
+  standard(name: string, base: string, orm: string | undefined, normal: string | undefined): Promise<THREE.MeshStandardMaterial> {
+    return this.once('std:' + base, async () => {
       const [map, o, n] = await Promise.all([
         this.store.texture(base, 'color'),
         this.store.maybeTexture(orm, 'data'),
         this.store.maybeTexture(normal, 'data'),
       ]);
-      const mat = new THREE.MeshStandardMaterial({
+      return new THREE.MeshStandardMaterial({
         name,
         map,
         roughnessMap: o,
-        metalnessMap: metal ? o : null,
+        metalnessMap: o,
         normalMap: n,
         normalScale: new THREE.Vector2(...SKIN_NORMAL_SCALE),
         roughness: 1,
-        metalness: metal && o ? 1 : 0,
-        envMap: this.env,
-        // ткань почти не отражает окружение: с 0,3 бельё блестело, как латекс
-        envMapIntensity: cloth ? 0.12 : 0.3,
-      });
-      if (cloth) {
-        mat.onBeforeCompile = (sh: Shader) => {
-          sh.fragmentShader = sh.fragmentShader
-            .replace('#include <lights_physical_pars_fragment>', CLOTH_LIGHTS)
-            .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\nroughnessFactor = max( roughnessFactor, ${CLOTH_ROUGH_MIN.toFixed(2)} );`);
-        };
-        mat.customProgramCacheKey = () => 'cloth';
-      }
-      return mat;
-    });
-  }
-
-  /** Полоски швов/молнии белья (metal_base decal): цвет = текстура × baseColorScale. */
-  decal(d: DecalMat): Promise<THREE.MeshStandardMaterial> {
-    const sc = d.baseColorScaleLinear ?? [1, 1, 1];
-    return this.once(`decal:${d.baseColor}:${sc.join(',')}:${d.metalness}`, async () => {
-      const [map, normal] = await Promise.all([this.store.texture(d.baseColor, 'color', { repeat: true }), this.store.maybeTexture(d.normal, 'data', { repeat: true })]);
-      return new THREE.MeshStandardMaterial({
-        name: 'garment_decal',
-        map,
-        normalMap: normal,
-        color: new THREE.Color(sc[0], sc[1], sc[2]),
-        roughness: d.roughness ?? 0.5,
-        metalness: d.metalness ?? 0,
-        transparent: true,
-        alphaTest: 0.3,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -4,
+        metalness: o ? 1 : 0,
         envMap: this.env,
         envMapIntensity: 0.3,
       });
@@ -1059,6 +1328,7 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
         envMapIntensity: 0.04,
       });
       const u = { uRamp: { value: ramp }, uShadow: { value: m.shadowStrength ?? 0.5 }, uIdGain: { value: 1.0 }, uSpec: { value: 0.4 }, uAlbedo: { value: HAIR_ALBEDO } };
+      keepUniforms(mat, u);
       mat.onBeforeCompile = (s: Shader) => {
         Object.assign(s.uniforms, u);
         s.fragmentShader = s.fragmentShader
@@ -1123,6 +1393,7 @@ material.specularF90 = 0.5 * uSpec;`,
         uAlbedo: { value: HAIR_ALBEDO },
         uStubble: { value: new THREE.Vector3(CAP_STUBBLE.scale, CAP_STUBBLE.floor, CAP_STUBBLE.radius) },
       };
+      keepUniforms(mat, u);
       const hasDiff = !!diff;
       const hasSec = !!sec && !!mask;
       mat.onBeforeCompile = (s: Shader) => {
@@ -1159,6 +1430,30 @@ diffuseColor.a *= mix( uStubble.y, 1.0, stubbleDots( vMapUv * uStubble.x, uStubb
     });
   }
 
+  /**
+   * Тень щетины под бородой (mesh_decal игры): тёмный цвет DiffuseColor с альфой маски ×
+   * DiffuseAlpha. Матовая, без бликов: это тон кожи под волосками, а не блестящий слой.
+   */
+  beardShadow(hm: HairManifest, m: HairMaterial): Promise<THREE.MeshStandardMaterial> {
+    const mask = m.mask ? hm.textures[m.mask]?.file ?? null : null;
+    return this.once(`beardShadow:${mask}:${m.diffuseColor}:${m.diffuseAlpha}`, async () => {
+      const alpha = await this.store.texture(mask ?? '', 'data');
+      return new THREE.MeshStandardMaterial({
+        name: 'beard_shadow',
+        color: lin(m.diffuseColor ?? '#22150a'),
+        alphaMap: alpha,
+        opacity: m.diffuseAlpha ?? 1,
+        transparent: true,
+        depthWrite: false,
+        roughness: 1,
+        metalness: 0,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -4,
+      });
+    });
+  }
+
   accessory(m: HairMaterial): Promise<THREE.MeshStandardMaterial> {
     return this.once('acc:' + (m.fallbackColor ?? ''), async () =>
       new THREE.MeshStandardMaterial({
@@ -1175,5 +1470,7 @@ diffuseColor.a *= mix( uStubble.y, 1.0, stubbleDots( vMapUv * uStubble.x, uStubb
   dispose() {
     for (const p of this.cache.values()) p.then((m) => m.dispose()).catch(() => {});
     this.cache.clear();
+    this.ready.clear();
+    this.used.clear();
   }
 }

@@ -1,9 +1,9 @@
-// Загрузка выгрузки игры: манифесты, glb и текстуры по /game/<путь от tools/local>.
-// Все пути в манифестах заданы от tools/local, поэтому url = '/game/' + путь.
+// Загрузка набора ассетов игры (asset pack): манифесты, glb и текстуры. Все пути в
+// манифестах заданы от корня набора (tools/local в разработке); адрес файла даёт
+// src/assets/pack.ts — /game/<путь> в dev или blob: из подключённой папки.
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-
-export const gameUrl = (rel: string) => '/game/' + rel.replace(/^\/+/, '');
+import { fetchGameJson, gameAssetUrl } from '../../assets/pack';
 
 // ------------------------------------------------------------------ манифесты (данные, без логики)
 /* Поля описаны ровно настолько, насколько их читает движок; остальное — unknown. */
@@ -70,7 +70,9 @@ export interface FaceManifest {
 }
 
 export interface HairMaterial {
-  type: 'hairCards' | 'cap' | 'accessory';
+  type: 'hairCards' | 'cap' | 'accessory' | 'beardShadow';
+  /** карточки бороды (hairCards): свои параметры master-материала бороды */
+  beard?: boolean;
   cardSet?: string;
   profile?: string;
   roughnessScale?: number;
@@ -85,9 +87,17 @@ export interface HairMaterial {
   secondaryMaskUVScale?: number;
   diffuseColor?: string;
   diffuseAlpha?: number;
+  shadowMin?: number;
+  shadowRoughness?: number;
   fallbackColor?: string;
   roughness?: number;
   metalness?: number;
+}
+/** Часть сборки бороды: меш, его appearance и номера показанных чанков (chunkMask игры). */
+export interface BeardComponent {
+  mesh: string;
+  app: string;
+  chunks: number[];
 }
 export interface HairHint {
   meshes: string[];
@@ -102,10 +112,14 @@ export interface HairManifest {
     string,
     {
       glb: string;
-      submeshes: { glbMesh: string; doubleSided: boolean; kind: string }[];
+      submeshes: { glbMesh: string; doubleSided: boolean; kind: string; chunk?: number }[];
       appearances: Record<string, (string | null)[]>;
+      /** меш с морфами лица (борода): веса — как у головы */
+      morphs?: boolean;
     }
   >;
+  /** бороды: app части бороды → app цвета → компоненты (нет в наборах старее бород) */
+  beards?: { apps: Record<string, Record<string, BeardComponent[]>> };
   hints: Record<'female' | 'male', Record<string, HairHint>>;
   hintsPlain?: Record<'female' | 'male', Record<string, HairHint>>;
 }
@@ -139,7 +153,8 @@ export interface BodyManifest {
   glb: Record<string, BodyGlb>;
   materials: {
     personalLink: { baseColor: string; orm: string; normal: string };
-    underwear: Record<string, DecalMat[]>;
+    /** бельё в выгрузке есть, но редактор, как игра, показывает V без него */
+    underwear?: Record<string, DecalMat[]>;
     nails: { byGender: Record<'pwa' | 'pma', Record<string, NailMat>> };
   };
   textures: Record<string, BodyTexSet>;
@@ -176,29 +191,9 @@ export interface SkeletonJson {
 }
 
 // ------------------------------------------------------------------ загрузчики
-const jsonCache = new Map<string, Promise<unknown>>();
-/** JSON из выгрузки (кешируется на всё приложение — манифесты не меняются за сессию). */
+/** JSON набора (кешируется в pack.ts, пока набор не сменится). */
 export function loadJson<T>(rel: string): Promise<T> {
-  let p = jsonCache.get(rel);
-  if (!p) {
-    p = fetch(gameUrl(rel)).then((r) => {
-      if (!r.ok) throw new Error(`${rel}: ${r.status}`);
-      return r.json();
-    });
-    p.catch(() => jsonCache.delete(rel));
-    jsonCache.set(rel, p);
-  }
-  return p as Promise<T>;
-}
-
-/** Есть ли файл (для необязательных частей выгрузки). */
-export async function exists(rel: string): Promise<boolean> {
-  try {
-    const r = await fetch(gameUrl(rel), { method: 'HEAD' });
-    return r.ok;
-  } catch {
-    return false;
-  }
+  return fetchGameJson<T>(rel);
 }
 
 export type TexKind = 'color' | 'data';
@@ -216,17 +211,81 @@ export class AssetStore {
   private loader = new GLTFLoader();
   private gltfs = new Map<string, Promise<GLTF>>();
   private textures = new Map<string, Promise<THREE.Texture>>();
+  /** загруженные текстуры по ключу (для вытеснения неиспользуемых) */
+  private loaded = new Map<string, THREE.Texture>();
+  /**
+   * Картинки декодируются вне главного потока (createImageBitmap), а не в кадре первой
+   * отрисовки, как у HTMLImageElement. Ориентация и альфа — как в файле (flipY = false).
+   */
+  private bmpLoader =
+    typeof createImageBitmap === 'function'
+      ? new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'from-image', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
+      : null;
   private texLoader = new THREE.TextureLoader();
   anisotropy = 1;
+
+  /** Сколько текстур в кеше и сколько они занимают на GPU (RGBA8 с мипами), МБ. */
+  get textureCount() {
+    return this.loaded.size;
+  }
+  get textureMB() {
+    return this.sizeMB(this.loaded.values());
+  }
+
+  /** Сколько видеопамяти (МБ) занимают эти текстуры. */
+  sizeMB(textures: Iterable<THREE.Texture>) {
+    let b = 0;
+    for (const t of textures) {
+      const img = t.image as { width?: number; height?: number } | undefined;
+      b += (img?.width ?? 0) * (img?.height ?? 0) * 4 * (t.generateMipmaps ? 4 / 3 : 1);
+    }
+    return Math.round(b / 1e5) / 10;
+  }
+
+  /**
+   * Освободить текстуры, которыми не пользуется ни один оставшийся материал (keep). Они
+   * уходят из GPU и из кеша; понадобятся снова — загрузятся заново.
+   */
+  trim(keep: Set<THREE.Texture>) {
+    for (const [key, t] of this.loaded) {
+      if (keep.has(t)) continue;
+      this.loaded.delete(key);
+      this.textures.delete(key);
+      freeTexture(t);
+    }
+  }
 
   gltf(rel: string): Promise<GLTF> {
     let p = this.gltfs.get(rel);
     if (!p) {
-      p = this.loader.loadAsync(gameUrl(rel));
+      p = gameAssetUrl(rel).then((url) => this.loader.loadAsync(url));
       p.catch(() => this.gltfs.delete(rel));
       this.gltfs.set(rel, p);
     }
     return p;
+  }
+
+  /** Выгрузить glb из кеша и освободить его геометрию (меш больше не нужен). */
+  dropGltf(rel: string) {
+    const p = this.gltfs.get(rel);
+    if (!p) return;
+    this.gltfs.delete(rel);
+    p.then((g) =>
+      g.scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) m.geometry.dispose();
+      }),
+    ).catch(() => {});
+  }
+
+  /** Освободить текстуру (все варианты загрузки этого файла). */
+  dropTexture(rel: string) {
+    for (const [key, p] of this.textures)
+      if (key.startsWith(rel + '|')) {
+        this.textures.delete(key);
+        this.loaded.delete(key);
+        p.then(freeTexture).catch(() => {});
+      }
   }
 
   /**
@@ -237,7 +296,7 @@ export class AssetStore {
     const key = `${rel}|${kind}|${opts.repeat ? 'r' : 'c'}|${opts.lut ? 'l' : 'm'}`;
     let p = this.textures.get(key);
     if (!p) {
-      p = this.texLoader.loadAsync(gameUrl(rel)).then((t) => {
+      p = gameAssetUrl(rel).then((url) => this.load(url)).then((t) => {
         t.flipY = false;
         t.colorSpace = kind === 'color' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
         const wrap = opts.repeat ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
@@ -250,12 +309,21 @@ export class AssetStore {
           t.anisotropy = this.anisotropy;
         }
         t.needsUpdate = true;
+        if (this.textures.get(key) === mine) this.loaded.set(key, t);
         return t;
       });
-      p.catch(() => this.textures.delete(key));
+      const mine = p;
+      p.catch(() => {
+        if (this.textures.get(key) === mine) this.textures.delete(key);
+      });
       this.textures.set(key, p);
     }
     return p;
+  }
+
+  private async load(url: string): Promise<THREE.Texture> {
+    if (!this.bmpLoader) return this.texLoader.loadAsync(url);
+    return new THREE.Texture(await this.bmpLoader.loadAsync(url));
   }
 
   /** То же, но null вместо ошибки (необязательная карта). */
@@ -265,7 +333,7 @@ export class AssetStore {
   }
 
   dispose() {
-    for (const p of this.textures.values()) p.then((t) => t.dispose()).catch(() => {});
+    for (const p of this.textures.values()) p.then(freeTexture).catch(() => {});
     for (const p of this.gltfs.values())
       p.then((g) =>
         g.scene.traverse((o) => {
@@ -274,6 +342,14 @@ export class AssetStore {
         }),
       ).catch(() => {});
     this.textures.clear();
+    this.loaded.clear();
     this.gltfs.clear();
   }
+}
+
+/** Освободить текстуру на GPU и её ImageBitmap (память картинки браузер отдаёт только после close). */
+function freeTexture(t: THREE.Texture) {
+  t.dispose();
+  const img = t.image as unknown;
+  if (typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap) img.close();
 }

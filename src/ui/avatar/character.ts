@@ -1,6 +1,6 @@
-// V целиком: голова, глаза, брови, зубы, тело, руки, ногти, бельё и причёска на одном
-// скелете. Сборка по манифестам выгрузки; внешний вид меняется заменой материалов и
-// весов морфов, причёска и зубы догружаются отдельно.
+// V целиком: голова, глаза, брови, зубы, тело, руки, ногти, части наготы и причёска на
+// одном скелете. Сборка по манифестам набора ассетов; внешний вид меняется заменой
+// материалов и весов морфов, причёска, нагота и зубы догружаются отдельно.
 import * as THREE from 'three';
 import type { Gender } from '../../model/catalog';
 import type {
@@ -14,9 +14,11 @@ import type {
 } from './assets';
 import { loadJson } from './assets';
 import { FaceRig } from './face';
+import { morphWeight, resolveIntimate, type IntimateManifest } from './intimate';
 import { morphTargetMatches, type AvatarLook } from './look';
 import type { Materials } from './materials';
 import { BodyAnimator, HandGuard, NailTwist } from './motion';
+import { KEEP_RECENT, touchRecent } from './perf';
 import { weldSeams } from './seams';
 import { MasterSkeleton } from './skeleton';
 import { HEAD_LAYER } from './stage';
@@ -52,72 +54,12 @@ export function markLowerLashes(g: THREE.BufferGeometry, eyeCenter: { l: number[
 
 const chunkOf = (name: string) => Number(/submesh_(\d+)/.exec(name)?.[1] ?? -1);
 
-/**
- * Перенести дельты морфов груди с торса на бюстгальтер: каждой вершине белья —
- * дельта ближайшей вершины тела (поиск по сетке 2 см). Белье игры этих морфов не имеет.
- */
-function transferMorphs(from: THREE.SkinnedMesh[], to: THREE.SkinnedMesh[], names: string[]) {
-  const CELL = 0.02;
-  const grid = new Map<string, number[]>();
-  const pts: number[] = [];
-  const deltas: number[][] = names.map(() => []);
-  for (const m of from) {
-    const dict = m.morphTargetDictionary ?? {};
-    const pos = m.geometry.getAttribute('position');
-    const md = names.map((n) => {
-      const i = Object.entries(dict).find(([k]) => morphTargetMatches(k, n))?.[1];
-      return i === undefined ? null : m.geometry.morphAttributes.position?.[i];
-    });
-    if (md.every((x) => !x)) continue;
-    for (let v = 0; v < pos.count; v++) {
-      const id = pts.length / 3;
-      const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
-      pts.push(x, y, z);
-      names.forEach((_, k) => {
-        const a = md[k];
-        deltas[k].push(a ? a.getX(v) : 0, a ? a.getY(v) : 0, a ? a.getZ(v) : 0);
-      });
-      const key = `${Math.floor(x / CELL)},${Math.floor(y / CELL)},${Math.floor(z / CELL)}`;
-      const cell = grid.get(key);
-      if (cell) cell.push(id);
-      else grid.set(key, [id]);
-    }
-  }
-  if (!pts.length) return;
-  for (const m of to) {
-    const g = m.geometry;
-    const pos = g.getAttribute('position');
-    const out = names.map(() => new Float32Array(pos.count * 3));
-    for (let v = 0; v < pos.count; v++) {
-      const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
-      const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL), cz = Math.floor(z / CELL);
-      let best = -1;
-      let bd = Infinity;
-      for (let r = 1; r <= 3 && best < 0; r++)
-        for (let i = -r; i <= r; i++)
-          for (let j = -r; j <= r; j++)
-            for (let k = -r; k <= r; k++) {
-              const cell = grid.get(`${cx + i},${cy + j},${cz + k}`);
-              if (!cell) continue;
-              for (const id of cell) {
-                const d = (pts[id * 3] - x) ** 2 + (pts[id * 3 + 1] - y) ** 2 + (pts[id * 3 + 2] - z) ** 2;
-                if (d < bd) (bd = d), (best = id);
-              }
-            }
-      if (best < 0) continue;
-      names.forEach((_, n) => out[n].set(deltas[n].slice(best * 3, best * 3 + 3), v * 3));
-    }
-    const ma = g.morphAttributes;
-    const base = ma.position?.length ?? 0;
-    ma.position = [...(ma.position ?? []), ...out.map((a) => new THREE.Float32BufferAttribute(a, 3))];
-    if (ma.normal) ma.normal = [...ma.normal, ...out.map(() => new THREE.Float32BufferAttribute(new Float32Array(pos.count * 3), 3))];
-    g.morphTargetsRelative = true;
-    // Имена целей у glTF-меша заданы загрузчиком — дописываем новые вручную
-    const dict = { ...(m.morphTargetDictionary ?? {}) };
-    names.forEach((n, k) => (dict[n + '_breast'] = base + k));
-    m.morphTargetDictionary = dict;
-    m.morphTargetInfluences = [...(m.morphTargetInfluences ?? []), ...names.map(() => 0)];
-  }
+interface IntimateBuilt {
+  id: string;
+  file: string;
+  kind: 'skin' | 'decal';
+  /** подмеш (submesh_NN) → меш */
+  subs: Map<number, MorphMesh>;
 }
 
 interface HairBuilt {
@@ -146,10 +88,21 @@ export class Character {
   private nails: THREE.SkinnedMesh[] = [];
   private teeth: THREE.SkinnedMesh[] = [];
   private hairs = new Map<string, Promise<HairBuilt>>();
+  /** то же, но уже собранные (синхронный обход для освобождения памяти) */
+  private hairsReady = new Map<string, HairBuilt>();
+  private intimateReady = new Map<string, IntimateBuilt>();
   private hairOn: HairBuilt[] = [];
   private hairKey = '';
+  private hairOrder: string[] = [];
+  private intimateM: Promise<IntimateManifest> | null = null;
+  private intimateParts = new Map<string, Promise<IntimateBuilt>>();
+  private intimateLive: IntimateBuilt[] = [];
+  private intimateMeshOrder: string[] = [];
+  private intimateMatOrder: string[] = [];
   private extras: Promise<void> | null = null;
   private hairManifest: Promise<HairManifest>;
+  /** все glb, из которых этот персонаж брал меши (освобождаются в dispose) */
+  private glbs = new Set<string>();
   readonly code: 'pwa' | 'pma';
 
   private constructor(
@@ -182,7 +135,15 @@ export class Character {
       loadJson<SkeletonJson>(`body/skeleton.${c}.json`),
     ]);
     const ch = new Character(gender, store, mats, skinM, faceM, bodyM, skeleton);
-    await ch.loadCore();
+    try {
+      await ch.loadCore();
+      // Без головы или тела V не показывается: пусть сцена покажет ошибку или портрет,
+      // а не пустой «готовый» кадр
+      if (!ch.head.length || !ch.bodySkin.length) throw new Error(`avatar: в glb ${ch.code} нет мешей головы или тела`);
+    } catch (e) {
+      ch.dispose();
+      throw e;
+    }
     return ch;
   }
 
@@ -198,7 +159,22 @@ export class Character {
 
   private glb(key: string) {
     const e = this.bodyM.glb[key];
-    return e ? this.store.gltf(e.file) : Promise.resolve(null);
+    return e ? this.gltf(e.file) : Promise.resolve(null);
+  }
+
+  /**
+   * glb из кеша AssetStore. add() уносит меши из сцены glb на скелет V, поэтому кешированная
+   * сцена после этого пуста: каждый взятый файл запоминается и в dispose() выгружается из
+   * кеша — новое тело того же пола разберёт его заново, а не получит пустую сцену.
+   */
+  private gltf(rel: string) {
+    this.glbs.add(rel);
+    return this.store.gltf(rel);
+  }
+
+  private dropGlb(rel: string) {
+    this.glbs.delete(rel);
+    this.store.dropGltf(rel);
   }
 
   private async loadCore() {
@@ -206,16 +182,16 @@ export class Character {
     const c = this.code;
     const fm = this.faceM.meshes[g];
     const legsKey = this.liftedLegsKey() ?? (g === 'female' ? `${c}_legs_cs_flat` : null);
-    const under = g === 'female' ? [`${c}_underwear_panties`, `${c}_underwear_bra`] : [`${c}_underwear_boxers`];
-    const [head, eyes, brows, body, armL, armR, legs, ...uw] = await Promise.all([
-      this.store.gltf(`glb/h0_000_${c}__morphs.morphtarget.glb`),
-      this.store.gltf(fm.eyes.glb),
-      this.store.gltf(fm.eyebrows.glb),
+    // Белья нет: в редакторе игры (без цензуры) V обнажена, а соски, гениталии и т. п.
+    // выбираются строками тела (части наготы — prepareIntimate)
+    const [head, eyes, brows, body, armL, armR, legs] = await Promise.all([
+      this.gltf(`glb/h0_000_${c}__morphs.morphtarget.glb`),
+      this.gltf(fm.eyes.glb),
+      this.gltf(fm.eyebrows.glb),
       this.glb(`${c}_body`),
       this.glb(`${c}_arm_l`),
       this.glb(`${c}_arm_r`),
       legsKey ? this.glb(legsKey) : Promise.resolve(null),
-      ...under.map((k) => this.glb(k)),
     ]);
 
     for (const m of meshesOf(head.scene)) {
@@ -281,29 +257,6 @@ export class Character {
     // Швы шея/торс/руки/ноги: торс главный, к нему подтягиваются остальные куски
     const seam = weldSeams([...this.bodySkin.filter((b) => b.part === 'body').map((b) => b.mesh), ...this.bodySkin.filter((b) => b.part === 'arms').map((b) => b.mesh), ...this.head]);
     if (import.meta.env.DEV) console.debug(`[avatar] швы ${this.code}: ${seam.welded} вершин, зазор до ${(seam.maxGap * 1000).toFixed(2)} мм`);
-    // Бельё всегда надето: в редакторе V показана в «цензурном» виде
-    const uwKeys = g === 'female' ? ['pwa|panties', 'pwa|bra'] : ['pma|boxers'];
-    for (let i = 0; i < uw.length; i++) {
-      const gl = uw[i];
-      if (!gl) continue;
-      const list = this.bodyM.materials.underwear[uwKeys[i]] ?? [];
-      const ms = meshesOf(gl.scene);
-      if (uwKeys[i] === 'pwa|bra') {
-        const torso = bodyMeshes.filter((m) => chunkOf(m.name) <= 2);
-        transferMorphs(torso, ms, ['t0_000_wa_base__full_breast_small', 't0_000_wa_base__full_breast_big']);
-      }
-      for (const m of ms) {
-        const d = list.find((x) => x.submesh === chunkOf(m.name));
-        if (d?.shader === 'decal') {
-          this.add(m, { cast: false });
-          m.renderOrder = ORDER.decal;
-          m.material = await this.mats.decal(d);
-        } else {
-          this.add(m);
-          m.material = d ? await this.mats.standard('underwear', d.baseColor, d.orm, d.normal, false, true) : new THREE.MeshStandardMaterial({ color: '#2a1228', roughness: 0.6 });
-        }
-      }
-    }
     this.root.updateMatrixWorld(true);
   }
 
@@ -324,9 +277,11 @@ export class Character {
     if (this.extras) return this.extras;
     const c = this.code;
     const fm = this.faceM.meshes[this.gender];
-    const teeth = this.store
-      .gltf(fm.teeth.glb)
+    // Через this.gltf: add() уносит меши зубов из кешированной сцены, и в dispose() glb
+    // должен выгрузиться из кеша, иначе следующее тело того же пола получит пустую сцену
+    const teeth = this.gltf(fm.teeth.glb)
       .then((gl) => {
+        if (this.disposed) return;
         for (const m of meshesOf(gl.scene)) {
           this.add(m, { cast: false });
           m.visible = false; // до материала
@@ -336,6 +291,7 @@ export class Character {
       .catch(() => {});
     const nails = Promise.all([this.glb(`${c}_nails_l`), this.glb(`${c}_nails_r`)])
       .then((gs) => {
+        if (this.disposed) return;
         for (const gl of gs)
           if (gl)
             for (const m of meshesOf(gl.scene)) {
@@ -345,11 +301,15 @@ export class Character {
             }
       })
       .catch(() => {});
+    // Клипы копируются (filterClip), сцена анимаций не разбирается — её можно оставить в кеше
     const anim = this.store
       .gltf(this.bodyM.animations.files[c].file)
-      .then((gl) => this.anim.setClips(gl.animations, this.sk))
+      .then((gl) => {
+        if (!this.disposed) this.anim.setClips(gl.animations, this.sk);
+      })
       .catch(() => {});
     this.extras = Promise.all([teeth, nails, anim]).then(() => {
+      if (this.disposed) return;
       this.root.updateMatrixWorld(true);
       onChange();
     });
@@ -364,7 +324,7 @@ export class Character {
   async prepare(look: AvatarLook): Promise<() => void> {
     const g = this.gender;
     const skinG = this.skinM[g];
-    const tone = (look.skinApp && this.bodyM.headSkinColorToTone[look.skinApp]) || this.bodyM.defaultCharCreatorOutfit.defaultTone;
+    const tone = this.toneOf(look);
     const eye = (look.eyesApp && this.faceM.eyes_color[look.eyesApp]) || Object.entries(this.faceM.eyes_color).find(([k]) => k.includes(`_${this.code}__`))?.[1];
     const lash = (look.lashApp && this.faceM.eyelash_color[look.lashApp]) || Object.entries(this.faceM.eyelash_color).find(([k]) => k.startsWith(g + '__'))?.[1];
     const browStyle = look.browStyle ? this.faceM.eyebrows.styles[g][look.browStyle] : undefined;
@@ -382,7 +342,7 @@ export class Character {
       eye ? this.mats.eyeShadow(eye) : null,
       eye ? this.mats.eyeTearline(eye).catch(() => null) : null,
       lash ? this.mats.lashes(lash, true) : null,
-      browStyle && browCol ? this.mats.brows(browStyle, browCol, exception?.gradientMapPng ?? browCol.gradientMapPng) : null,
+      browStyle && browCol ? this.mats.brows(browStyle, browCol, exception?.gradientMapPng ?? browCol.gradientMapPng, look.skinHex ?? undefined) : null,
       teethE ? this.mats.teeth(teethE).catch(() => null) : null,
       nailE ? this.mats.nails(nailE).catch(() => null) : null,
     ]);
@@ -416,8 +376,131 @@ export class Character {
     };
   }
 
+  /** Тон кожи тела (01_ca_pale…) по цвету кожи головы. */
+  private toneOf(look: AvatarLook): string {
+    return (look.skinApp && this.bodyM.headSkinColorToTone[look.skinApp]) || this.bodyM.defaultCharCreatorOutfit.defaultTone;
+  }
+
+  // ---------------------------------------------------------------- нагота
+  private intimateManifest(): Promise<IntimateManifest> {
+    if (!this.intimateM) {
+      const p = loadJson<IntimateManifest>('body/intimate.json');
+      p.catch(() => {
+        if (this.intimateM === p) this.intimateM = null;
+      });
+      this.intimateM = p;
+    }
+    return this.intimateM;
+  }
+
+  private buildIntimate(m: IntimateManifest, id: string): Promise<IntimateBuilt> {
+    let p = this.intimateParts.get(id);
+    if (!p) {
+      p = (async () => {
+        const info = m.meshes[id];
+        if (!info) throw new Error('intimate: нет меша ' + id);
+        const gl = await this.gltf(info.file);
+        const subs = new Map<number, MorphMesh>();
+        for (const mesh of meshesOf(gl.scene)) {
+          mesh.removeFromParent();
+          // свои кости dyng_penis_* у каждого файла (skeleton.bind, owner)
+          this.sk.bind(mesh, info.file);
+          const decal = info.kind === 'decal';
+          mesh.castShadow = !decal;
+          mesh.receiveShadow = true;
+          mesh.renderOrder = decal ? ORDER.decal : 0;
+          mesh.visible = false;
+          this.root.add(mesh);
+          subs.set(chunkOf(mesh.name), mesh as MorphMesh);
+        }
+        const built: IntimateBuilt = { id, file: info.file, kind: info.kind, subs };
+        if (this.intimateParts.get(id) === p) this.intimateReady.set(id, built);
+        return built;
+      })();
+      p.catch(() => this.intimateParts.delete(id));
+      this.intimateParts.set(id, p);
+    }
+    return p;
+  }
+
+  /**
+   * Части наготы для вида (body/intimate.json): какие меши показать, их материалы под тон
+   * кожи и веса морфов (размер гениталий, грудь у декалей). Возвращает функцию «надеть».
+   * Без файла наготы в наборе V остаётся как есть.
+   */
+  async prepareIntimate(look: AvatarLook): Promise<() => void> {
+    const m = await this.intimateManifest();
+    const res = resolveIntimate(m, this.code, look.body, this.toneOf(look));
+    const built = await Promise.all(res.parts.map((p) => this.buildIntimate(m, p.mesh).catch(() => null)));
+    const assign: (() => void)[] = [];
+    const usedMats: string[] = [];
+    await Promise.all(
+      res.parts.map(async (part, k) => {
+        const b = built[k];
+        if (!b) return;
+        for (const s of part.submeshes) {
+          const def = m.materials[s.material];
+          const mesh = b.subs.get(s.index);
+          if (!def || !mesh) continue;
+          usedMats.push(s.material);
+          const mat = await (def.type === 'skin' ? this.mats.intimateSkin(s.material, def) : this.mats.intimateDecal(s.material, def, /hairstyle/.test(part.mesh))).catch(() => null);
+          if (mat) assign.push(() => ((mesh.material = mat), (mesh.visible = true)));
+        }
+      }),
+    );
+    return () => {
+      for (const p of this.intimateLive) for (const mesh of p.subs.values()) mesh.visible = false;
+      this.intimateLive = built.filter((b): b is IntimateBuilt => !!b);
+      for (const a of assign) a();
+      // Размер гениталий и грудь: веса из appliesTo; прочие цели (GarmentSupport) — 0
+      for (const b of this.intimateLive)
+        for (const mesh of b.subs.values()) {
+          const inf = mesh.morphTargetInfluences;
+          if (!inf || !mesh.morphTargetDictionary) continue;
+          for (const [name, i] of Object.entries(mesh.morphTargetDictionary)) inf[i] = morphWeight(res, b.id, name);
+        }
+      this.evictIntimate(m, this.intimateLive.map((b) => b.id), usedMats);
+    };
+  }
+
+  /** Освободить давно снятые части наготы: меши, материалы и их текстуры. */
+  private evictIntimate(m: IntimateManifest, meshes: string[], mats: string[]) {
+    const mm = touchRecent(this.intimateMeshOrder, meshes, KEEP_RECENT.intimateMeshes);
+    this.intimateMeshOrder = mm.order;
+    for (const id of mm.evict) {
+      const p = this.intimateParts.get(id);
+      this.intimateParts.delete(id);
+      this.intimateReady.delete(id);
+      p?.then((b) => {
+        for (const mesh of b.subs.values()) {
+          mesh.removeFromParent();
+          freeMesh(mesh);
+        }
+        this.dropGlb(b.file);
+      }).catch(() => {});
+    }
+    const mt = touchRecent(this.intimateMatOrder, mats, KEEP_RECENT.intimateMaterials);
+    this.intimateMatOrder = mt.order;
+    const texOf = (name: string) => {
+      const d = m.materials[name];
+      if (!d) return [];
+      return d.type === 'skin' ? [d.albedo, d.normal, d.orm] : [d.diffuse, d.normal, d.roughness];
+    };
+    const keepTex = new Set(mt.order.flatMap(texOf));
+    for (const name of mt.evict) {
+      this.mats.releaseIntimate(name);
+      for (const t of texOf(name)) if (t && !keepTex.has(t)) this.store.dropTexture(t);
+    }
+  }
+
   private applyMorphs(look: AvatarLook) {
-    for (const m of this.morphMeshes) {
+    const beard: MorphMesh[] = [];
+    for (const b of this.beardOn)
+      for (const p of b.parts) {
+        const m = p.core as MorphMesh;
+        if (m.morphTargetDictionary && m.morphTargetInfluences) beard.push(m);
+      }
+    for (const m of [...this.morphMeshes, ...beard]) {
       const inf = m.morphTargetInfluences;
       inf.fill(0);
       for (const [name, i] of Object.entries(m.morphTargetDictionary)) {
@@ -443,7 +526,7 @@ export class Character {
       p = (async () => {
         const info = hm.meshes[stem];
         if (!info) throw new Error('hair: нет меша ' + stem);
-        const gl = await this.store.gltf(info.glb);
+        const gl = await this.gltf(info.glb);
         const group = new THREE.Group();
         group.name = 'hair_' + stem;
         const parts: HairBuilt['parts'] = [];
@@ -464,15 +547,26 @@ export class Character {
             f.bind(m.skeleton, m.bindMatrix);
             f.frustumCulled = false;
             f.renderOrder = ORDER.hairFringe;
+            // Борода: морфы лица у кромки те же, что у основного прохода (общий массив весов)
+            const mm = m as MorphMesh;
+            if (mm.morphTargetInfluences) {
+              f.morphTargetDictionary = mm.morphTargetDictionary;
+              f.morphTargetInfluences = mm.morphTargetInfluences;
+            }
             group.add(f);
             part.fringe = f;
           } else {
-            m.castShadow = sub.kind !== 'cap';
+            m.castShadow = sub.kind !== 'cap' && sub.kind !== 'shadow';
             if (sub.kind === 'cap') m.renderOrder = ORDER.cap;
+            if (sub.kind === 'shadow') m.renderOrder = ORDER.decal;
           }
+          // Борода: меш с морфами лица (форма подбородка, челюсти, рта)
+          if (info.morphs) m.frustumCulled = false;
           parts.push(part);
         }
-        return { group, parts, stem };
+        const built = { group, parts, stem };
+        if (this.hairs.get(stem) === p) this.hairsReady.set(stem, built);
+        return built;
       })();
       p.catch(() => this.hairs.delete(stem));
       this.hairs.set(stem, p);
@@ -540,9 +634,128 @@ export class Character {
         this.hairOn = built.filter((b): b is HairBuilt => !!b);
         for (const b of this.hairOn) this.root.add(b.group);
         this.hairKey = key;
+        this.evictHair(hm);
       }
       for (const a of assign) a();
     };
+  }
+
+  // ---------------------------------------------------------------- борода
+  private beardOn: HairBuilt[] = [];
+  private beardKey = '';
+  private beardOrder: string[] = [];
+
+  /**
+   * Борода: карточки волос и тень щетины (tex/hair/manifest.json, beards). Компоненты бороды
+   * — меши с морфами лица; показаны только чанки из маски игры (так часть бороды «подбородок»
+   * оставляет от полной бороды только подбородок). Возвращает функцию «надеть».
+   */
+  async prepareBeard(look: AvatarLook): Promise<() => void> {
+    const hm = look.beardApp ? await this.hairManifest : null;
+    const apps = hm?.beards?.apps[look.beardApp ?? ''];
+    const comps = apps ? (look.beardColour ? apps[look.beardColour] : undefined) ?? apps.default ?? Object.values(apps)[0] : undefined;
+    if (!hm || !comps?.length) return () => this.setBeard([], '');
+    const built = await Promise.all(comps.map((c) => this.buildHair(hm, c.mesh).catch(() => null)));
+    const assign: (() => void)[] = [];
+    await Promise.all(
+      comps.map(async (c, k) => {
+        const b = built[k];
+        if (!b) return;
+        const info = hm.meshes[b.stem];
+        const keys = info.appearances[c.app] ?? Object.values(info.appearances)[0] ?? [];
+        const shown = new Set(c.chunks);
+        for (const part of b.parts) {
+          const sub = info.submeshes[part.index];
+          const key = keys[part.index];
+          const mdef = key ? hm.materials[key] : undefined;
+          const hide = () => {
+            part.core.visible = false;
+            if (part.fringe) part.fringe.visible = false;
+          };
+          if (!mdef || !shown.has(sub?.chunk ?? part.index)) {
+            assign.push(hide);
+            continue;
+          }
+          if (mdef.type === 'hairCards') {
+            const [core, fringe] = await Promise.all([this.mats.hairCards(hm, mdef, 'core', part.doubleSided), this.mats.hairCards(hm, mdef, 'fringe', part.doubleSided)]).catch(() => [null, null]);
+            assign.push(() => {
+              part.core.visible = !!core;
+              if (core) part.core.material = core;
+              if (part.fringe) {
+                part.fringe.visible = !!fringe;
+                if (fringe) part.fringe.material = fringe;
+              }
+            });
+          } else {
+            const mat = await (mdef.type === 'beardShadow' ? this.mats.beardShadow(hm, mdef) : this.mats.accessory(mdef)).catch(() => null);
+            assign.push(() => {
+              part.core.visible = !!mat;
+              if (mat) part.core.material = mat;
+            });
+          }
+        }
+      }),
+    );
+    const key = built.map((b) => b?.stem ?? '').join('|');
+    return () => {
+      this.setBeard(built.filter((b): b is HairBuilt => !!b), key);
+      for (const a of assign) a();
+      this.applyMorphs(look);
+    };
+  }
+
+  private setBeard(on: HairBuilt[], key: string) {
+    if (key === this.beardKey) return;
+    for (const b of this.beardOn) this.root.remove(b.group);
+    this.beardOn = on;
+    for (const b of on) this.root.add(b.group);
+    this.beardKey = key;
+    const r = touchRecent(this.beardOrder, on.map((b) => b.stem), KEEP_RECENT.beard);
+    this.beardOrder = r.order;
+    this.hairManifest
+      .then((hm) => {
+        for (const stem of r.evict) {
+          const p = this.hairs.get(stem);
+          this.hairs.delete(stem);
+          this.hairsReady.delete(stem);
+          p?.then((b) => {
+            b.group.traverse(freeMesh);
+            const glb = hm.meshes[stem]?.glb;
+            if (glb) this.dropGlb(glb);
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }
+
+  /** Давно снятые причёски: геометрия освобождается, glb выгружается из кеша. */
+  private evictHair(hm: HairManifest) {
+    const r = touchRecent(this.hairOrder, this.hairOn.map((b) => b.stem), KEEP_RECENT.hair);
+    this.hairOrder = r.order;
+    for (const stem of r.evict) {
+      const p = this.hairs.get(stem);
+      this.hairs.delete(stem);
+      this.hairsReady.delete(stem);
+      // материалы и текстуры причёски освобождает Materials.trim: на живых мешах их больше нет
+      p?.then((b) => {
+        b.group.traverse(freeMesh);
+        const glb = hm.meshes[stem]?.glb;
+        if (glb) this.dropGlb(glb);
+      }).catch(() => {});
+    }
+  }
+
+  /** Материалы на мешах тела и в кеше причёсок, наготы и слоёв головы (их не освобождаем). */
+  collectMaterials(out: Set<THREE.Material>) {
+    const add = (o: THREE.Object3D) =>
+      o.traverse((x) => {
+        const m = (x as THREE.Mesh).material;
+        if (Array.isArray(m)) m.forEach((y) => out.add(y));
+        else if (m) out.add(m);
+      });
+    add(this.root);
+    for (const p of this.hairsReady.values()) add(p.group);
+    for (const b of this.intimateReady.values()) for (const m of b.subs.values()) add(m);
   }
 
   update(dt: number, camera: THREE.Vector3) {
@@ -605,6 +818,24 @@ export class Character {
   private headBind = new THREE.Vector3();
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     this.anim.dispose();
+    this.root.traverse(freeMesh);
+    // причёски и части наготы, которые сейчас сняты, на сцене не висят (и те, что ещё грузятся)
+    for (const p of this.hairs.values()) p.then((b) => b.group.traverse(freeMesh)).catch(() => {});
+    for (const p of this.intimateParts.values()) p.then((b) => b.subs.forEach(freeMesh)).catch(() => {});
+    // Меши унесены из кешированных сцен: эти glb больше никому не годятся
+    for (const rel of [...this.glbs]) this.dropGlb(rel);
   }
+  private disposed = false;
+}
+
+/** Геометрия меша и текстура костей его скелета (у каждого меша свой THREE.Skeleton). */
+function freeMesh(o: THREE.Object3D) {
+  const m = o as THREE.SkinnedMesh;
+  if (!m.isMesh) return;
+  m.geometry.dispose();
+  // dispose() скелета идемпотентен: у прядей кромки и слёзной кромки скелет общий с основным мешем
+  if (m.isSkinnedMesh) m.skeleton?.dispose();
 }

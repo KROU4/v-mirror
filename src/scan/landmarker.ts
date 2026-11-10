@@ -3,7 +3,23 @@ import { FaceLandmarker, FilesetResolver, type FaceLandmarkerResult } from '@med
 
 let instance: Promise<FaceLandmarker> | null = null;
 
+/** Служебные строки glog из wasm MediaPipe («INFO: …», «W1110 …») — не ошибки, в консоль их не пускаем. */
+export const isMediapipeChatter = (a: unknown) => typeof a === 'string' && /^(?:INFO: |[IW]\d{4} \d{2}:\d{2}:\d{2}\.\d+ +\d+ \S+\.cc:\d+\])/.test(a);
+let quiet = false;
+function quietMediapipe() {
+  if (quiet || typeof console === 'undefined') return;
+  quiet = true;
+  for (const level of ['error', 'warn', 'info', 'log'] as const) {
+    const orig = console[level].bind(console);
+    console[level] = (...args: unknown[]) => {
+      if (isMediapipeChatter(args[0])) return;
+      orig(...args);
+    };
+  }
+}
+
 export function getLandmarker(): Promise<FaceLandmarker> {
+  quietMediapipe();
   if (!instance) {
     const base = import.meta.env.BASE_URL;
     instance = (async () => {
@@ -16,11 +32,16 @@ export function getLandmarker(): Promise<FaceLandmarker> {
           outputFaceBlendshapes: true,
           outputFacialTransformationMatrixes: true,
         });
+      let lm: FaceLandmarker;
       try {
-        return await create('GPU');
+        lm = await create('GPU');
       } catch {
-        return await create('CPU');
+        lm = await create('CPU');
       }
+      // Граф на видеокарте собирается при первом detect() — по выбранному фото, под индикатором
+      // «Ищу лицо». Прогрев на пустом кадре при открытии скана занимал главный поток на ~2 с,
+      // пока человек ещё выбирал фото (кнопки панели не отвечали)
+      return lm;
     })();
     instance.catch(() => (instance = null));
   }
