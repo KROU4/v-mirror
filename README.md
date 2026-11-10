@@ -1,93 +1,134 @@
-# V-MIRROR — внешность V по фотографии
+# V-Mirror
 
-Веб-приложение для Cyberpunk 2077 (патч 2.5). Повторяет экран игры «Выбор внешности Ви» для обоих типов тела. Справа список строк в том же порядке, что в игре: у каждой строки стрелки ◁ ▷, у цветов — сетка образцов. В центре 3D-модель V, собранная из ресурсов игры. По фотографии приложение подбирает ближайшие варианты для каждого параметра: кожа, причёска, цвет волос, глаза, нос, рот, челюсть, уши, борода, макияж. Номер в каждой строке — тот, что нужно выставить в редакторе игры.
+**Make your Cyberpunk 2077 V look like a real person.** V-Mirror is a web replica of the
+game's character creator (patch 2.5, both body types) that reads a reference photo and tells
+you which option to pick in every row: skin, hairstyle and colour, eyes, nose, mouth, jaw,
+ears, brows, beard, makeup and more. The numbers it shows are exactly the numbers you set in
+the game.
 
-## 3D-модель V
+**Live:** https://krou4.github.io/v-mirror/ · [Русская версия](docs/README.ru.md)
 
-В центре — V целиком, собранная из ресурсов вашей установленной игры: голова с морфами лица, глаза, ресницы, брови, зубы, тело, руки с ногтями, ноги, бельё и причёска. Всё это лежит в `tools/local` и в репозиторий не попадает: меши — в `glb/` и `hair/` (собираются командой `npm run pack`), текстуры и их манифесты — в `tex/`, скелет, тело и анимации редактора — в `body/`. Dev-сервер и `vite preview` отдают эти файлы по адресу `/game/{glb,hair,renders,tex,body}/...` с ETag и ответом 304. Если выгрузки нет (нет `/game/hair/hint_meshes.json`), вместо модели показывается схематичный портрет.
+![V-Mirror: the creator replica with a live 3D V](docs/screenshot.webp)
 
-Как в редакторе игры:
+## Features
 
-- **Материалы** берутся из манифестов: кожа головы и тела по тону и типу кожи (с подкраской, картой деталей и мягким подповерхностным рассеянием), радужка глаз и затенение у кромки век (`eye_shadow_wetness`: неосвещённый слой, умножающий кадр на цвет тени, плюс слабый влажный блик слёзной кромки), ресницы (покрытие считается с учётом мипов, через alpha-to-coverage, поэтому они не рвутся в точки), брови с градиентом цвета, зубы (глубина рта затемняется по маске, свет внутрь рта проходит только при разомкнутых губах), ногти, карточки волос в два прохода (плотная сердцевина и мягкая кромка) с градиентом «корень → кончик», матовым бликом в цвет пряди и подложкой-скальпом.
-- **Скелет** один на тело (`body/skeleton.<пол>.json`); все меши привязаны к нему по именам костей. Вершины весят на 8 костей, как в игре, поэтому швы шеи, плеч и бёдер не расходятся в позе.
-- **Камера** с FOV 15° переезжает за 1 с к кадру выбранной строки: голова, глаза, губы, зубы, волосы, ногти (V поднимает руку к груди; кадр чуть дальше игрового, чтобы макушка не уходила под заголовок), рост целиком (тело, грудь).
-- **Анимации** `ui_*` из игры сменяются с перекрёстным переходом 0,5 с. На всех строках головы тело играет только цикл `ui_closeup_shot`: клипы `ui_closeup_shot_<часть>` в игре — аддитивные клипы лица, на теле они поднимали бы руку к лицу. Камера крупных планов мягко следует за головой. Лицо живёт само: моргает (веко смыкается полностью), смотрит в камеру с микросаккадами, дышит; в строке «Зубы» V мягко улыбается с приоткрытыми зубами: уголки рта и щёки поднимаются, нижняя губа прижата к зубам. Руки никогда не закрывают лицо: если клип поднимает кисть выше подбородка (у женского скелета в позе ногтей), она опускается поправкой по двум костям.
-- **Бельё всегда надето.** Это осознанное решение: веб-копия показывает V в «цензурном» виде, как редактор игры по умолчанию, и строки тела (грудь, гениталии, лобковые волосы) не снимают бельё.
-- **Свет** — 15 конусных ламп редактора (ключевой, заливка, пурпурный и голубой контровой) с мягкими тенями; свет неподвижен, при повороте вращается сама V. Контровой свет по коже ложится мягкой каймой только у силуэта, без неоновых полос по лицу, ушам и белью. Нижняя голубая заливка нацелена на лицо и бледнее игровой: с исходной лицо получалось перевёрнуто освещённым (бурые «усы», синяки под глазами, красный нос на голубых щеках).
+- **Creator replica.** Every row, option count, order and dependency of the in-game
+  creator for male and female V (hairstyle → its own colour set, beard → style → colour, and
+  so on). The catalog was extracted from the game's own files.
+- **Photo → settings.** Drop a photo; MediaPipe measures the face locally, and a multimodal
+  model of your choice on [OpenRouter](https://openrouter.ai) picks the closest option per row.
+  The result is a checklist of "set row X to N" that you copy into the game.
+- **Live 3D V** (optional, see [asset pack](#live-3d-asset-pack)): V built from the game's
+  meshes, textures and creator animations, with the creator's camera per row, lighting,
+  blinking, the teeth smile, morphs, hair, beards, makeup and the full body as in the game.
+- **Game swatches.** Colour rows show the game's own swatch thumbnails (hair gradients, iris
+  photos, nail art). Without the asset pack a close CSS approximation is drawn from colour data.
+- **Bilingual UI.** Russian and English, switch in the header.
+- **No server.** A static site. Your OpenRouter key and photos stay in your browser.
 
-Рендер ставится на паузу, когда вкладка скрыта; плотность пикселей ограничена 2.
+## Photo scan and your OpenRouter key
 
-Управление как в игре: <kbd>↑</kbd> <kbd>↓</kbd> — строка, <kbd>←</kbd> <kbd>→</kbd> — вариант, <kbd>Q</kbd> <kbd>E</kbd> (V вращается, пока клавиша зажата) или перетаскивание мышью — поворот V на любой угол, полный оборот (двойной щелчок возвращает ракурс), <kbd>G</kbd> — сетка цветов, <kbd>R</kbd> — случайное лицо, <kbd>C</kbd> — скопировать список, <kbd>L</kbd> — ссылка на персонажа, <kbd>Esc</kbd> — закрыть сетку или скан.
+The site has no backend and never sees your key.
 
-## Запуск
+1. Create a key at [openrouter.ai/keys](https://openrouter.ai/keys). Free vision models work.
+2. In V-Mirror open the key panel from the header (or **Key and model** in the photo scan),
+   paste the key and press **Check key**.
+3. Pick a model (free vision models are listed first) and run the scan.
 
-```bash
+The key is stored in your browser only and is sent only to `openrouter.ai`. Because the site
+shares the `github.io` address with other pages, the key is kept for the current tab only by
+default; tick **Remember the key on this device** to keep it.
+
+No key? Use the **Manual answer** tab: copy the prompt, give it together with the photo to
+any multimodal chat model, and paste its JSON reply back.
+
+## Live 3D: asset pack
+
+The 3D model uses Cyberpunk 2077's own assets. They belong to CD PROJEKT RED, so they are
+**not** in this repository and **not** on the public site. You build an asset pack once from
+your own copy of the game (Windows, about 5 minutes, about 560 MB) and connect the folder in
+the browser. The page reads it straight from disk; nothing is uploaded.
+
+```sh
 npm install
+npm run pack -- --game "D:\Games\Cyberpunk 2077" --out "D:\v-mirror-pack"
 ```
 
-```bash
-npm run dev
+Then press **3D** in the header, then **Choose pack folder**, and select the pack. The browser
+remembers it. Full guide, requirements and
+troubleshooting: [docs/ASSET_PACK.md](docs/ASSET_PACK.md).
+
+Without a pack, everything except the live 3D works: the catalog, the photo scan, the
+settings list, swatches and V portraits.
+
+## Controls
+
+| Key | Action |
+| --- | --- |
+| <kbd>↑</kbd> <kbd>↓</kbd> | previous / next row |
+| <kbd>←</kbd> <kbd>→</kbd> | previous / next option |
+| <kbd>Q</kbd> <kbd>E</kbd> or drag | rotate V (double-click resets the view) |
+| <kbd>G</kbd> | colour grid |
+| <kbd>X</kbd> | mark the row as set in the game |
+| <kbd>R</kbd> | random face |
+| <kbd>C</kbd> | copy the settings list |
+| <kbd>L</kbd> | copy a link to this character |
+| <kbd>Esc</kbd> | close the grid or the scan |
+
+## Development
+
+Requires Node.js 20+.
+
+```sh
+npm install
+npm run dev        # dev server; uses tools/local as the asset pack if present
+npm test           # unit tests (vitest)
+npm run build      # typecheck + production build + audit that dist holds no game files
+npm run preview    # serve the production build
 ```
 
-Приложение откроется на http://localhost:5177. Перед стартом `predev` копирует WASM MediaPipe и скачивает модель FaceLandmarker (около 4 МБ) в `public/mediapipe/`.
+`VITE_BASE` sets the base path of the build (GitHub Pages uses `/v-mirror/`). For local 3D
+during development, build the pack into `tools/local` (git-ignored):
 
-```bash
-npm test
+```sh
+npm run pack -- --game "D:\Games\Cyberpunk 2077" --out tools/local
 ```
 
-```bash
-npm run build
-```
+### Project layout
 
-Сборка (`dist/`) — статика, её можно выложить на любой хостинг.
+| Path | Contents |
+| --- | --- |
+| `src/model/` | creator catalog logic: dependencies, random V, share codes, morph and hairstyle descriptors |
+| `src/scan/` | MediaPipe measurement, colour analysis, local matching, OpenRouter client, prompt and answer parsing |
+| `src/ui/avatar/` | the three.js V: skeleton, materials, face, motion, stage and camera, body and intimate parts |
+| `src/assets/pack.ts` | asset pack loading (dev folder or a folder picked in the browser) |
+| `src/i18n/` | Russian and English strings |
+| `src/data/` | catalog and swatch colour data derived from the game (no meshes or textures) |
+| `tools/extract/` | asset pack builder and catalog/swatch extraction from a game install |
+| `tools/calibrate/` | morph and hairstyle calibration pages (local, need the pack) |
+| `DESIGN.md` | design system of the UI |
 
-## Как это работает
+### Deploy
 
-1. **Каталог редактора** (`src/data/catalog.{male,female}.json`) собран из файлов игры 2.5. Это те же ресурсы, которые читает игровой редактор: `male_cco_ep1.inkcharcustomization` и `female_cco_ep1.inkcharcustomization`. Все слоты, варианты и зависимости повторяют игру. Например, набор цветов волос зависит от причёски, у лысой V пункта цвета нет, а часть бороды зависит от её стиля. Номер в листе — позиция варианта в списке игры (слева направо, начиная с 1).
-2. **Измерения в браузере.** MediaPipe FaceLandmarker находит 478 точек лица. По ним считаются пропорции: глаза, нос, рот, челюсть, подбородок. Цвета кожи, радужки, волос, бровей, губ и щетины снимаются с фото и сравниваются с образцами игры по ΔE в CIELAB. Фото никуда не отправляется, пока пользователь сам не нажмёт кнопку отправки модели.
-3. **Калибровка морфов.** Каждый вариант носа, рта, челюсти, глаз и ушей отрендерен на настоящей голове V и прогнан через тот же MediaPipe. Геометрия морфов измерена по смещениям вершин в миллиметрах. Отсюда числовые признаки для подбора и текстовые описания («узкий, длинная спинка», «скошенный подбородок»). Модель выбирает вариант по этим описаниям, а не по безликому номеру.
-4. **Мультимодальная модель (по желанию).** Модель получает фото, локальные замеры и описание всех вариантов, а возвращает JSON с номерами. Ответ модели и локальный подбор сливаются: в каждом слоте побеждает вариант с большей уверенностью.
+Every push to `main` runs [`.github/workflows/pages.yml`](.github/workflows/pages.yml): tests,
+the production build with `VITE_BASE=/<repo>/`, the game-file audit, and deployment to GitHub
+Pages.
 
-## OpenRouter
+## Limitations
 
-На вкладке «Нейросеть OpenRouter» в панели скана:
+- Nose and jaw shape are harder to read from a frontal photo than eyes and mouth, so their
+  confidence is lower. A frontal photo in even light works best.
+- In-game colours depend on the creator's lighting. Matching uses the game's swatches, not
+  the final render.
+- The asset pack builder runs on Windows only.
+- Game hair physics (dangling bones) is not simulated.
 
-- вставьте свой ключ OpenRouter (`sk-or-…`). Ключ хранится только в `localStorage` вашего браузера и отправляется только на openrouter.ai. При отправке OpenRouter передаёт фото и промпт поставщику выбранной модели, и дальше действуют правила этого поставщика (бесплатные модели могут сохранять запросы);
-- выберите модель. Список подгружается из `https://openrouter.ai/api/v1/models`; бесплатные модели с поддержкой изображений идут первыми. По умолчанию стоит `google/gemma-4-31b-it:free`, запасные — `nvidia/nemotron-3.5-super-vl:free` и недорогая `qwen/qwen3.7-flash`.
+## Legal
 
-У бесплатных моделей OpenRouter есть дневной лимит запросов. При ответе 429 приложение подскажет подождать или выбрать другую модель.
+V-Mirror is an unofficial fan project, not affiliated with or endorsed by CD PROJEKT RED.
+Cyberpunk 2077 and related names are trademarks of CD PROJEKT S.A. The repository contains
+no game files. It contains only data derived from them: option lists, swatch colours, numeric
+features, plus portrait screenshots. The asset pack you build stays on your machine; do not
+redistribute it.
 
-Без ключа есть вкладка «Ручной ответ». Скопируйте промпт и скачайте фото, отправьте их в любой чат с мультимодальной моделью (any multimodal chat model), затем вставьте её JSON обратно.
-
-## Извлечение данных из игры
-
-Нужны установленная игра и [WolvenKit.CLI](https://github.com/WolvenKit/WolvenKit/releases). Скрипты только читают архивы игры, сама игра не меняется.
-
-```powershell
-.\tools\extract\extract_game_data.ps1 -GamePath "G:\Cyberpunk 2077" -WolvenKit "C:\tools\wk\WolvenKit.CLI.exe" -Work "C:\tmp\cp-work"
-```
-
-```bash
-npm run catalog -- "C:\tmp\cp-work"
-```
-
-Меши, текстуры и манифесты для живого 3D собирает `npm run pack` (см. [docs/ASSET_PACK.md](docs/ASSET_PACK.md)); игровые файлы в репозиторий не попадают.
-
-## Структура
-
-| Путь | Что там |
-|---|---|
-| `src/model/` | каталог, логика состояния как в игре (зависимости, случайная V, код ссылки), описания морфов и причёсок |
-| `src/scan/` | MediaPipe, замер цветов, локальный подбор, промпт и разбор ответа модели, панель скана |
-| `src/ui/`, `src/App.tsx` | интерфейс в стиле редактора игры: список строк, сетка цветов, запасной портрет |
-| `src/ui/avatar/` | 3D-модель V на three.js: сборка по манифестам (`character.ts`), скелет (`skeleton.ts`), материалы (`materials.ts`), лицо (`face.ts`), анимации (`motion.ts`), свет и камера (`stage.ts`), кадры строк (`slots.ts`) |
-| `tools/extract/` | извлечение данных из игры |
-| `tools/calibrate/` | страница калибровки морфов и рендера причёсок |
-
-## Ограничения
-
-- Форма носа и челюсти по фронтальному фото определяется хуже, чем глаза и рот, поэтому уверенность в этих пунктах занижена. Лучше всего работает снимок анфас при ровном свете.
-- Цвета в игре зависят от освещения редактора. Подбор идёт по образцам из интерфейса игры, а не по финальному рендеру.
-- Форма бровей в игре обозначена только номером. Описания (густота, изгиб, длина) сделаны по текстурам формы бровей из файлов игры. Стили макияжа глаз не описаны: приложение сообщает модели лишь, есть ли макияж.
-- Подписи цветов собраны из внутренних имён файлов: в локализации игры названий цветов нет, в интерфейсе показываются только образцы.
-- В репозитории нет игровых ресурсов (мешей, текстур), только производные данные: списки вариантов, цвета образцов, числовые признаки. Cyberpunk 2077 — товарный знак CD PROJEKT RED; проект неофициальный.
+The source code is released under the [MIT License](LICENSE).
