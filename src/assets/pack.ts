@@ -620,7 +620,9 @@ function pickFilesInput(): Promise<File[] | null> {
       };
       window.setTimeout(() => window.addEventListener('focus', onFocus), 0);
     }
-    document.body.appendChild(input);
+    // An open modal <dialog> (the pack panel) makes everything outside it inert, and an inert
+    // file input never delivers the chosen folder: put the input inside that dialog.
+    (document.querySelector('dialog[open]') ?? document.body).appendChild(input);
     input.click();
   });
 }
