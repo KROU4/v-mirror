@@ -56,8 +56,11 @@ pack.json            {format: 1, gameVersion, createdAt, files, bytes, tool}
 glb/                 head morph targets (head, eyes, brows) and teeth for both body types
 hair/                every hairstyle mesh + app_to_mesh.json, hint_meshes*.json, index.json
 hair/beards/         beard meshes with head morph targets (male V)
+glb/face/decals/     head layers: makeup (eyes, lips, cheeks), freckles/blemishes, face tattoos,
+                     scars, face cyberware (decal meshes with the head morph targets) and piercings
 tex/skin|face|hair/  skin tones, eyes, lashes, brows, teeth, hair cards/caps/profiles + manifest.json each
-                     (tex/hair/manifest.json also lists the beard styles and colours under "beards")
+                     (tex/hair/manifest.json also lists the beard styles and colours under "beards";
+                     tex/face/decals.json maps creator rows to the layer meshes, chunks and materials)
 body/                body, arms, nails, legs, animations, skeletons, joints, manifest.json
 body/intimate/       nipples, genitals, pubic hair, body tattoos and scars + intimate.json
 swatches/            creator colour thumbnails (when tools/extract/build_swatches.py is present)

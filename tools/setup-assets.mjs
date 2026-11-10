@@ -13,8 +13,11 @@ const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 /** SHA-256 of face_landmarker.task (float16, version 1): the model ships to every visitor. */
 export const MODEL_SHA256 = '64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff';
-/** FilesetResolver.forVisionTasks loads only these (the *_module_internal pair is unused). */
-const WASM_FILES = ['vision_wasm_internal.js', 'vision_wasm_internal.wasm'];
+/**
+ * src/scan/landmarker.core.ts loads only the ES-module pair: it works in the module Web Worker
+ * and on the main thread alike (the classic vision_wasm_internal pair is unused).
+ */
+const WASM_FILES = ['vision_wasm_module_internal.js', 'vision_wasm_module_internal.wasm'];
 
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 

@@ -13,6 +13,7 @@ vi.mock('./skeleton', () => ({
   MasterSkeleton: class {
     root = new THREE.Group();
     bind() {}
+    release() {}
     get() {}
   },
 }));
@@ -35,9 +36,18 @@ const MANIFESTS: Record<string, unknown> = {
   'body/skeleton.pwa.json': { bones: [] },
   'tex/hair/manifest.json': { meshes: {}, hints: {}, materials: {}, textures: {}, cardSets: {}, profiles: {} },
 };
-vi.mock('./assets', () => ({ loadJson: (rel: string) => Promise.resolve(MANIFESTS[rel]) }));
+/** Загрузки по пути и подставленные отказы (путь → ошибка следующей загрузки). */
+const loads: string[] = [];
+const FAILS = new Map<string, () => Error>();
+vi.mock('./assets', () => ({
+  loadJson: (rel: string) => {
+    loads.push(rel);
+    const f = FAILS.get(rel);
+    return f ? Promise.reject(f()) : Promise.resolve(MANIFESTS[rel]);
+  },
+}));
 
-const { Character } = await import('./character');
+const { Character, isPartMissing } = await import('./character');
 
 /** Кеш glb как у AssetStore: один разобранный glb на путь, пока его не выгрузят (dropGltf). */
 class FakeStore {
@@ -114,5 +124,29 @@ describe('Character: сборка после освобождения', () => {
     for (const rel of ['glb/h0_000_pwa__morphs.morphtarget.glb', 'body.glb'])
       store.gltfs.set(rel, Promise.resolve({ scene: new THREE.Group(), animations: [] }));
     await expect(Character.build('female', store as never, {} as never)).rejects.toThrow(/нет мешей/);
+  });
+});
+
+describe('Character: необязательные части набора', () => {
+  const named = (name: string) => () => Object.assign(new Error(name), { name });
+  const look = { body: {}, faceLayers: [] } as never;
+
+  it('разовый сбой чтения не запоминается, отсутствие файла — до смены набора', async () => {
+    const ch = await Character.build('female', new FakeStore() as never, {} as never);
+    const count = () => loads.filter((r) => r === 'body/intimate.json').length;
+    // сбой чтения (перезапуск dev-сервера, сеть): следующая попытка снова читает файл
+    FAILS.set('body/intimate.json', named('TypeError'));
+    const e1 = await ch.prepareIntimate(look).catch((e) => e);
+    expect(isPartMissing(e1)).toBe(false);
+    await ch.prepareIntimate(look).catch(() => {});
+    expect(count()).toBe(2);
+    // файла нет в наборе: отказ окончательный, повторных запросов нет
+    FAILS.set('body/intimate.json', named('PackFileMissing'));
+    const e2 = await ch.prepareIntimate(look).catch((e) => e);
+    expect(isPartMissing(e2)).toBe(true);
+    await ch.prepareIntimate(look).catch(() => {});
+    await ch.prepareIntimate(look).catch(() => {});
+    expect(count()).toBe(3);
+    FAILS.clear();
   });
 });

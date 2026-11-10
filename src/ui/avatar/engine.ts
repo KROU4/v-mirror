@@ -4,8 +4,8 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Gender } from '../../model/catalog';
 import { AssetStore } from './assets';
-import { Character } from './character';
-import type { AvatarLook } from './look';
+import { Character, isPartMissing } from './character';
+import type { AvatarLook, PackPart } from './look';
 import { Materials, texturesOf } from './materials';
 import { FrameStats, initialPixelRatio, nextPixelRatio } from './perf';
 import { bodyModeFor, cameraShot, cameraSlotFor, type CameraSlot } from './slots';
@@ -15,6 +15,32 @@ export type { AvatarLook } from './look';
 
 /** Скорость поворота V при зажатой Q/E, °/с (в игре поворот идёт, пока клавиша нажата). */
 export const SPIN_DEG_PER_S = 150;
+
+/**
+ * Масштаб кадра (zoom камеры) для холста w×h с видимым промежутком gap и плашкой inset снизу.
+ * Крупные планы рассчитаны на широкий экран: в узком промежутке кадр отъезжает, чтобы голова
+ * поместилась по ширине (кадру нужна ширина ≥ 0,77 высоты), а на почти квадратном холсте
+ * (телефон) — ещё на 14 %, иначе макушка уходит за верхний край. Кадр во весь рост (строки
+ * тела) узкий: V в нём занимает по ширине меньше половины высоты, поэтому на телефоне он не
+ * отъезжает вслед за крупными планами и даже чуть приближается — V около 85 % видимой высоты
+ * холста, а не мелкая фигурка, на которой не разглядеть тату и интимные строки.
+ */
+export function frameZoom(slot: CameraSlot, w: number, h: number, gap: number, inset: number): number {
+  const body = slot === 'UI_Preview';
+  const aspect = gap / h;
+  const fit = body ? Math.min(1, aspect / BODY_FRAME_ASPECT) : Math.min(1, aspect * 1.3);
+  const narrow = w / h < 1.3 ? (body ? PHONE_BODY_FILL : 0.86) : 1;
+  return fit * ((h - inset) / h) * narrow;
+}
+/** Ширина кадра во весь рост к высоте, нужная V (руки опущены, с полями). */
+export const BODY_FRAME_ASPECT = 0.5;
+/** Кадр во весь рост на почти квадратном холсте: ближе на 6 %, ноги и макушка остаются в кадре. */
+export const PHONE_BODY_FILL = 1.06;
+
+/** Угол поворота клавишей: from + dir · скорость · время удержания (с t0 до now, мс). */
+export function spinYaw(from: number, dir: number, t0: number, now: number): number {
+  return from + dir * SPIN_DEG_PER_S * Math.max(0, now - t0) / 1000;
+}
 
 export interface SlotFocus {
   slotId?: string;
@@ -32,6 +58,11 @@ export interface EngineEvents {
    * после догрузки зубов и ногтей): по нему интерфейс снимает «Загрузка V»
    */
   onShown?: () => void;
+  /**
+   * В наборе нет необязательной части (слои лица, бороды, нагота — набор собран старой версией):
+   * её строки интерфейс помечает «не показано в 3D». Каждая часть сообщается один раз.
+   */
+  onMissing?: (parts: PackPart[]) => void;
 }
 
 /** Тело, на котором V сейчас не стоит, держим столько, потом освобождаем (на слабых устройствах — сразу). */
@@ -67,12 +98,33 @@ export class AvatarEngine {
   private token = 0;
   private hairToken = 0;
   private intimateToken = 0;
+  private missing = new Set<PackPart>();
+  /**
+   * Часть набора не показана. Помечается «нет в наборе» только когда её действительно нет
+   * (isPartMissing); разовый сбой загрузки строку не помечает — следующее изменение вида
+   * загрузит часть снова.
+   */
+  private markMissing(part: PackPart, e: unknown) {
+    const gone = isPartMissing(e);
+    if (import.meta.env.DEV) console.warn(gone ? '[avatar] нет части набора:' : '[avatar] часть набора не загрузилась:', part, e);
+    if (!gone || this.missing.has(part) || this.disposed) return;
+    this.missing.add(part);
+    this.events.onMissing?.([...this.missing]);
+  }
   private lastLook: AvatarLook | null = null;
   private slot: CameraSlot = 'UI_Skin';
   private yawTarget = 0;
   private yaw = 0;
   /** −1, 0, 1 — пока зажата Q или E */
   private spin = 0;
+  /**
+   * Начало текущего поворота клавишей: угол и время. Угол считается по времени удержания, а не
+   * суммой dt кадров: первый и последний кадр удержания попадают на нажатие и отпускание с
+   * разной долей, и пары «E + Q» одинаковой длины сдвигали V на 1–1,5° (за 70 пар — до вида
+   * со спины).
+   */
+  private spinFrom = 0;
+  private spinT0 = 0;
   private followW = 0;
   private drift = new THREE.Vector3();
   private follow = new THREE.Vector3();
@@ -86,6 +138,8 @@ export class AvatarEngine {
   private dpr: number;
   private dprCeil = Infinity;
   private size: [number, number, number, number, number] | null = null;
+  /** масштаб кадра слота (frameZoom); камера доезжает до него плавно, вместе с переездом */
+  private zoomTarget = 1;
   /** сборок шейдеров в работе: пока они идут, кадр не рисуем (иначе главный поток ждёт драйвер) */
   private compiling = 0;
   private frameWaiters: (() => void)[] = [];
@@ -372,8 +426,16 @@ export class AvatarEngine {
 
   private frame(dt: number) {
     this.rig.update(dt);
+    const cam = this.rig.camera;
+    if (cam.zoom !== this.zoomTarget) {
+      // вместе с переездом камеры (1 с): кадр не прыгает при смене строки
+      const k = this.rig.moving ? 1 - Math.exp(-dt * 5) : 1;
+      cam.zoom += (this.zoomTarget - cam.zoom) * k;
+      if (Math.abs(cam.zoom - this.zoomTarget) < 1e-4) cam.zoom = this.zoomTarget;
+      cam.updateProjectionMatrix();
+    }
     // Поворот: Q/E держат постоянную скорость, цель отслеживается с инерцией (yawSpeed куклы)
-    if (this.spin) this.yawTarget += this.spin * SPIN_DEG_PER_S * dt;
+    if (this.spin) this.yawTarget = spinYaw(this.spinFrom, this.spin, this.spinT0, performance.now());
     this.yaw += (this.yawTarget - this.yaw) * (1 - Math.exp(-dt * 8));
     const ch = this.active;
     if (ch) {
@@ -459,6 +521,7 @@ export class AvatarEngine {
     if (this.disposed || my !== this.token) return false;
     this.updateHair(look);
     this.updateBeard(look);
+    this.updateDecals(look);
     this.updateIntimate(look);
     this.scheduleTrim();
     // Зубы, ногти и клипы тела — фоном; когда придут, вид надевается ещё раз
@@ -549,7 +612,23 @@ export class AvatarEngine {
       await this.show(ch, apply);
     } catch (e) {
       // в наборе нет бород (собран старой версией) — V без бороды
-      if (import.meta.env.DEV) console.warn('[avatar] борода:', e);
+      this.markMissing('beards', e);
+    }
+  }
+
+  private decalToken = 0;
+  /** Макияж, тату, шрамы, кибер-импланты и пирсинг лица — догружаются, как причёска. */
+  private async updateDecals(look: AvatarLook) {
+    const my = ++this.decalToken;
+    const ch = this.active;
+    if (!ch) return;
+    try {
+      const apply = await ch.prepareDecals(look);
+      if (!apply || this.disposed || my !== this.decalToken || this.active !== ch) return;
+      await this.show(ch, apply);
+    } catch (e) {
+      // в наборе нет tex/face/decals.json (собран старой версией) — V без слоёв лица
+      this.markMissing('faceLayers', e);
     }
   }
 
@@ -564,7 +643,7 @@ export class AvatarEngine {
       await this.show(ch, apply);
     } catch (e) {
       // в наборе нет body/intimate.json — V без частей наготы
-      if (import.meta.env.DEV) console.warn('[avatar] нагота:', e);
+      this.markMissing('intimate', e);
     }
   }
 
@@ -582,17 +661,30 @@ export class AvatarEngine {
     if (!ch) return;
     this.rig.setShot(cameraShot(this.slot, ch.gender), immediate);
     ch.anim.request(bodyModeFor(this.slot));
+    this.updateZoom(immediate);
   }
 
   setYaw(deg: number) {
-    if (deg !== this.yawTarget) this.lastInput = performance.now();
+    const now = performance.now();
+    if (deg !== this.yawTarget) this.lastInput = now;
     this.yawTarget = deg;
+    // во время поворота клавишей отсчёт идёт от нового угла
+    if (this.spin) {
+      this.spinFrom = deg;
+      this.spinT0 = now;
+    }
   }
 
   /** Непрерывный поворот: dir = −1 / 1 пока клавиша зажата, 0 — стоп. Угол не ограничен. */
-  setSpin(dir: number) {
-    this.spin = Math.sign(dir);
-    this.lastInput = performance.now();
+  setSpin(dir: number, at = performance.now()) {
+    const d = Math.sign(dir);
+    if (d === this.spin) return;
+    // угол на момент отпускания (или смены направления) — по времени, без ожидания кадра
+    if (this.spin) this.yawTarget = spinYaw(this.spinFrom, this.spin, this.spinT0, at);
+    this.spin = d;
+    this.spinFrom = this.yawTarget;
+    this.spinT0 = at;
+    this.lastInput = at;
   }
 
   /** Целевой угол поворота, ° (после вращения клавишами его забирает интерфейс). */
@@ -613,14 +705,21 @@ export class AvatarEngine {
     this.hold(500);
     const cam = this.rig.camera;
     cam.aspect = w / h;
-    const gap = Math.max(1, gapRight - gapLeft);
     const inset = THREE.MathUtils.clamp(insetBottom, 0, h * 0.4);
-    // Почти квадратный холст (телефон): кадр слотов рассчитан на широкий экран, и на крупных
-    // планах макушка уходит за верхний край — отъезжаем чуть дальше
-    const narrow = w / h < 1.3 ? 0.86 : 1;
-    cam.zoom = Math.min(1, (gap / h) * 1.3) * ((h - inset) / h) * narrow;
+    // масштаб кадра по слоту — frameZoom
     const center = (gapLeft + gapRight) / 2 / w;
     cam.setViewOffset(w, h, (0.5 - center) * w, inset / 2, w, h);
+    this.updateZoom(true);
+  }
+
+  /** Масштаб кадра текущего слота; immediate — сразу (смена размера), иначе плавно в frame(). */
+  private updateZoom(immediate: boolean) {
+    if (!this.size) return;
+    const [w, h, gapLeft, gapRight, insetBottom] = this.size;
+    const inset = THREE.MathUtils.clamp(insetBottom, 0, h * 0.4);
+    this.zoomTarget = frameZoom(this.slot, w, h, Math.max(1, gapRight - gapLeft), inset);
+    const cam = this.rig.camera;
+    if (immediate || !this.rig.moving) cam.zoom = this.zoomTarget;
     cam.updateProjectionMatrix();
   }
 
@@ -630,6 +729,7 @@ export class AvatarEngine {
     this.token++;
     this.hairToken++;
     this.beardToken++;
+    this.decalToken++;
     this.intimateToken++;
     cancelAnimationFrame(this.raf);
     for (const w of this.frameWaiters.splice(0)) w();

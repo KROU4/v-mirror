@@ -7,6 +7,7 @@ import {
   gameAssetUrl,
   getPackState,
   hasGameAsset,
+  isPackFileMissing,
   packPath,
   restorePack,
   subscribePack,
@@ -121,6 +122,44 @@ describe('dev source', () => {
     expect(await fetchGameJson('tex/a.json')).toEqual({ v: 2 });
   });
 
+  it('reads every HEAD response to the end (Chromium logs an unread one as ERR_ABORTED)', async () => {
+    const heads: Response[] = [];
+    const fetch = async (u: RequestInfo | URL, init?: RequestInit) => {
+      const r = new Response(String(u).endsWith('pack.json') ? null : '{}', {
+        status: String(u).endsWith('pack.json') ? 204 : 200,
+        headers: { 'content-type': 'application/json' },
+      });
+      if (init?.method === 'HEAD') heads.push(r);
+      return r;
+    };
+    __resetPackForTests(env({ devPack: true, fetch }));
+    expect((await whenPackSettled()).status).toBe('ready');
+    expect(await hasGameAsset('glb/x.glb')).toBe(true);
+    expect(heads.length).toBe(2);
+    expect(heads.every((r) => r.bodyUsed)).toBe(true);
+  });
+
+  it('a missing file (404) is told apart from a failed read, which is retried', async () => {
+    let fail = true;
+    const fetch = async (u: RequestInfo | URL) => {
+      const url = String(u);
+      if (url === '/game/body/manifest.json') return new Response('{"a":1}', { headers: { 'content-type': 'application/json' } });
+      if (url === '/game/pack.json') return new Response('nope', { status: 404 });
+      if (url === '/game/body/intimate.json') return new Response('nope', { status: 404 });
+      if (fail) return new Response('restarting', { status: 503 });
+      return new Response('{"ok":1}', { headers: { 'content-type': 'application/json' } });
+    };
+    __resetPackForTests(env({ devPack: true, fetch }));
+    await whenPackSettled();
+    const gone = await fetchGameJson('body/intimate.json').catch((e) => e);
+    expect(isPackFileMissing(gone)).toBe(true);
+    const once = await fetchGameJson('tex/face/decals.json').catch((e) => e);
+    expect(isPackFileMissing(once)).toBe(false);
+    // the failed read is not cached: the next request gets the file
+    fail = false;
+    expect(await fetchGameJson('tex/face/decals.json')).toEqual({ ok: 1 });
+  });
+
   it('falls back to "none" when the dev route is missing', async () => {
     __resetPackForTests(env({ devPack: true }));
     expect((await whenPackSettled()).status).toBe('none');
@@ -152,6 +191,8 @@ describe('directory source', () => {
     expect(await hasGameAsset('glb/missing.glb')).toBe(false);
     expect(await hasGameAsset('nope/missing.glb')).toBe(false);
     await expect(gameAssetUrl('glb/missing.glb')).rejects.toThrow(/not in the asset pack/);
+    expect(isPackFileMissing(await gameAssetUrl('glb/missing.glb').catch((e) => e))).toBe(true);
+    expect(isPackFileMissing(await fetchGameJson('body/missing.json').catch((e) => e))).toBe(true);
 
     disconnectPack();
     expect(getPackState().status).toBe('none');

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Gender } from '../../model/catalog';
 import { defaultState, setSlot, slotValue } from '../../model/state';
-import { lookOf, morphTargetMatches } from './look';
+import { faceLayersOf, lookOf, morphTargetMatches, notIn3d, PACK_PART_SLOTS } from './look';
+import { getIndex } from '../../model/catalog';
 
 describe('lookOf', () => {
   for (const g of ['female', 'male'] as Gender[]) {
@@ -55,6 +56,60 @@ describe('lookOf: борода', () => {
   });
   it('у женского тела бороды нет', () => {
     expect(lookOf(defaultState('female')).beardApp).toBeNull();
+  });
+});
+
+describe('faceLayersOf: слои лица', () => {
+  const pick = (s: ReturnType<typeof defaultState>, id: string, at: (o: { meshHint?: string | string[]; app?: string; activates?: string[] }) => boolean) => {
+    const o = slotValue(s, id)?.variant.options.find(at);
+    expect(o, id).toBeDefined();
+    return setSlot(s, id, o!.i);
+  };
+  const hint = (o: { meshHint?: string | string[] }) => (Array.isArray(o.meshHint) ? o.meshHint[0] : o.meshHint);
+
+  it('с полным набором в 3D рисуются все строки головы; без части набора помечаются её строки', () => {
+    for (const id of ['makeupEyes', 'piercings_color', 'scars', 'beard', 'pubic_hair']) expect(notIn3d(id, new Set())).toBe(false);
+    expect(notIn3d('makeupLips_color', new Set(['faceLayers']))).toBe(true);
+    expect(notIn3d('beard_color', new Set(['faceLayers']))).toBe(false);
+    expect(notIn3d('beard_color', new Set(['beards']))).toBe(true);
+    expect(notIn3d('hairstyle', new Set(['faceLayers', 'beards', 'intimate']))).toBe(false);
+  });
+
+  it('строки частей набора существуют в каталоге', () => {
+    const ids = new Set([...getIndex('male').slotById.keys(), ...getIndex('female').slotById.keys()]);
+    for (const list of Object.values(PACK_PART_SLOTS)) for (const id of list) expect(ids.has(id), id).toBe(true);
+  });
+
+  it('макияж глаз: база — meshHint стиля, appearance — app строки цвета', () => {
+    let s = pick(defaultState('female'), 'makeupEyes', (o) => !!hint(o) && hint(o) !== 'none');
+    s = pick(s, 'makeupEyes_color', (o) => !!o.app && o.app !== 'None');
+    const l = faceLayersOf(s).find((x) => x.slot === 'makeupEyes');
+    expect(l?.base).toMatch(/makeup_eyes/);
+    expect(l?.app).toBe(slotValue(s, 'makeupEyes_color')?.option?.app);
+  });
+
+  it('тату лица: appearance по полу и тону кожи (шаблон)', () => {
+    const s = pick(defaultState('male'), 'facial_tattoo_switcher', (o) => !!hint(o) && hint(o) !== 'none');
+    expect(faceLayersOf(s).find((x) => x.slot === 'facial_tattoo_switcher')?.app).toBe('{g}__{tone}');
+  });
+
+  it('шрамы: общая база hx_000__scars, appearance — app опции', () => {
+    const s = pick(defaultState('male'), 'scars', (o) => !!o.app && o.app !== 'None');
+    expect(faceLayersOf(s).find((x) => x.slot === 'scars')).toEqual({ slot: 'scars', base: 'hx_000__scars', app: slotValue(s, 'scars')?.option?.app });
+  });
+
+  it('кибер-имплант: номер из activates и шаблон тона кожи', () => {
+    const s = pick(defaultState('female'), 'cyberware_switcher', (o) => !!o.activates?.some((a) => /^cyberware_(?!00)\d+$/.test(a)));
+    const l = faceLayersOf(s).find((x) => x.slot === 'cyberware_switcher');
+    expect(l?.app).toMatch(/^hx_000_\{code\}__cyberware_\d+__\{tone\}$/);
+  });
+
+  it('по умолчанию без «none»-слоёв и без шрамов', () => {
+    for (const g of ['female', 'male'] as Gender[]) {
+      const ls = faceLayersOf(defaultState(g));
+      expect(ls.every((l) => l.base && l.base !== 'none')).toBe(true);
+      expect(ls.some((l) => l.slot === 'scars')).toBe(false);
+    }
   });
 });
 

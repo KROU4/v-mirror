@@ -2,15 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import { displayNumber, getIndex, type Gender, type Loc } from '../model/catalog';
 import { slotValue, type CharacterState } from '../model/state';
 import { analyzePhoto, type PhotoAnalysis } from './analyze';
-import { getLandmarker } from './landmarker';
-import { applySuggestions, localSuggestions, mergeSuggestions, type Source, type Suggestion } from './match';
+import { getLandmarker, releaseLandmarkerSoon } from './landmarker';
+import { applySuggestions, localSuggestions, mergeSuggestions, screenHeavyLids, type Source, type Suggestion } from './match';
 import { buildPrompt, callOpenRouter, LlmError, parseLlm, photoToDataUrl } from './llm';
 import { defaultModel, useOrSettings } from './openrouter';
 import KeyPanel, { orErrorText, useModels } from './KeyPanel';
 import { IconCopy, IconDownload, IconKey, IconUpload } from '../ui/Icons';
 import { pad2 } from '../ui/format';
 import { Swatch } from '../ui/SwatchChip';
-import { NOT_IN_3D } from '../ui/avatar/look';
+import { notIn3d, type PackPart } from '../ui/avatar/look';
 import { useI18n, type T } from '../i18n';
 
 export interface ScanProvenance {
@@ -33,17 +33,27 @@ const CONTOUR = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397,
 export const ANALYSIS_MAX_PX = 2048;
 
 export default function ScanPanel({
+  active = true,
   gender,
   base,
   in3d,
+  missing3d,
   onApply,
   onGender,
   onKeySettings,
 }: {
+  /**
+   * Скан открыт. Закрытая панель остаётся смонтированной (App только прячет секцию, чтобы не
+   * терять фото и ответ модели), поэтому детектор освобождается по этому флагу, а не при
+   * размонтировании
+   */
+  active?: boolean;
   gender: Gender;
   base: CharacterState;
   /** на сцене 3D-модель (как у InfoBox): только тогда строки без 3D помечаются */
   in3d: boolean;
+  /** части набора, которых в нём нет: их строки 3D не рисует */
+  missing3d: ReadonlySet<PackPart>;
   onApply: (s: CharacterState, p: Record<string, ScanProvenance>) => void;
   onGender: (g: Gender) => void;
   onKeySettings: () => void;
@@ -82,6 +92,7 @@ export default function ScanPanel({
     () => () => {
       abortRef.current?.abort();
       if (objUrlRef.current) URL.revokeObjectURL(objUrlRef.current);
+      releaseLandmarkerSoon();
     },
     [],
   );
@@ -100,7 +111,7 @@ export default function ScanPanel({
   }, [note]);
 
   const local = useMemo(() => (analysis ? localSuggestions(gender, analysis) : []), [analysis, gender]);
-  const merged = useMemo(() => mergeSuggestions(local, llm?.sugg ?? []), [local, llm]);
+  const merged = useMemo(() => mergeSuggestions(local, llm ? screenHeavyLids(llm.gender, analysis, llm.sugg) : []), [local, llm, analysis]);
   const preview = useMemo(() => applySuggestions(base, merged), [base, merged]);
   const prompt = useMemo(() => buildPrompt(gender, analysis, lang), [gender, analysis, lang]);
 
@@ -136,11 +147,18 @@ export default function ScanPanel({
     (window as unknown as { __vmLoad?: (u: string) => void }).__vmLoad = load;
   }, [load]);
 
-  // Детектор лица (wasm и модель) загружаем сразу при открытии скана, в простое, пока
-  // пользователь выбирает фото: это сеть и асинхронная компиляция wasm. Сборка графа на
-  // видеокарте (первый detect, ≈ 2 с главного потока) идёт уже по выбранному фото, под
-  // индикатором «Ищу лицо», а не неожиданно, пока человек тянется к кнопке «Закрыть»
+  // Детектор лица стартует при открытии скана, в простое, пока пользователь выбирает фото.
+  // Обычно он живёт в воркере: там и загрузка wasm с моделью, и сборка графа на видеокарте с
+  // прогревом на пустом кадре, главный поток не занят. Только в запасном пути (нет module
+  // worker или OffscreenCanvas, воркер не запустился) всё это идёт на главном потоке, и сборка
+  // графа (≈ 2 с) приходится на открытый скан.
+  // Закрытый скан детектор не держит (воркер, wasm, модель и ещё один WebGL-контекст): через
+  // паузу он освобождается, повторное открытие в эту паузу берёт уже готовый.
   useEffect(() => {
+    if (!active) {
+      releaseLandmarkerSoon();
+      return;
+    }
     const warm = () => void getLandmarker().catch(() => {});
     if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(warm, { timeout: 1500 });
@@ -148,7 +166,7 @@ export default function ScanPanel({
     }
     const id = window.setTimeout(warm, 300);
     return () => window.clearTimeout(id);
-  }, []);
+  }, [active]);
 
   const runAnalysis = useCallback(async () => {
     const img = imgRef.current;
@@ -162,7 +180,13 @@ export default function ScanPanel({
     const snap = document.createElement('canvas');
     snap.width = Math.max(1, Math.round(img.naturalWidth * scale));
     snap.height = Math.max(1, Math.round(img.naturalHeight * scale));
-    snap.getContext('2d')!.drawImage(img, 0, 0, snap.width, snap.height);
+    // Холст на процессоре (willReadFrequently): холст по умолчанию живёт на видеокарте, и его
+    // drawImage ждёт за очередью WebGL 3D-вида (до 1–2 с при подключённом пакете), а потом
+    // пиксели всё равно читаются обратно. Декодирование — заранее и вне главного потока.
+    const ctx = snap.getContext('2d', { willReadFrequently: true })!;
+    await img.decode().catch(() => {});
+    if (seq !== photoSeq.current) return;
+    ctx.drawImage(img, 0, 0, snap.width, snap.height);
     setAnalyzing(true);
     setError(null);
     try {
@@ -471,7 +495,7 @@ export default function ScanPanel({
                     </span>
                     <span>
                       {loc(slot!.label)} <span className="src">{s.src === 'llm' ? t('src.llm') : t('src.local')}</span>
-                      {in3d && NOT_IN_3D.has(s.slotId) && <span className="not3d">{t('scan.not3d')}</span>}
+                      {in3d && notIn3d(s.slotId, missing3d) && <span className="not3d">{t('scan.not3d')}</span>}
                       {s.why && <span className="why">{loc(s.why)}</span>}
                     </span>
                     <span className="num">

@@ -1,27 +1,28 @@
 // Мультимодальная модель: промпт с каталогом вариантов, вызов OpenRouter, разбор ответа.
-// Тот же промпт используется в «ручном режиме» — ответ можно вставить вручную
-// (на этапе разработки роль модели выполнял ассистент).
+// Тот же промпт используется в «ручном режиме» — ответ можно вставить вручную.
 import { getIndex, type Gender, type Loc, type Option, type Variant } from '../model/catalog';
 import { MORPH_SLOTS, morphInfo } from '../model/descriptors';
-import { hairDescriptions } from '../model/hair';
+import { hairDescription, hairDescriptions, isTwoTone } from '../model/hair';
 import { lookupSwatch, swatchTable } from '../ui/swatch';
 import { browDescription } from '../model/brows';
+import { EYE_MAKEUP_FALLBACK, EYE_MAKEUP_STYLES, eyeMakeupStyleNo, eyeMakeupWords } from '../model/makeup';
 import type { PhotoAnalysis } from './analyze';
-import { colorKey, irisRing, type Suggestion } from './match';
+import { beardStyleKey, colorHex, colorKey, heavyLidRows, irisRing, linkedColorKey, localSuggestions, PLAIN_RATING, type Suggestion } from './match';
 
+/** Стили бороды словами — по кадрам 3D-редактора (полная часть, тёмный цвет). */
 const BEARD_STYLE: Record<string, string> = {
-  big_beard: 'big full beard',
-  big_beard_afro: 'big curly full beard',
-  default: 'short neat beard',
-  handlebar_stache: 'handlebar moustache only',
-  jesse_beard: 'medium full beard',
-  maelstrom_full: 'full rough uneven beard',
+  big_beard: 'long big full beard with a curled moustache',
+  big_beard_afro: 'big bushy full beard with moustache',
+  default: 'short neat full beard with moustache',
+  handlebar_stache: 'handlebar moustache with a thin strap along the jaw and a soul patch',
+  jesse_beard: 'medium full beard with moustache, covers cheeks and chin',
+  maelstrom_full: 'moustache and a long pointed chin beard, sparse cheeks',
   shadowbase_01: 'stubble / five o’clock shadow',
-  short_afro: 'short curly beard',
-  thick_beard_afro: 'thick curly beard',
-  fu_manchu: 'fu manchu moustache with long ends',
-  logan: 'mutton chops with moustache',
-  patmc: 'short scruffy beard',
+  short_afro: 'short scruffy full beard with moustache, patchy cheeks',
+  thick_beard_afro: 'thick short full beard with moustache',
+  fu_manchu: 'fu manchu moustache with long ends and a thin chin tuft',
+  logan: 'mutton chops joined to the moustache, light chin',
+  patmc: 'moustache with a goatee (van dyke), bare cheeks',
 };
 const BEARD_PART: Record<string, string> = {
   '': 'full (moustache + chin + sides)',
@@ -112,19 +113,29 @@ const HAIR_WORDS: Record<string, string> = {
  * тёмный край — тень, а не тёмные кончики.
  */
 export function hairWords(gender: Gender, slotId: string, o: Option): string {
-  const d = lookupSwatch(swatchTable(gender), slotId, o);
-  const stops = d?.stops ?? [];
   const words = HAIR_WORDS[colorKey(o)];
   const name = words ? `${o.label.en}: ${words}` : o.label.en;
+  // Краска (оценка выше естественной) понятна по названию: тона образца только у естественных —
+  // экономия токенов для бесплатных моделей
+  if (o.rating[0] > PLAIN_RATING && words) return name;
+  const d = lookupSwatch(swatchTable(gender), slotId, o);
+  const stops = d?.stops ?? [];
   if (stops.length >= 2) return `${name} (light ${stops[0]}, shade ${stops[stops.length - 1]})`;
   return `${name} (${o.hex})`;
 }
 
-/** Естественные радужки словами: hex миниатюры у них вводит в заблуждение (карий #2c2b2c — серый). */
-const EYE_WORDS: Record<string, string> = {
-  gradient_brown: 'dark brown',
+/**
+ * Естественные радужки словами: hex миниатюры у них вводит в заблуждение (карий #2c2b2c — серый).
+ * Слова сверены с радужкой игровой иконки (swatches.*.json, кольцо radial): «Gradient Black» —
+ * тёмная сине-серая, а не чёрно-карая, карий в игре один — Gradient Brown.
+ */
+/** Множитель уверенности ответа модели с формой глаз «тяжёлые веки». */
+export const HEAVY_LID_LLM_CONF = 0.5;
+
+export const EYE_WORDS: Record<string, string> = {
+  gradient_brown: 'dark/near-black brown',
   gradient_blue: 'blue',
-  gradient_black: 'near-black brown',
+  gradient_black: 'dark blue-grey (not brown)',
   gradient_green: 'green',
   gradient_grey: 'grey-blue',
   gradient_light_blue: 'light blue',
@@ -138,8 +149,52 @@ function eyeWords(gender: Gender, o: Option): string {
   if (words) return `${o.label.en}: ${words}`;
   // У стилизованных — основной цвет и цвет кольца радужки на образце (линзы Rebecca двухцветные)
   const ring = irisRing(gender, 'eyes_color', o) ?? o.iris;
-  const col = ring && o.hex && ring !== o.hex ? `${o.hex}, iris ring ${ring}` : (ring ?? o.hex);
-  return `${o.label.en} (${col})${stylisedEye(o) ? ' [stylised]' : ''}`;
+  const col = ring && o.hex && ring !== o.hex ? `${o.hex}/${ring}` : (ring ?? o.hex);
+  return `${o.label.en} (${col})`;
+}
+
+/**
+ * Цвет глаз: естественные — по строке словами, стилизованные (линзы, кибер-глаза) — одной
+ * строкой «номер название (цвет/кольцо)»: их 60 с лишним, и отдельные строки съедали ~1К токенов.
+ */
+function eyeColourList(gender: Gender, opts: Option[]): string {
+  const natural: string[] = [];
+  const styled: string[] = [];
+  opts.forEach((o, k) => {
+    if (EYE_WORDS[colorKey(o)] && !stylisedEye(o)) natural.push(`  ${k + 1}: ${eyeWords(gender, o)}`);
+    else styled.push(`${k + 1} ${eyeWords(gender, o)}`);
+  });
+  if (styled.length) natural.push(`  stylised lenses / cyber eyes, only if clearly visible: ${styled.join('; ')}`);
+  return natural.join('\n');
+}
+
+/** Номера списком с диапазонами: 4, 10-18, 22. */
+function ranges(nums: number[]): string {
+  const out: string[] = [];
+  for (let k = 0; k < nums.length; ) {
+    let j = k;
+    while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++;
+    out.push(j > k ? `${nums[k]}-${nums[j]}` : `${nums[k]}`);
+    k = j + 1;
+  }
+  return out.join(', ');
+}
+
+/**
+ * Стили макияжа глаз: обычные — по строке с описанием формы, рисунки (молнии, полосы, надписи)
+ * — одной строкой номеров: на обычном фото их не бывает, а описания всех 36 стилей не
+ * помещаются в бюджет промпта.
+ */
+function eyeMakeupList(opts: Option[]): string {
+  const plain: string[] = [];
+  const graphic: number[] = [];
+  opts.forEach((o, k) => {
+    const no = eyeMakeupStyleNo(o);
+    if (no && EYE_MAKEUP_STYLES[no]?.graphic) graphic.push(k + 1);
+    else plain.push(`  ${k + 1}: ${eyeMakeupWords(o)}`);
+  });
+  if (graphic.length) plain.push(`  painted graphic designs (shapes, stripes, lettering): ${ranges(graphic)}`);
+  return plain.join('\n');
 }
 
 function variantOf(gender: Gender, slotId: string, name?: string): Variant | undefined {
@@ -151,6 +206,13 @@ function variantOf(gender: Gender, slotId: string, name?: string): Variant | und
 
 function list(opts: Option[], fn: (o: Option, n: number) => string): string {
   return opts.map((o, k) => `  ${k + 1}: ${fn(o, k + 1)}`).join('\n');
+}
+
+/** «С цветом 3 причёска 21 двухцветная» / «…причёски: 21, 32» — для промпта. */
+export function twoTonePhrase(colourNo: number, styles: readonly number[]): string {
+  return styles.length === 1
+    ? `With colour ${colourNo}, hairstyle ${styles[0]} is two-tone in the game`
+    : `With colour ${colourNo}, these hairstyles are two-tone in the game: ${styles.join(', ')}`;
 }
 
 export interface PromptPack {
@@ -170,21 +232,40 @@ export function buildPrompt(gender: Gender, a?: PhotoAnalysis | null, lang: 'ru'
   };
 
   const hs = variantOf(gender, 'hairstyle', 'hairstyle');
+  const hc = variantOf(gender, 'hair_color');
   if (hs) {
     const desc = hairDescriptions(gender, hs.options);
-    add('hairstyle', 'hairstyle', list(hs.options, (o, n) => `[${o.tags[0] ?? 'none'}] ${desc[n - 1].en}`));
+    add(
+      'hairstyle',
+      'hairstyle — match the length first (where the ends fall: ears, jaw, collar, shoulders), then the parting and whether it is swept back, combed forward or messy; texture (straight, wavy, curly) last; receding/shaved front only if the photo shows it',
+      list(hs.options, (o, n) => `[${o.tags[0] ?? 'none'}] ${desc[n - 1].en}`),
+    );
   }
-  const hc = variantOf(gender, 'hair_color');
   if (hc) {
+    // Двухцветные причёски для измеренного оттенка: с некоторыми цветами игра красит лишь концы
+    // или пряди (длинные 32 + Red Merlot — каштан с бордовыми концами). Весь список пар не
+    // помещается в бюджет промпта — называем только причёски, двухцветные с измеренным цветом
+    const measuredKey = a && !a.monochrome ? localSuggestions(gender, a).find((s) => s.slotId === 'hair_color')?.colorKey : undefined;
+    const measuredNo = measuredKey ? hc.options.findIndex((o) => colorKey(o) === measuredKey) + 1 : 0;
+    const twoToneStyles = measuredNo && hs ? hs.options.flatMap((o, k) => (isTwoTone(gender, o, measuredKey!) ? [k + 1] : [])) : [];
     add(
       'hair_color',
-      'hair colour (eyebrows, eyelashes and beard get the same colour unless you answer their own slots below)',
+      'hair colour (eyebrows, eyelashes and beard get the same colour unless you answer their own slots below)' +
+        (twoToneStyles.length
+          ? `. ${twoTonePhrase(measuredNo, twoToneStyles)} (only the ends or streaks dyed, the rest a natural shade): for hair that is one colour all over do not pair them`
+          : ''),
       list(hc.options, (o) => hairWords(gender, 'hair_color', o)),
     );
     // Брови и борода: палитры те же и в том же порядке, что у волос (номера совпадают)
-    const sameAsHair = 'same numbering as hair_color; answer ONLY if clearly different from the hair (e.g. dark brows with blond hair, grey in the beard), otherwise omit';
-    if (variantOf(gender, 'eyebrows_color')) add('eyebrows_color', `eyebrow colour — ${sameAsHair}`, '  (numbers 1…' + hc.options.length + ' as in hair_color)');
-    if (gender === 'male' && variantOf(gender, 'beard_color')) add('beard_color', `beard colour — ${sameAsHair}`, '  (numbers 1…' + hc.options.length + ' as in hair_color)');
+    const nums = '  (numbers 1…' + hc.options.length + ' as in hair_color)';
+    if (variantOf(gender, 'eyebrows_color'))
+      add(
+        'eyebrows_color',
+        'eyebrow colour — same numbering as hair_color; answer it whenever the brows differ from the hair: dyed hair (red, auburn, platinum, any bright colour) and grey hair usually come with darker natural brows. If omitted, a natural shade of the hair colour is used',
+        nums,
+      );
+    if (gender === 'male' && variantOf(gender, 'beard_color'))
+      add('beard_color', 'beard colour — same numbering as hair_color; answer ONLY if clearly different from the hair (e.g. grey in the beard), otherwise omit', nums);
   }
   const br = variantOf(gender, 'eyebrows');
   if (br) add('eyebrows', 'eyebrow shape (thickness, density, arch)', list(br.options, (o) => browDescription(o)?.en ?? o.label.en));
@@ -196,9 +277,7 @@ export function buildPrompt(gender: Gender, a?: PhotoAnalysis | null, lang: 'ru'
         'beard',
         'facial hair style (1 = none)',
         list(beard.options, (o) => {
-          const v = variantOf(gender, 'beard_part', o.activates?.[0]);
-          const hint = v?.options[0]?.meshHint;
-          const m = typeof hint === 'string' ? hint.split('__')[1] : '';
+          const m = beardStyleKey(gender, o);
           return m ? BEARD_STYLE[m] ?? pretty(m) : 'none, clean shaven';
         }),
       );
@@ -219,29 +298,41 @@ export function buildPrompt(gender: Gender, a?: PhotoAnalysis | null, lang: 'ru'
       list(sk.options, (o) => skinWords(o)),
     );
   const ec = variantOf(gender, 'eyes_color');
-  if (ec) add('eyes_color', 'eye colour — natural ones first; only pick unnatural if the photo clearly shows coloured lenses', list(ec.options, (o) => eyeWords(gender, o)));
+  if (ec) add('eyes_color', 'eye colour — natural ones first; only pick unnatural if the photo clearly shows coloured lenses', eyeColourList(gender, ec.options));
 
+  const heavyLids = heavyLidRows(gender);
   for (const slot of MORPH_SLOTS) {
     const info = morphInfo(gender, slot);
-    add(slot, `${slot} shape (described relative to the game default; 1 = default)`, info.options.map((o, k) => `  ${k + 1}: ${o.text.en}`).join('\n'));
+    const title =
+      slot === 'eyes'
+        ? 'eyes shape (relative to the game default; 1 = default). Judge the relaxed eye: a smile, squint or bright light narrows the eyes on a photo, so do not pick narrow or heavy-lidded shapes for that; most people fit a default-like or open shape'
+        : `${slot} shape (described relative to the game default; 1 = default)`;
+    const line = (text: string, n: number) => (slot === 'eyes' && heavyLids.has(n) ? `${text} — heavy upper lids, looks half-closed on V` : text);
+    add(slot, title, info.options.map((o, k) => `  ${k + 1}: ${line(o.text.en, k + 1)}`).join('\n'));
   }
   const scars = variantOf(gender, 'scars');
   if (scars) add('scars', 'facial scars (1 = none)', list(scars.options, (o) => (o.app && o.app !== 'None' ? pretty(o.app.split('__').pop() ?? '') : 'none')));
   const cheeks = variantOf(gender, 'makeupCheeks');
-  if (cheeks)
-    add('makeupCheeks', 'freckles / blush (1 = none)', list(cheeks.options, (o) => {
+  if (cheeks) {
+    // Варианты без описаний формы — одной строкой диапазонов на вид (веснушки, румяна)
+    const kind = (o: Option) => {
       const h = typeof o.meshHint === 'string' ? o.meshHint : '';
-      return h.includes('freckles') ? `freckles variant ${h.slice(-2)}` : h.includes('cheeks') ? `blush/contour ${h.slice(-2)}` : 'none';
-    }));
+      return h.includes('freckles') ? 'freckles variants' : h.includes('cheeks') ? 'blush/contour variants' : 'none';
+    };
+    const groups = new Map<string, number[]>();
+    cheeks.options.forEach((o, k) => groups.set(kind(o), [...(groups.get(kind(o)) ?? []), k + 1]));
+    add('makeupCheeks', 'freckles / blush (1 = none)', [...groups].map(([w, nums]) => `  ${ranges(nums)}: ${w}`).join('\n'));
+  }
   const lt = variantOf(gender, 'makeupLips_type');
   if (lt) add('makeupLips_type', 'lip makeup type (1 = none)', list(lt.options, (o) => o.label.en));
   const lc = variantOf(gender, 'makeupLips_color', 'makeupLips_glossy_01') ?? variantOf(gender, 'makeupLips_color');
   if (lc) add('makeupLips_color', 'lipstick colour — only if lip makeup type is not 1 (none)', list(lc.options, (o) => `${o.label.en} (${o.hex})`));
-  // Стиль макияжа глаз по номеру не угадать: у 36 стилей нет описаний формы. Модель сообщает
-  // только, есть ли макияж (present.eyeMakeup) и его цвет; стиль пользователь выбирает сам
-  // по подсказке (hints), а «нет макияжа» выставляется само
+  // Макияж глаз: стиль — по описаниям формы декалей игры (обычные — по строке, рисунки — одной
+  // строкой), цвет — отдельно. Ответ о стиле принимается только при present.eyeMakeup = true
+  const me = variantOf(gender, 'makeupEyes');
+  if (me) add('makeupEyes', 'eye makeup style (1 = none), only if clearly visible', eyeMakeupList(me.options));
   const mc = variantOf(gender, 'makeupEyes_color', 'makeupEyes_01') ?? variantOf(gender, 'makeupEyes_color');
-  if (mc) add('makeupEyes_color', 'eye makeup colour — only if eye makeup (liner, shadow, smoky) is clearly visible', list(mc.options, (o) => `${o.label.en} (${o.hex})`));
+  if (mc) add('makeupEyes_color', 'eye makeup colour, with a style', '  ' + mc.options.map((o, k) => `${k + 1} ${o.label.en} ${o.hex}`).join('; '));
 
   const measured = !a
     ? ''
@@ -430,6 +521,11 @@ export function parseLlm(gender: Gender, text: string, allowed?: readonly string
     const o = variant.options[n - 1];
     const why = typeof v.why === 'string' ? v.why.slice(0, 200) : undefined;
     const s: Suggestion = { slotId, number: n, conf: clampConf(v.conf) * 0.95, src: 'llm', why };
+    // Тяжёлые веки делают V сонным: такой ответ — с половинной уверенностью и пометкой
+    if (slotId === 'eyes' && heavyLidRows(gender).has(n)) {
+      s.conf *= HEAVY_LID_LLM_CONF;
+      s.why = `${why ? `${why}; ` : ''}heavy upper lids`;
+    }
     if (o?.app && (o.hex || o.iris)) {
       s.colorKey = colorKey(o);
       s.hex = o.iris ?? o.hex;
@@ -454,10 +550,26 @@ export function parseLlm(gender: Gender, text: string, allowed?: readonly string
   // black_salt_n_pepper…) — переносим тот же ключ, чуть менее уверенно. Ответ модели про
   // сами эти слоты (если он есть) уже в out и уверенности не теряет.
   const hair = out.find((x) => x.slotId === 'hair_color' && x.colorKey);
-  if (hair) {
+  if (hair?.colorKey) {
+    // Ресницы — за ответом о бровях, если он есть (палитры общие)
+    const brows = out.find((x) => x.slotId === 'eyebrows_color' && x.colorKey);
     for (const id of HAIR_LINKED) {
       if (!idx.slotById.get(id) || out.some((x) => x.slotId === id)) continue;
-      out.push({ slotId: id, colorKey: hair.colorKey, hex: hair.hex, conf: hair.conf * 0.9, src: 'llm', why: { ru: 'как цвет волос', en: 'same as the hair colour' } });
+      if (id === 'eyelash_color' && brows?.colorKey) {
+        out.push({ slotId: id, colorKey: brows.colorKey, hex: brows.hex, conf: brows.conf * 0.9, src: 'llm', why: { ru: 'как цвет бровей', en: 'same as the brow colour' } });
+        continue;
+      }
+      // Краска и седина волос на брови и ресницы не переносятся (linkedColorKey)
+      const key = linkedColorKey(id, hair.colorKey);
+      const same = key === hair.colorKey;
+      out.push({
+        slotId: id,
+        colorKey: key,
+        hex: same ? hair.hex : colorHex(gender, id, key) ?? hair.hex,
+        conf: hair.conf * 0.9,
+        src: 'llm',
+        why: same ? { ru: 'как цвет волос', en: 'same as the hair colour' } : { ru: 'естественный тон под цвет волос', en: 'natural shade for this hair colour' },
+      });
     }
   }
 
@@ -471,27 +583,38 @@ export function parseLlm(gender: Gender, text: string, allowed?: readonly string
   if (pres.facialHair === false && gender === 'male') off('beard', { ru: 'без растительности на лице', en: 'no facial hair' });
   if (pres.piercings === false) off('piercings', { ru: 'пирсинга не видно', en: 'no piercings visible' });
   if (pres.faceTattoo === false) off('facial_tattoo_switcher', { ru: 'татуировок на лице нет', en: 'no face tattoos' });
-  if (pres.eyeMakeup === false) off('makeupEyes', { ru: 'макияжа глаз нет', en: 'no eye makeup' });
+  if (pres.eyeMakeup === false) {
+    // «нет макияжа» сильнее номера стиля: слабые модели ставят стиль и тут же пишут false
+    for (let k = out.length - 1; k >= 0; k--) if (out[k].slotId === 'makeupEyes' || out[k].slotId === 'makeupEyes_color') out.splice(k, 1);
+    off('makeupEyes', { ru: 'макияжа глаз нет', en: 'no eye makeup' });
+  }
   if (pres.cyberware === false) off('cyberware_switcher', { ru: 'имплантов на лице нет', en: 'no facial cyberware' });
   // «Есть», но без номера: сами не выбираем — показываем пользователю, что стоит проверить
   if (pres.piercings === true && !answered('piercings')) hints.push({ ru: 'На фото есть пирсинг или серьги — выберите их в строке «Пирсинг».', en: 'The photo shows piercings or earrings: pick them in the Piercings row.' });
-  // Цвет макияжа глаз без стиля: при «нет макияжа» у строки цвета одна опция None, и ответ
-  // модели выглядел бы применённым, а потом терялся при выборе стиля. Цвет уходит в подсказку
-  const eyeCol = out.findIndex((x) => x.slotId === 'makeupEyes_color');
-  let eyeColName: Loc | null = null;
-  if (eyeCol >= 0 && (pres.eyeMakeup === false || !answered('makeupEyes'))) {
-    const s = out[eyeCol];
-    const mc = variantOf(gender, 'makeupEyes_color', 'makeupEyes_01') ?? variantOf(gender, 'makeupEyes_color');
-    const o = s.number !== undefined ? mc?.options[s.number - 1] : undefined;
-    if (o) eyeColName = o.label;
-    out.splice(eyeCol, 1);
+  applyEyeMakeup(gender, out, pres.eyeMakeup, hints);
+  // Причёска и цвет, которые в игре дают двухцветные волосы (крашены лишь концы или пряди)
+  const hsS = out.find((x) => x.slotId === 'hairstyle' && x.value !== undefined);
+  if (hsS && hair?.colorKey) {
+    const opts = idx.slotById.get('hairstyle')?.variants.find((v) => v.name === 'hairstyle')?.options ?? [];
+    const o = opts.find((x) => x.i === hsS.value);
+    if (o && isTwoTone(gender, o, hair.colorKey)) {
+      // Модель сама говорит о крашеных концах или прядях — пара осознанная, оставляем
+      const said = [hsS.why, hair.why].some((w) => typeof w === 'string' && TWO_TONE_WORDS.test(w));
+      const alt = said ? null : oneToneAlternative(gender, opts, o, hair.colorKey);
+      if (alt) {
+        hsS.value = alt.i;
+        hsS.conf *= 0.85;
+        hints.push({
+          ru: `Причёска ${o.label.ru} с этим цветом в игре красит только концы или пряди — выбрана похожая ${alt.label.ru}, окрашенная целиком. Если на фото крашены только концы, верните ${o.label.ru}.`,
+          en: `Hairstyle ${o.label.en} dyes only the ends or streaks with this colour in the game, so the similar ${alt.label.en} (dyed all over) is used. If only the ends are dyed on the photo, switch back to ${o.label.en}.`,
+        });
+      } else
+        hints.push({
+          ru: `С причёской ${o.label.ru} этот цвет волос в игре красит только концы или пряди, остальное — естественный оттенок. Если волосы окрашены целиком, выберите другую причёску или цвет.`,
+          en: `With hairstyle ${o.label.en} this hair colour dyes only the ends or streaks in the game; the rest stays a natural shade. If the hair is one colour all over, pick another hairstyle or colour.`,
+        });
+    }
   }
-  if (pres.eyeMakeup === true && !answered('makeupEyes'))
-    hints.push(
-      eyeColName
-        ? { ru: `На фото есть макияж глаз — выберите стиль в строке «Макияж глаз», цвет: ${eyeColName.ru}.`, en: `The photo shows eye makeup: pick a style in the Eye makeup row; colour: ${eyeColName.en}.` }
-        : { ru: 'На фото есть макияж глаз — выберите стиль и цвет в строке «Макияж глаз».', en: 'The photo shows eye makeup: pick a style and colour in the Eye makeup row.' },
-    );
   if (pres.faceTattoo === true) hints.push({ ru: 'На лице есть татуировка — подберите похожую в строке «Татуировки лица».', en: 'There is a face tattoo: pick a similar one in the Facial tattoos row.' });
   if (pres.cyberware === true) hints.push({ ru: 'На лице есть импланты — подберите их в строке «Киберимпланты».', en: 'There is facial cyberware: pick it in the Cyberware row.' });
 
@@ -499,6 +622,75 @@ export function parseLlm(gender: Gender, text: string, allowed?: readonly string
   // notes выводится в интерфейс как текст: не строка (например {}) уронила бы React
   const notes = typeof j.notes === 'string' && j.notes.trim() ? j.notes.slice(0, 500) : undefined;
   return { suggestions: out, bodyType, notes, hints: hints.length ? hints : undefined };
+}
+
+/**
+ * Макияж глаз из ответа модели. Стиль и цвет принимаются, только если модель видит макияж
+ * (present.eyeMakeup = true): номер стиля без этого флага — частая ошибка слабых моделей.
+ * Макияж виден, а стиль не назван (или назван «нет») — ставится нейтральная подводка
+ * (EYE_MAKEUP_FALLBACK) с цветом из ответа и низкой уверенностью, подсказка просит проверить.
+ */
+function applyEyeMakeup(gender: Gender, out: Suggestion[], present: boolean | undefined, hints: Loc[]) {
+  const drop = (id: string) => {
+    for (let k = out.length - 1; k >= 0; k--) if (out[k].slotId === id) out.splice(k, 1);
+  };
+  if (present === false) return; // «нет макияжа» уже выставлено
+  if (present !== true) {
+    drop('makeupEyes');
+    drop('makeupEyes_color');
+    return;
+  }
+  const me = variantOf(gender, 'makeupEyes');
+  if (out.find((x) => x.slotId === 'makeupEyes')?.number === 1) drop('makeupEyes');
+  if (!out.some((x) => x.slotId === 'makeupEyes') && me) {
+    const k = me.options.findIndex((o) => eyeMakeupStyleNo(o) === EYE_MAKEUP_FALLBACK);
+    if (k >= 0) {
+      out.push({ slotId: 'makeupEyes', number: k + 1, conf: 0.25, src: 'llm', why: { ru: 'макияж виден, стиль не назван — тонкая подводка', en: 'eye makeup is visible, no style given: thin liner' } });
+      hints.push({ ru: 'Стиль макияжа глаз подобран примерно — проверьте строку «Макияж глаз».', en: 'The eye makeup style is a rough guess: check the Eye makeup row.' });
+    }
+  }
+  // Цвет не назван — чёрный (первый в палитре): без цвета слой макияжа не рисуется
+  if (!out.some((x) => x.slotId === 'makeupEyes_color')) {
+    const mc = variantOf(gender, 'makeupEyes_color', 'makeupEyes_01') ?? variantOf(gender, 'makeupEyes_color');
+    const o = mc?.options[0];
+    if (o?.app && o.hex) out.push({ slotId: 'makeupEyes_color', number: 1, colorKey: colorKey(o), hex: o.hex, conf: 0.2, src: 'llm', why: { ru: 'цвет не назван — чёрный', en: 'no colour given: black' } });
+  }
+}
+
+/** Пояснение модели о частично окрашенных волосах (тогда двухцветная пара — её выбор). */
+const TWO_TONE_WORDS = /ombre|ombré|\btips?\b|\bends?\b|streak|highlight|омбре|кончик|концы|пряд|мелир/i;
+
+const STOP = new Set(['the', 'and', 'with', 'over', 'one', 'side', 'hair', 'past']);
+const words = (s: string) => new Set(s.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2 && !STOP.has(w)));
+/**
+ * Черты, которых не должно появиться у замены: выбритые зоны (женщине с гладкими длинными
+ * волосами — полувыбритая голова), собранные волосы и особые формы.
+ */
+const DISTINCT = [/shaved|undercut|buzz/, /updo|bun|ponytail|tied|knot/, /braid|dread/, /mohawk|mullet|spiky|spikes/];
+
+/**
+ * Похожая причёска, которую этот цвет красит целиком: тот же класс длины (тег игры) и
+ * больше всего общих слов в описании. null — такой нет.
+ */
+export function oneToneAlternative(gender: Gender, opts: readonly Option[], o: Option, colour: string): Option | null {
+  const baseText = hairDescription(gender, o).en;
+  const base = words(baseText);
+  let best: Option | null = null;
+  let bestScore = 0;
+  for (const c of opts) {
+    if (c === o || c.tags[0] !== o.tags[0] || isTwoTone(gender, c, colour)) continue;
+    const text = hairDescription(gender, c).en;
+    if (DISTINCT.some((re) => re.test(text) && !re.test(baseText))) continue;
+    const w = words(text);
+    let common = 0;
+    for (const x of w) if (base.has(x)) common++;
+    const score = common / Math.max(1, base.size + w.size - common);
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return bestScore >= 0.2 ? best : null;
 }
 
 export async function photoToDataUrl(img: HTMLImageElement, max = 768): Promise<string> {

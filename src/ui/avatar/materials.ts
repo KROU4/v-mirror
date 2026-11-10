@@ -9,7 +9,9 @@ import type {
   BrowColour,
   BrowStyle,
   EyeEntry,
+  FaceDecalMat,
   HairManifest,
+  PiercingMat,
   HairMaterial,
   LashEntry,
   NailMat,
@@ -285,6 +287,104 @@ float noseFold = 1.0;
 const HAIR_ALBEDO = new THREE.Vector3(0.8, 0.74, 0.7);
 
 /**
+ * Поправка цвета профиля волос по значкам редактора. Рампы профиля (корень→кончик × ID) под
+ * светом редактора дают другой цвет, чем значок игры: мерло — малиновое вместо красно-бордового,
+ * платина — белёсая вместо бежево-серой. Поправка сохраняет оттенок пряди: k — яркость,
+ * s — насыщенность относительно яркости пряди (0 — серый той же яркости, 1 — как в рампе),
+ * tint — слабый сдвиг каналов (каждый в пределах HAIR_TINT_LIMIT, яркость 1). Прежние
+ * множители по каналам до ×3 подгоняли средний цвет одной причёски, а на прядях, где в рампе
+ * мало красного (ID-рампа мерло с жёлто-бежевым стопом), тот же ×3 по зелёному рисовал
+ * зелёные пряди и серо-оливковые длины с красными кончиками.
+ * Подобрано по кадрам самого движка на трёх причёсках (длинная женская 32, каре 06, короткая
+ * мужская 27): средний линейный цвет прядей против среднего цвета значка, общая яркость по
+ * медиане отношений. ΔE76 по 35 цветам (двухцветные сочетания причёска × цвет исключены,
+ * кадры после сведения слоёв декалей): медиана 2,6, среднее 3,8, мерло 2,8 (насыщенность C*
+ * 16 против 15 у значка); без поправки — 11,6 и 12,1.
+ * Жёлтые и бирюзовые (цитрус, cyberpunk_yellow, teal_ash) требуют сдвига каналов до ±15 %.
+ * У мерло и яблока основную часть дают k и s (меньше насыщенности: значок бордово-коричневый,
+ * а не малиновый), а сдвиг каналов не больше ±9 %: при ±15 % бежевые ID-пряди яблока
+ * становились зеленее красных (тест «зелёных прядей нет»). Хуже всего омбре, у которых рампа
+ * и значок расходятся по оттенку (purple_ombre ΔE 20, purple_blonde 15, mermaid_aquamarine 12):
+ * значок — один средний цвет
+ * двухцветной пряди, а сильнее сдвигать каналы нельзя — красные пряди станут зелёными.
+ */
+export interface HairGrade {
+  k: number;
+  s: number;
+  tint?: readonly [number, number, number];
+}
+export const HAIR_GRADE_LIMITS = { k: [0.3, 2.6], s: [0.25, 1.6] } as const;
+export const HAIR_TINT_LIMIT = [0.85, 1.15] as const;
+export const HAIR_GRADE: Readonly<Record<string, HairGrade>> = {
+  brown_liquorice: { k: 0.712, s: 1.108, tint: [1.022, 0.988, 1.057] },
+  blonde_platinum: { k: 0.480, s: 0.814, tint: [1.011, 0.995, 1.020] },
+  red_merlot: { k: 1.351, s: 0.514, tint: [0.945, 1.025, 0.910] },
+  ginger_copper: { k: 1.034, s: 0.683, tint: [0.938, 1.026, 0.930] },
+  teal_ombre: { k: 0.821, s: 0.893, tint: [0.939, 1.010, 1.080] },
+  black_carbon: { k: 1.011, s: 1.324, tint: [1.028, 0.985, 1.066] },
+  blonde_golden: { k: 0.559, s: 0.883 },
+  blonde_dishwater: { k: 0.978, s: 1.211, tint: [1.053, 0.979, 1.056] },
+  blue_sapphire: { k: 1.458, s: 0.959, tint: [0.930, 1.028, 0.930] },
+  brown_ombre: { k: 1.194, s: 1.490, tint: [0.987, 1.011, 0.930] },
+  red_apple: { k: 1.543, s: 0.562, tint: [0.934, 1.029, 0.909] },
+  gray_gunmetal: { k: 0.653, s: 1.030 },
+  ginger_strawberry: { k: 1.145, s: 0.822, tint: [0.930, 1.028, 0.930] },
+  teal_ash: { k: 0.392, s: 1.180, tint: [0.850, 1.028, 1.150] },
+  pink_magenta: { k: 0.338, s: 0.862, tint: [0.944, 1.024, 0.930] },
+  pink_rose: { k: 1.086, s: 0.657, tint: [0.940, 1.025, 0.930] },
+  blue_steel: { k: 1.561, s: 0.894, tint: [0.930, 1.026, 0.951] },
+  blue_red_ombre: { k: 0.982, s: 1.185, tint: [1.031, 0.987, 1.035] },
+  cold_white: { k: 0.559, s: 0.859, tint: [1.006, 0.997, 1.015] },
+  cyberpunk_yellow: { k: 0.391, s: 0.811, tint: [0.850, 1.030, 1.150] },
+  goblin_green: { k: 0.488, s: 0.992, tint: [0.957, 1.005, 1.077] },
+  liliac: { k: 0.960, s: 0.773, tint: [1.032, 0.997, 0.935] },
+  mermaid_aquamarine: { k: 0.501, s: 1.600, tint: [1.048, 0.965, 1.150] },
+  purple_ombre: { k: 0.892, s: 0.980, tint: [0.855, 1.062, 0.850] },
+  black_salt_n_pepper: { k: 1.049, s: 0.359 },
+  green_toxic: { k: 0.595, s: 0.866, tint: [1.080, 0.983, 0.934] },
+  brown_medium: { k: 1.293, s: 0.838, tint: [1.008, 0.989, 1.080] },
+  blue_sky: { k: 1.507, s: 1.407, tint: [0.951, 1.014, 1.005] },
+  citrus_yellow: { k: 1.484, s: 1.484, tint: [1.131, 0.938, 1.150] },
+  dark_purple: { k: 1.456, s: 0.995, tint: [1.080, 0.967, 1.080] },
+  green_orange: { k: 0.896, s: 0.953, tint: [0.982, 1.007, 0.980] },
+  liliac_ombre: { k: 2.318, s: 0.842, tint: [0.994, 1.015, 0.872] },
+  phoenix_fire: { k: 0.956, s: 1.260, tint: [1.043, 0.979, 1.080] },
+  purple_blonde: { k: 1.581, s: 1.441, tint: [1.131, 0.938, 1.150] },
+  silver_rose: { k: 2.433, s: 1.600, tint: [1.106, 0.981, 0.880] },
+};
+
+const NEUTRAL_GRADE: HairGrade = { k: 1, s: 1 };
+
+/** Ключ материала брови из всех полей слоя (порядок полей не важен). */
+export function browKey(def: object): string {
+  const d = def as Record<string, unknown>;
+  return JSON.stringify(Object.keys(d).sort().map((k) => [k, d[k]]));
+}
+
+/** Поправка профиля по имени профиля или LUT скальпа (hh_cap_grad__<профиль>). */
+export function hairGrade(profileOrLut: string | null | undefined): HairGrade {
+  const key = (profileOrLut ?? '').replace(/^.*__/, '');
+  return HAIR_GRADE[key] ?? HAIR_GRADE[profileOrLut ?? ''] ?? NEUTRAL_GRADE;
+}
+
+/** Альбедо-множитель прядей профиля: общая яркость × k × tint (насыщенность — отдельно, uSat). */
+export function hairAlbedo(profileOrLut: string | null | undefined): THREE.Vector3 {
+  const g = hairGrade(profileOrLut);
+  const t = g.tint ?? [1, 1, 1];
+  return HAIR_ALBEDO.clone().multiply(new THREE.Vector3(t[0] * g.k, t[1] * g.k, t[2] * g.k));
+}
+
+/** Цвет пряди после поправки (линейный RGB): то же, что делает шейдер (без HAIR_ALBEDO). */
+export function gradeHair(c: RGB, g: HairGrade): RGB {
+  const y = luma(c);
+  const t = g.tint ?? [1, 1, 1];
+  return [0, 1, 2].map((i) => Math.max(0, y + g.s * (c[i] - y)) * g.k * t[i]) as RGB;
+}
+
+/** GLSL: насыщенность пряди относительно её яркости (как gradeHair). */
+const HAIR_SAT_GLSL = 'col = max( vec3( 0.0 ), vec3( dot( col, vec3( 0.2126, 0.7152, 0.0722 ) ) ) * ( 1.0 - uSat ) + col * uSat );';
+
+/**
  * Глазное яблоко: доля карты нормалей радужки и сила отражения окружения. Шероховатость
  * базового слоя не зажимается: с нижней границей 0,5 и отражением окружения 0,9 карая
  * радужка (12_gradient_brown) заливалась серо-голубым матовым отражением — «слепые» глаза.
@@ -313,6 +413,19 @@ export function catchlight(r: readonly [number, number, number], c = EYE_CATCHLI
 
 /** Доля непрозрачности нижнего ряда ресниц. */
 const LOWER_LASH_ALPHA = 0.55;
+
+/**
+ * Подъём нижнего ряда ресниц (м): карточки в позе привязки начинаются на ~1 мм ниже кромки
+ * нижнего века, и ряд висел на коже щеки пунктиром.
+ */
+export const LOWER_LASH_LIFT = 0.0016;
+
+/**
+ * Пирсинг (Materials.piercing): у металла базовый цвет плашки × metalBase и отражение
+ * окружения metalEnv, у пластика — plasticEnv; миниатюра узорного цвета × patternGain
+ * (в ней уже запечён свет студии редактора).
+ */
+export const PIERCING = { metalBase: 0.75, metalEnv: 0.35, plasticEnv: 0.35, patternGain: 0.9 };
 
 /** Покрытие ресниц (см. Materials.lashes). */
 const LASH_ALPHA = `
@@ -387,6 +500,8 @@ const NOSE_GLSL = `
 	roughnessFactor = max( roughnessFactor, mix( uRoughMin, 0.8, gNose ) );
 	// тёплый «завёрнутый» свет на стенках и крыльях носа без примеси красного (NOSE_SCATTER)
 	gScatter = mix( uScatter, vec3( dot( uScatter, vec3( 0.3333 ) ) * ${NOSE_SCATTER.gain.toFixed(2)} ), ${NOSE_SCATTER.neutral.toFixed(2)} * gNose );
+	// подглазье: свет под кожей заворачивает сильнее и без лишнего красного (UNDER_EYE.scatter)
+	gScatter = mix( gScatter, vec3( dot( uScatter, vec3( 0.3333 ) ) ) * ( 1.0 + uUnderEyeK.z ), uUnderEyeK.z * gEye );
 }
 #endif`;
 
@@ -400,6 +515,13 @@ const NOSE_GLSL = `
  * поправка его почти не меняет. Щёки берутся с мелкого мипа карты в двух точках UV.
  */
 export const NOSE_EVEN = { amount: 1, maxLift: 1.35, chroma: 0.9 };
+/**
+ * Нижняя граница выравнивания носа (v в UV головы): сразу под ноздрями (v ≈ 0,322–0,334)
+ * начинается верхняя губа со щетиной. Эллипс носа доходит до v 0,375, и выравнивание
+ * поднимало там тёмно-серую щетину к цвету щёк (до ×1,35): над губой у мужчины выходили
+ * светлые «молочные усы» (L* щетины −1 к щеке против −8 в альбедо).
+ */
+export const NOSE_EVEN_FLOOR = { v0: 0.334, v1: 0.344 };
 const NOSE_CHEEKS_UV: readonly [number, number][] = [
   [0.38, 0.32],
   [0.62, 0.32],
@@ -430,11 +552,98 @@ export function noseEven(c: RGB, ref: RGB, mask = 1, k = NOSE_EVEN, blur: RGB = 
   }) as RGB;
 }
 
+/** Доля выравнивания носа в точке UV головы (эллипс носа, без верхней губы); как NOSE_ALBEDO_GLSL. */
+export function noseEvenMask(u: number, v: number): number {
+  const q = Math.hypot((u - 0.5) / 0.085, (v - 0.285) / 0.09);
+  return (1 - smoothstep(0.6, 1, q)) * (1 - smoothstep(NOSE_EVEN_FLOOR.v0, NOSE_EVEN_FLOOR.v1, v));
+}
+
+/**
+ * Подглазья. В альбедо обоих полов под нижним веком тёмная серо-сиреневая дуга (на 20–25 %
+ * темнее щеки и холоднее её), вогнутая геометрия под глазом и свет её ещё углубляют: в кадре
+ * дуга выходила лиловым «синяком» (L* на 12 ниже щеки, тон на 17° краснее). В игре
+ * подповерхностное рассеяние её почти стирает. В эллипсе под каждым глазом (UV головы,
+ * зеркально по u = 0,5) яркость размытого альбедо подтягивается к щекам (не больше maxLift и
+ * не на тёмной линии ресниц), цвет — к цвету щёк на долю chroma; поры и веснушки остаются.
+ * Альбедо на уровне щеки не убирало тень самой глазницы: у мужчины под глазом оставался
+ * серо-зелёный полумесяц на 10–14 L* темнее щеки (у внутреннего угла, «носослёзная борозда»).
+ * Поэтому эллипс шире к носу и вниз, альбедо может стать светлее щёк до over (в игре эту тень
+ * стирает подповерхностное рассеяние), а «завёрнутый» свет в эллипсе сильнее (scatter) и
+ * без лишнего красного. Порог gate (доля яркости щеки) отделяет почти чёрную линию ресниц от
+ * складки нижнего века: складка в альбедо вдвое темнее щеки, и с прежним порогом 0,45–0,7 её
+ * не трогало — у мужчины под веком лежало пятно на 26 L* темнее щеки. После правки складка и
+ * подглазье в кадре по умолчанию в пределах 6–9 L* от щеки (было 13–26).
+ */
+export const UNDER_EYE = { u: 0.1, v: 0.272, ru: 0.08, rv: 0.034, maxLift: 1.9, chroma: 0.8, scatter: 0.8, over: 1.1, gate: [0.28, 0.45] as [number, number] };
+
+/** Доля поправки подглазья в точке UV головы (как блок UNDER_EYE в NOSE_ALBEDO_GLSL). */
+export function underEyeMask(u: number, v: number, e = UNDER_EYE): number {
+  const qx = (Math.abs(u - 0.5) - e.u) / e.ru;
+  const qy = (v - e.v) / e.rv;
+  return 1 - smoothstep(0.6, 1, Math.hypot(qx, qy));
+}
+
+/** Цвет пикселя подглазья (линейный) после поправки к щекам ref; blur — размытое альбедо. */
+export function underEyeEven(c: RGB, ref: RGB, mask = 1, blur: RGB = c, e = UNDER_EYE): RGB {
+  const lb = Math.max(luma(blur), 1e-4);
+  const lr = Math.max(luma(ref), 1e-4);
+  const lift = 1 + (Math.min(Math.max((lr * e.over) / lb, 1), e.maxLift) - 1) * smoothstep(e.gate[0], e.gate[1], lb / lr);
+  return c.map((v, i) => {
+    const gain = lift * (1 + ((ref[i] / lr) / Math.max(blur[i] / lb, 1e-4) - 1) * e.chroma);
+    return v + (v * gain - v) * mask;
+  }) as RGB;
+}
+
+/**
+ * Кожа вокруг рта. В альбедо у кромки губ светлая бесцветная кайма (L* +1,5 к щеке при
+ * насыщенности 18 против 24 у мужчины), а щетина над губой серо-голубая: в кадре у мужчины
+ * над верхней губой, в уголках и под нижней губой лежала бледная серо-белая полоса — «молочные
+ * усы». В эллипсе рта (UV головы) размытое альбедо светлее щёк темнеет до них (не ниже
+ * minGain), а бесцветное — получает оттенок щёк на долю chroma. Губы (темнее и насыщеннее щёк)
+ * и тёмная щетина (заметно темнее щёк) не меняются; поры остаются.
+ */
+export const MOUTH_EVEN = { v: 0.394, ru: 0.13, rv: 0.072, top: 0.334, minGain: 0.85, chroma: 0.85 };
+
+/** Доля поправки вокруг рта в точке UV головы (как блок MOUTH_EVEN в NOSE_ALBEDO_GLSL). */
+export function mouthEvenMask(u: number, v: number, m = MOUTH_EVEN): number {
+  const q = Math.hypot((u - 0.498) / m.ru, (v - m.v) / m.rv);
+  return (1 - smoothstep(0.7, 1, q)) * smoothstep(m.top, m.top + 0.016, v);
+}
+
+/** Цвет пикселя у рта (линейный) после поправки к щекам ref; blur — размытое альбедо. */
+export function mouthEven(c: RGB, ref: RGB, mask = 1, blur: RGB = c, m = MOUTH_EVEN): RGB {
+  const lb = Math.max(luma(blur), 1e-4);
+  const lr = Math.max(luma(ref), 1e-4);
+  const dark = Math.min(1, Math.max(m.minGain, lr / lb));
+  const satB = (blur[0] - blur[2]) / lb;
+  const satR = (ref[0] - ref[2]) / lr;
+  const pull = m.chroma * smoothstep(0.85, 0.97, lb / lr) * smoothstep(0, 0.1, satR - satB);
+  return c.map((v, i) => {
+    const gain = dark * (1 + ((ref[i] / lr) / Math.max(blur[i] / lb, 1e-4) - 1) * pull);
+    return v + (v * gain - v) * mask;
+  }) as RGB;
+}
+
 const NOSE_ALBEDO_GLSL = `
 #if defined( SKIN_NOSE ) && defined( USE_MAP )
 {
+	vec2 eq = vec2( abs( vMapUv.x - 0.5 ) - uUnderEye.x, vMapUv.y - uUnderEye.y ) / uUnderEye.zw;
+	float em = 1.0 - smoothstep( 0.6, 1.0, length( eq ) );
+	gEye = em;
+	if ( em > 0.0 ) {
+		vec3 ref = 0.5 * ( textureLod( map, vec2( ${NOSE_CHEEKS_UV[0].join(', ')} ), 5.0 ).rgb + textureLod( map, vec2( ${NOSE_CHEEKS_UV[1].join(', ')} ), 5.0 ).rgb );
+		vec3 b = textureLod( map, vMapUv, 3.0 ).rgb;
+		vec3 W = vec3( ${LUMA.join(', ')} );
+		float lb = max( dot( b, W ), 1e-4 );
+		float lr = max( dot( ref, W ), 1e-4 );
+		float lift = 1.0 + ( clamp( lr * uUnderEyeK.w / lb, 1.0, uUnderEyeK.x ) - 1.0 ) * smoothstep( uUnderEyeG.x, uUnderEyeG.y, lb / lr );
+		vec3 gain = lift * mix( vec3( 1.0 ), ( ref / lr ) / max( b / lb, vec3( 1e-4 ) ), uUnderEyeK.y );
+		diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * gain, em );
+	}
+}
+{
 	vec2 nq = ( vMapUv - vec2( 0.5, 0.285 ) ) / vec2( 0.085, 0.09 );
-	float nm = ( 1.0 - smoothstep( 0.6, 1.0, length( nq ) ) ) * uNoseEven.x;
+	float nm = ( 1.0 - smoothstep( 0.6, 1.0, length( nq ) ) ) * ( 1.0 - smoothstep( ${g4(NOSE_EVEN_FLOOR.v0)}, ${g4(NOSE_EVEN_FLOOR.v1)}, vMapUv.y ) ) * uNoseEven.x;
 	if ( nm > 0.0 ) {
 		vec3 ref = 0.5 * ( textureLod( map, vec2( ${NOSE_CHEEKS_UV[0].join(', ')} ), 5.0 ).rgb + textureLod( map, vec2( ${NOSE_CHEEKS_UV[1].join(', ')} ), 5.0 ).rgb );
 		vec3 b = textureLod( map, vMapUv, 4.0 ).rgb;
@@ -445,6 +654,22 @@ const NOSE_ALBEDO_GLSL = `
 		float pull = uNoseEven.z * smoothstep( 0.0, 0.15, ( b.r - b.g ) / lb - ( ref.r - ref.g ) / lr );
 		vec3 gain = lift * mix( vec3( 1.0 ), ( ref / lr ) / max( b / lb, vec3( 1e-4 ) ), pull );
 		diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * gain, nm );
+	}
+}
+{
+	// кожа вокруг рта (MOUTH_EVEN): светлая бесцветная кайма губ и серая щетина — к щекам
+	vec2 mq = ( vMapUv - vec2( 0.498, ${g4(MOUTH_EVEN.v)} ) ) / vec2( ${g4(MOUTH_EVEN.ru)}, ${g4(MOUTH_EVEN.rv)} );
+	float mm = ( 1.0 - smoothstep( 0.7, 1.0, length( mq ) ) ) * smoothstep( ${g4(MOUTH_EVEN.top)}, ${g4(MOUTH_EVEN.top + 0.016)}, vMapUv.y ) * uNoseEven.x;
+	if ( mm > 0.0 ) {
+		vec3 ref = 0.5 * ( textureLod( map, vec2( ${NOSE_CHEEKS_UV[0].join(', ')} ), 5.0 ).rgb + textureLod( map, vec2( ${NOSE_CHEEKS_UV[1].join(', ')} ), 5.0 ).rgb );
+		vec3 b = textureLod( map, vMapUv, 2.0 ).rgb;
+		vec3 W = vec3( ${LUMA.join(', ')} );
+		float lb = max( dot( b, W ), 1e-4 );
+		float lr = max( dot( ref, W ), 1e-4 );
+		float dark = clamp( lr / lb, ${MOUTH_EVEN.minGain.toFixed(3)}, 1.0 );
+		float pull = ${MOUTH_EVEN.chroma.toFixed(3)} * smoothstep( 0.85, 0.97, lb / lr ) * smoothstep( 0.0, 0.1, ( ref.r - ref.b ) / lr - ( b.r - b.b ) / lb );
+		vec3 gain = dark * mix( vec3( 1.0 ), ( ref / lr ) / max( b / lb, vec3( 1e-4 ) ), pull );
+		diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * gain, mm );
 	}
 }
 #endif
@@ -467,6 +692,9 @@ function patchSkin(mat: THREE.MeshPhysicalMaterial, p: SkinPatch, key: string) {
     uHueKeep: { value: SKIN_HUE_KEEP },
     uSoftN: { value: p.softNormal ?? SKIN.softNormal },
     uNoseEven: { value: new THREE.Vector3(NOSE_EVEN.amount, NOSE_EVEN.maxLift, NOSE_EVEN.chroma) },
+    uUnderEye: { value: new THREE.Vector4(UNDER_EYE.u, UNDER_EYE.v, UNDER_EYE.ru, UNDER_EYE.rv) },
+    uUnderEyeK: { value: new THREE.Vector4(UNDER_EYE.maxLift, UNDER_EYE.chroma, UNDER_EYE.scatter, UNDER_EYE.over) },
+    uUnderEyeG: { value: new THREE.Vector2(...UNDER_EYE.gate) },
   };
   mat.userData.skin = uniforms;
   mat.defines = { ...(mat.defines ?? {}), SKIN_SSS: '' };
@@ -491,7 +719,8 @@ uniform vec3 uScatter; uniform float uRoughMin; uniform float uMouthLight; unifo
 float gMouthDepth = 0.0;
 float gEarMask = 0.0;
 float gNose = 0.0;
-uniform float uSoftN; uniform vec3 uNoseEven;
+float gEye = 0.0;
+uniform float uSoftN; uniform vec3 uNoseEven; uniform vec4 uUnderEye; uniform vec4 uUnderEyeK; uniform vec2 uUnderEyeG;
 vec3 gSoftN = vec3( 0.0, 0.0, 1.0 );
 vec3 gScatter = vec3( 0.0 );
 float gCrease = 1.0;`,
@@ -514,7 +743,9 @@ material.specularF90 *= 1.0 - 0.7 * gNose;
         '#include <normal_fragment_maps>',
         THREE.ShaderChunk.normal_fragment_maps.replace('mapN.xy *= normalScale;', DETAIL_GLSL) +
           `
-gSoftN = normalize( mix( normal, nonPerturbedNormal, uSoftN ) );
+// под глазом рельеф карты (выпуклое подглазье) не смягчается: вогнутая геометрия глазницы
+// иначе оставляет под веком тёмную дугу (UNDER_EYE)
+gSoftN = normalize( mix( normal, nonPerturbedNormal, uSoftN * ( 1.0 - gEye ) ) );
 // Глубокие складки карты нормалей (ямка над грудиной, складка у крыла носа) круто наклонены
 // к геометрии и ловят скользящий блик ламп «стеклянным» штрихом — там блик гаснет
 gCrease = mix( ${SKIN_CREASE.floor.toFixed(2)}, 1.0, smoothstep( ${SKIN_CREASE.from.toFixed(2)}, ${SKIN_CREASE.to.toFixed(2)}, dot( normal, nonPerturbedNormal ) ) );`,
@@ -578,6 +809,37 @@ export function skinScatter(f: { color: string; amount: number } = SKIN_FALLOFF)
  * гасит выравнивание альбедо носа (NOSE_EVEN).
  */
 const SKIN = { roughness: 1.0, specular: 0.5, scatter: skinScatter(), softNormal: 0.45 };
+
+/**
+ * Блик кожи по тону. Широкий блик матовой кожи (шероховатость не ниже 0,6) от голубых
+ * заполняющих ламп ложится на тёмную кожу серой дымкой: на тонах 11–12 лицо выходило
+ * пепельным и плоским, хотя альбедо тёплое. На светлых тонах та же дымка тонет в диффузе.
+ */
+export const SKIN_SPECULAR_BY_TONE: readonly [RegExp, number][] = [
+  [/06_bl_dark/, 0.28],
+  [/05_bl_espresso/, 0.38],
+];
+
+/**
+ * Альбедо глазного яблока на тёмных тонах (11 Espresso, 12 Dark): склера той же яркости, что
+ * у светлой кожи, светилась белым на тёмном лице — в игре её глушат тень века и AO уголков.
+ */
+export const SCLERA_BY_TONE: readonly [RegExp, number][] = [
+  [/06_bl_dark/, 0.78],
+  [/05_bl_espresso/, 0.86],
+];
+
+/** Множитель альбедо глазного яблока для тона кожи тела (01_ca_pale…). */
+export function scleraDim(tone: string | null | undefined): number {
+  for (const [re, k] of SCLERA_BY_TONE) if (tone && re.test(tone)) return k;
+  return 1;
+}
+
+/** Доля блика кожи (specularIntensity) для appearance тона кожи или его ключа. */
+export function skinSpecular(tone: string | null | undefined): number {
+  for (const [re, k] of SKIN_SPECULAR_BY_TONE) if (tone && re.test(tone)) return k;
+  return SKIN.specular;
+}
 
 /**
  * Единое соглашение карт нормалей для всего персонажа (голова, тело, руки, бельё, кибер-
@@ -674,10 +936,329 @@ export function texturesOf(m: THREE.Material, out = new Set<THREE.Texture>()): S
 }
 
 /**
- * Брови: множитель кадра для тёмной брови не больше этого (кожа под бровью темнеет хотя бы
- * до 35 %). Без предела на тонах 11–12 значок кожи темнее альбедо брови, и брови пропадали.
+ * Брови: альбедо тёмной брови не светлее этой доли альбедо кожи под ней. Без предела на
+ * тонах 11–12 кожа темнее альбедо брови, и брови пропадали или серели.
  */
 export const BROW_DARK_MAX = 0.35;
+
+/** NormalAlpha бровей игры (eyebrows_grad__default.mi): рельеф волосков поверх кожи. */
+export const BROW_NORMAL_ALPHA = 0.4;
+
+/** Шероховатость волосков бровей (кожа под ними — по своей карте). */
+export const BROW_ROUGHNESS = 0.92;
+
+/** Градиент цвета слоя (брови): R диффуза — позиция в градиенте × интенсивность. */
+export interface DecalGradient {
+  gradient?: string;
+  gradientIntensity?: number;
+}
+
+/** Кожа головы для вида: альбедо типа кожи и оттенок тона (общий ключ кожи и слоёв лица). */
+interface HeadSpec {
+  albedo: string;
+  tintColor: string;
+  tintScale: number;
+  specular: number;
+  key: string;
+}
+function headSpec(g: SkinGender, skinApp: string | null, skinType: string): HeadSpec {
+  const toneKey = skinApp && g.skinTones[skinApp] ? skinApp : Object.keys(g.skinTones)[0];
+  const tone = g.skinTones[toneKey];
+  const entry = tone.byskinType[skinType] ?? Object.values(tone.byskinType)[0];
+  const albedo = entry?.albedo ?? g.skinTypes[skinType]?.albedo ?? Object.values(g.skinTypes)[0].albedo;
+  const tintColor = entry?.tintColor ?? tone.tintColor;
+  const tintScale = entry?.tintScale ?? tone.tintScale;
+  const specular = skinSpecular(toneKey);
+  return { albedo, tintColor, tintScale, specular, key: `${albedo}:${tintColor}:${tintScale}:${specular}` };
+}
+
+/**
+ * Знак зелёного канала нормали слоя лица в экранном базисе касательных (UV glTF без
+ * переворота): карты выгружены в OpenGL-зелёный (face/decals.py), как у кожи.
+ */
+export const DECAL_NORMAL_Y = -1;
+
+/**
+ * Сила рельефа слоя. Диффузный свет кожи считается по нормали, наполовину смешанной с
+ * нормалью геометрии (SKIN.softNormal), и рельеф шрамов в нём почти пропадал; рельеф слоя
+ * добавляется и к этой мягкой нормали (gDecalRelief), а здесь — с запасом.
+ */
+export const DECAL_RELIEF = 1.5;
+
+/**
+ * Тату (лицо и тело): текстуры игры — чернила, нарисованные по телесному фону (≈ #a7856d там,
+ * где чернил нет), либо сплошной цвет чернил; DiffuseColor по тону кожи лишь приглушает этот
+ * фон под тон. Наложение «как есть» (смешивание к RGB текстуры с DiffuseAlpha 0,6–0,7) рисовало
+ * серо-бежевую полупрозрачную плёнку, на тёмной коже — светлее кожи («негатив»). Чернила
+ * умножают кожу: множитель — отношение текстуры к фону (не больше 1: тату никогда не светлит
+ * кожу), доля — альфа текстуры × DiffuseAlpha × gain.
+ * Тёмные чернила — нейтральный множитель: у блэкворка игры краска тёмно-бирюзовая (#1e2e29),
+ * а отношение к тёплому фону по каналам — (0,03; 0,12; 0,15), и кожа под ним уходила в
+ * оливково-бирюзовый. В игре такой слой (lerp к почти чёрному цвету) только затемняет кожу,
+ * поэтому оттенок множителя гаснет по мере его темноты (яркость множителя ниже neutral[0] —
+ * чистая яркость, выше neutral[1] — свой оттенок, как у красных и зелёных чернил).
+ */
+export const TATTOO_INK = { paper: '#a7856d', gain: 1.45, neutral: [0.05, 0.4] as const };
+
+/** Слой — тату (по текстуре игры): head_tattoo__…, tattoo_body__… */
+export function isInkDecal(diffuse: string | null | undefined): boolean {
+  return !!diffuse && /(^|\/)(head_)?tattoo_/.test(diffuse);
+}
+
+/** Множитель кожи под тату (линейные RGB 0…1): как шейдер (DECAL_INK, intimateDecal). */
+export function inkFactor(tex: RGB, alpha: number, diffuseAlpha: number, ink = TATTOO_INK): RGB {
+  const paper = new THREE.Color(ink.paper);
+  const a = Math.min(1, Math.max(0, alpha * diffuseAlpha * ink.gain));
+  const f = [paper.r, paper.g, paper.b].map((p, i) => Math.min(1, tex[i] / p)) as RGB;
+  const y = luma(f);
+  const keep = smoothstep(ink.neutral[0], ink.neutral[1], y);
+  return f.map((v) => 1 + (y + (v - y) * keep - 1) * a) as RGB;
+}
+
+const INK_GLSL = (texRgb: string, texA: string, alphaU: string) => `vec3 inkF = min( ${texRgb} / uInkPaper, vec3( 1.0 ) );
+	{
+		float inkY = dot( inkF, vec3( 0.2126, 0.7152, 0.0722 ) );
+		inkF = mix( vec3( inkY ), inkF, smoothstep( ${g4(TATTOO_INK.neutral[0])}, ${g4(TATTOO_INK.neutral[1])}, inkY ) );
+	}
+	float inkA = saturate( ${texA} * ${alphaU} * ${TATTOO_INK.gain.toFixed(2)} );`;
+
+/** Сдвиг мипа шума SecondaryMask с мелким повтором (зерно пудры у макияжа глаз). */
+export const DECAL_GRAIN_BIAS = 3;
+/** Повтор SecondaryMask, начиная с которого шум считается зерном, а не формой слоя. */
+export const DECAL_GRAIN_SCALE = 8;
+/** Шероховатость слоя без своей карты: серая текстура движка по умолчанию. */
+export const DECAL_DEFAULT_ROUGHNESS = 0.5;
+/**
+ * Отражение окружения на металле слоя (кибер-импланты, золотая помада): у кожи envMapIntensity
+ * 0,12, и хром с картой металличности игры оставался матово-серым.
+ */
+export const DECAL_METAL_ENV = 6;
+
+/** Какие текстуры слоя загружены (faceDecal). */
+export interface DecalTexSet {
+  map: boolean;
+  grad: boolean;
+  sec: boolean;
+  nrm: boolean;
+  nAlpha: boolean;
+  rough: boolean;
+  metal: boolean;
+  sec2: boolean;
+}
+
+/** Ветки шейдера слоя лица по параметрам .mi и загруженным текстурам. */
+export function decalDefines(d: FaceDecalMat & DecalGradient, t: DecalTexSet): Record<string, string> {
+  const defs: Record<string, string> = { FACE_DECAL: '' };
+  if (t.map) defs.DECAL_MAP = '';
+  if (t.grad) defs.DECAL_GRADIENT = '';
+  else if (t.map && isInkDecal(d.diffuse)) defs.DECAL_INK = '';
+  if (t.sec && (d.secondaryMaskInfluence ?? 0) > 0) {
+    defs.DECAL_SEC = '';
+    if ((d.secondaryMaskUVScale ?? 1) >= DECAL_GRAIN_SCALE) defs.DECAL_SEC_GRAIN = '';
+  }
+  if (t.nrm && (d.normalAlpha ?? 0) > 0) defs.DECAL_NORMAL = '';
+  if (t.nAlpha) defs.DECAL_NALPHA_TEX = '';
+  const rm = (d.roughnessMetalnessAlpha ?? 0) > 0;
+  if (rm && t.rough) defs.DECAL_ROUGH = '';
+  else if (rm) defs.DECAL_ROUGH_CONST = '';
+  // металл: карта игры (кибер-импланты) или константа сдвига (золотая помада, metalnessBias 1)
+  if (rm && t.metal) defs.DECAL_METAL = defs.DECAL_METAL_MAP = '';
+  else if (rm && (d.metalnessBias ?? 0) > 0) defs.DECAL_METAL = '';
+  if (t.sec2 && (d.secondaryDiffuseAlphaIntensity ?? 0) > 0) defs.DECAL_DOUBLE = '';
+  return defs;
+}
+
+/** Дефайны слоя, каждый из которых добавляет программе текстуру. */
+const DECAL_SAMPLER_DEFINES = ['DECAL_MAP', 'DECAL_GRADIENT', 'DECAL_SEC', 'DECAL_NORMAL', 'DECAL_NALPHA_TEX', 'DECAL_ROUGH', 'DECAL_METAL_MAP', 'DECAL_DOUBLE'];
+/**
+ * Сколько текстур слоя помещается в программу. Кожа головы под слоем уже берёт 12 из 16
+ * текстурных блоков, гарантированных почти любой видеокартой: морфы, кости, альбедо, нормаль,
+ * шероховатость, детальная нормаль, окружение, DFG и четыре карты теней. Кибер-импланту нужно
+ * пять (цвет, нормаль, альфа нормали, шероховатость, металл): семнадцатый блок three не
+ * привязывает, и импланты рисовались матовой серой заливкой без металла.
+ */
+export const DECAL_SAMPLER_BUDGET = 4;
+
+/** Число текстур слоя в программе по его дефайнам. */
+export function decalSamplers(defs: Record<string, string>): number {
+  return DECAL_SAMPLER_DEFINES.filter((k) => k in defs).length;
+}
+
+const DECAL_PARS_GLSL = `
+uniform vec3 uInkPaper;
+varying vec2 vDecalUv;
+uniform sampler2D uDecalMap; uniform vec3 uDecalColor; uniform float uDecalAlpha;
+uniform sampler2D uDecalSec; uniform vec2 uDecalSecP;
+uniform sampler2D uDecalNormal; uniform float uDecalNormalA; uniform sampler2D uDecalNormalATex;
+uniform sampler2D uDecalRough; uniform sampler2D uDecalMetal; uniform vec4 uDecalRM; uniform float uDecalMetalScale;
+uniform sampler2D uDecalSec2; uniform float uDecalSec2Int; uniform vec3 uDecalSec2Color;
+uniform sampler2D uDecalGrad; uniform float uDecalGradInt; uniform float uDecalMetalEnv;
+float gDecalA = 0.0;
+float gDecalShape = 0.0;
+float gDecalSec = 1.0;
+vec3 gDecalRelief = vec3( 0.0 );
+// кожа под слоем и цвет слоя с его долей: свои доли цвета, шероховатости и металла
+// пересчитываются к общей доле покрытия gDecalA перед светом (DECAL_COMPOSE_GLSL)
+vec3 gDecalC0 = vec3( 0.0 );
+vec3 gDecalCS = vec3( 0.0 );
+float gDecalCA = 0.0;
+float gDecalR0 = 1.0;
+float gDecalM0 = 0.0;
+// базис касательных по UV слоя из производных (как getTangentFrame three.js; у меша слоя
+// касательные — кожи, для её карты нормалей)
+mat3 decalTangentFrame( vec3 eye_pos, vec3 surf_norm, vec2 uv ) {
+	vec3 q0 = dFdx( eye_pos.xyz );
+	vec3 q1 = dFdy( eye_pos.xyz );
+	vec2 st0 = dFdx( uv.st );
+	vec2 st1 = dFdy( uv.st );
+	vec3 N = normalize( surf_norm );
+	vec3 q1perp = cross( q1, N );
+	vec3 q0perp = cross( N, q0 );
+	vec3 T = q1perp * st0.x + q0perp * st1.x;
+	vec3 B = q1perp * st0.y + q0perp * st1.y;
+	float det = max( dot( T, T ), dot( B, B ) );
+	float scale = ( det == 0.0 ) ? 0.0 : inversesqrt( det );
+	return mat3( T * scale, B * scale, N );
+}`;
+
+/** Альбедо: цвет слоя (diffuse.rgb × DiffuseColor, второй слой mesh_decal_double_diffuse) по его альфе. */
+const DECAL_ALBEDO_GLSL = `
+{
+	gDecalC0 = diffuseColor.rgb;
+	vec4 dTex = vec4( 1.0 );
+#ifdef DECAL_MAP
+	dTex = texture2D( uDecalMap, vDecalUv );
+#endif
+#ifdef DECAL_SEC
+	// SecondaryMask: тёмное в маске — там слой (шрамы, шум туши). Мелкий повтор шума (×30 у
+	// макияжа глаз) — зерно пудры мельче пикселя: без сдвига мипа он ложился на веко
+	// правильной сеткой, как ткань (DECAL_SEC_GRAIN)
+	#ifdef DECAL_SEC_GRAIN
+		gDecalSec = mix( 1.0, 1.0 - texture2D( uDecalSec, vDecalUv * uDecalSecP.x, ${DECAL_GRAIN_BIAS.toFixed(1)} ).r, uDecalSecP.y );
+	#else
+		gDecalSec = mix( 1.0, 1.0 - texture2D( uDecalSec, vDecalUv * uDecalSecP.x ).r, uDecalSecP.y );
+	#endif
+#endif
+	gDecalShape = dTex.a * gDecalSec;
+	float aS = saturate( dTex.a * uDecalAlpha * gDecalSec );
+#ifdef DECAL_GRADIENT
+	// брови (mesh_decal_double_diffuse с GradientMap): цвет волоска — градиент по R диффуза
+	vec3 cS = texture2D( uDecalGrad, vec2( dTex.r, 0.5 ) ).rgb * uDecalGradInt;
+	{
+		// Тёмные волоски (каштан, чёрный, мерло) темнее кожи на любом тоне: на тонах 11–12
+		// альбедо такой брови светлее кожи, и бровь читалась серой полосой. Светлые (блонд,
+		// пастель) остаются своим цветом
+		float darkHair = 1.0 - smoothstep( 0.05, 0.16, dot( cS, vec3( 0.2126, 0.7152, 0.0722 ) ) );
+		cS = mix( cS, min( cS, diffuseColor.rgb * ${g4(BROW_DARK_MAX)} ), darkHair );
+	}
+#elif defined( DECAL_INK )
+	// тату: чернила умножают кожу (TATTOO_INK), а не заменяют её цветом текстуры
+	${INK_GLSL('dTex.rgb', 'dTex.a * gDecalSec', 'uDecalAlpha')}
+	vec3 cS = diffuseColor.rgb * inkF;
+	aS = inkA;
+#else
+	vec3 cS = dTex.rgb * uDecalColor;
+#endif
+#ifdef DECAL_DOUBLE
+	float aB = saturate( texture2D( uDecalSec2, vDecalUv ).r * uDecalSec2Int );
+	float aT = aS + aB * ( 1.0 - aS );
+	// второй слой (тень под волосками) только затемняет кожу: SecondaryDiffuseColor игры
+	// (#3e312a) светлее тёмных тонов кожи и выбеливал их
+	vec3 c2 = min( uDecalSec2Color, diffuseColor.rgb );
+	cS = ( cS * aS + c2 * aB * ( 1.0 - aS ) ) / max( aT, 1e-4 );
+	aS = aT;
+	gDecalShape = max( gDecalShape, aB );
+#endif
+	diffuseColor.rgb = mix( diffuseColor.rgb, cS, aS );
+	gDecalCS = cS;
+	gDecalCA = aS;
+	gDecalA = aS;
+}`;
+
+/**
+ * Шероховатость и металличность слоя (RoughnessMetalnessAlpha) — помада с блеском, металл
+ * импланта. Шероховатость слоя в игре заменяет шероховатость кожи из карты; у нас кожа головы
+ * зажата снизу (roughMin 0,6: голые губы в карте 0,36). Слой глаже кожи карты (глянцевая
+ * помада 0,25) берётся как есть, слой матовее неё — сдвигом на ту же разницу от нашей кожи
+ * (матовая помада 0,5 против губ 0,36 → 0,74): иначе «матовая» блестела бы сильнее голых губ.
+ * Без своей карты шероховатости у слоя — серая текстура движка по умолчанию (0,5).
+ */
+const DECAL_RM_GLSL = `
+	gDecalR0 = roughnessFactor;
+	gDecalM0 = metalnessFactor;
+#ifdef DECAL_GRADIENT
+	// волоски бровей матовые: блик кожи на рельефе волосков серебрил бровь
+	roughnessFactor = mix( roughnessFactor, ${g4(BROW_ROUGHNESS)}, saturate( gDecalA ) );
+#endif
+#if defined( DECAL_ROUGH ) || defined( DECAL_ROUGH_CONST )
+{
+	float rmA = saturate( uDecalRM.x * gDecalShape );
+	#ifdef DECAL_ROUGH
+		float rT = saturate( texture2D( uDecalRough, vDecalUv ).r * uDecalRM.y + uDecalRM.z );
+	#else
+		float rT = saturate( ${DECAL_DEFAULT_ROUGHNESS.toFixed(2)} * uDecalRM.y + uDecalRM.z );
+	#endif
+	float rMap = roughness;
+	#ifdef USE_ROUGHNESSMAP
+		rMap *= texture2D( roughnessMap, vRoughnessMapUv ).g;
+	#endif
+	float rDec = rT < rMap ? rT : saturate( roughnessFactor + rT - rMap );
+	roughnessFactor = mix( roughnessFactor, rDec, rmA );
+	gDecalA = max( gDecalA, rmA );
+}
+#endif
+#ifdef DECAL_METAL
+{
+	float mA = saturate( uDecalRM.x * gDecalShape );
+	#ifdef DECAL_METAL_MAP
+		float mT = texture2D( uDecalMetal, vDecalUv ).r * uDecalMetalScale + uDecalRM.w;
+	#else
+		float mT = uDecalRM.w;
+	#endif
+	metalnessFactor = mix( metalnessFactor, saturate( mT ), mA );
+	gDecalA = max( gDecalA, mA );
+}
+#endif`;
+
+/**
+ * Слой рисует кожу ещё раз и смешивается с кадром по общей доле покрытия gDecalA. Цвет,
+ * шероховатость и металл слоя смешаны с кожей по своим долям (≤ gDecalA) — перед светом они
+ * делятся на gDecalA, и итог в кадре = кожа + (слой − кожа) × своя доля. Раньше доля
+ * применялась дважды (в альбедо и в смешивании с кадром): тушь с альфой 0,55 ложилась на 30 %,
+ * чёрная подводка выходила полупрозрачной серо-бурой, брови — пепельными и бледными.
+ */
+const DECAL_COMPOSE_GLSL = `
+{
+	float invA = 1.0 / max( gDecalA, 1e-4 );
+	diffuseColor.rgb = mix( gDecalC0, gDecalCS, saturate( gDecalCA * invA ) );
+	roughnessFactor = saturate( gDecalR0 + ( roughnessFactor - gDecalR0 ) * min( invA, 1e4 ) );
+	metalnessFactor = saturate( gDecalM0 + ( metalnessFactor - gDecalM0 ) * min( invA, 1e4 ) );
+}
+#include <lights_physical_fragment>`;
+
+/**
+ * Рельеф слоя добавляется к рельефу кожи (поры остаются, шрам выступает поверх). Доля
+ * покрытия от рельефа — только там, где карта слоя действительно наклонена.
+ */
+const DECAL_NORMAL_GLSL = `
+#ifdef DECAL_NORMAL
+{
+	vec3 dn = texture2D( uDecalNormal, vDecalUv ).xyz * 2.0 - 1.0;
+	dn.y *= ${DECAL_NORMAL_Y.toFixed(1)};
+	dn.z = sqrt( saturate( 1.0 - dot( dn.xy, dn.xy ) ) );
+	mat3 dtbn = decalTangentFrame( - vViewPosition, nonPerturbedNormal, vDecalUv );
+	#ifdef DECAL_NALPHA_TEX
+		float na = uDecalNormalA * texture2D( uDecalNormalATex, vDecalUv ).r * gDecalSec;
+	#else
+		float na = uDecalNormalA * gDecalShape;
+	#endif
+	na = saturate( na );
+	vec3 dN = normalize( dtbn * dn );
+	gDecalRelief = na * ${DECAL_RELIEF.toFixed(2)} * ( dN - nonPerturbedNormal );
+	normal = normalize( normal + gDecalRelief );
+	gDecalA = max( gDecalA, na * saturate( length( dn.xy ) * 6.0 ) );
+}
+#endif`;
 
 export class Materials {
   private cache = new Map<string, Promise<THREE.Material>>();
@@ -753,29 +1334,30 @@ export class Materials {
   // ---------------------------------------------------------------- кожа
   /** Голова: альбедо типа кожи (d01…d05) + оттенок тона во время отрисовки. */
   headSkin(g: SkinGender, gender: string, skinApp: string | null, skinType: string): Promise<THREE.MeshPhysicalMaterial> {
-    const toneKey = skinApp && g.skinTones[skinApp] ? skinApp : Object.keys(g.skinTones)[0];
-    const tone = g.skinTones[toneKey];
-    const entry = tone.byskinType[skinType] ?? Object.values(tone.byskinType)[0];
-    const albedo = entry?.albedo ?? g.skinTypes[skinType]?.albedo ?? Object.values(g.skinTypes)[0].albedo;
-    const tintColor = entry?.tintColor ?? tone.tintColor;
-    const tintScale = entry?.tintScale ?? tone.tintScale;
-    return this.once(`head:${gender}:${albedo}:${tintColor}:${tintScale}`, async () => {
+    const spec = headSpec(g, skinApp, skinType);
+    return this.once(`head:${gender}:${spec.key}`, () => this.makeHeadSkin(g, spec, 'head_skin'));
+  }
+
+  /** decal: слой лица — без тайлового микрорельефа (у слоя свои текстуры, а блоков текстур в шейдере 16). */
+  private async makeHeadSkin(g: SkinGender, spec: HeadSpec, name: string, decal = false): Promise<THREE.MeshPhysicalMaterial> {
+    const { albedo, tintColor, tintScale } = spec;
+    {
       const [map, normal, rough, detail, micro] = await Promise.all([
         this.store.texture(albedo, 'color'),
         this.store.texture(g.maps.normal, 'data'),
         this.store.texture(g.maps.roughness, 'data'),
         this.store.maybeTexture(g.maps.detailNormal, 'data'),
-        this.store.maybeTexture(g.maps.microDetailNormal, 'data', { repeat: true }).then(microTile),
+        decal ? Promise.resolve(null) : this.store.maybeTexture(g.maps.microDetailNormal, 'data', { repeat: true }).then(microTile),
       ]);
       const mat = new THREE.MeshPhysicalMaterial({
-        name: 'head_skin',
+        name,
         map,
         normalMap: normal,
         normalScale: new THREE.Vector2(...SKIN_NORMAL_SCALE),
         roughnessMap: rough,
         roughness: SKIN.roughness,
         metalness: 0,
-        specularIntensity: SKIN.specular,
+        specularIntensity: spec.specular,
         envMap: this.env,
         envMapIntensity: 0.12,
       });
@@ -796,13 +1378,139 @@ export class Materials {
         'head',
       );
       return mat;
+    }
+  }
+
+  /**
+   * Слой лица (mesh_decal игры). Декаль в игре меняет G-буфер кожи до освещения: альбедо
+   * заменяется цветом декали по её альфе, нормаль и шероховатость — по своим долям, а свет
+   * (подповерхностное рассеяние, тон, тональная компрессия) остаётся светом кожи. Здесь меш
+   * слоя рисует кожу головы ещё раз — тот же материал по UV головы (атрибут headUv, см.
+   * transferHeadAttrs) — с подменой альбедо/нормали/шероховатости, и смешивается с кадром по
+   * своей доле покрытия: где декали нет, кадр не меняется, тёмная тушь темна на любой коже,
+   * а белая подводка светлая. Шрамы (почти только карта нормалей) меняют рельеф, а не цвет.
+   */
+  faceDecal(g: SkinGender, gender: string, skinApp: string | null, skinType: string, name: string, d: FaceDecalMat & DecalGradient): Promise<THREE.MeshPhysicalMaterial> {
+    const spec = headSpec(g, skinApp, skinType);
+    return this.once(`decal:${gender}:${spec.key}:${name}`, async () => {
+      const tex = (rel: string | undefined, kind: 'color' | 'data', repeat = false) => (rel ? this.store.texture(rel, kind, { repeat }) : Promise.resolve(null));
+      const [mat, map, sec, nrm, nAlpha, rough, metal, sec2, grad] = await Promise.all([
+        this.makeHeadSkin(g, spec, 'face_decal', true),
+        // с градиентом R диффуза — индекс в градиент, а не цвет
+        tex(d.diffuse, d.gradient ? 'data' : 'color'),
+        tex(d.secondaryMask, 'data', true),
+        tex(d.normal, 'data'),
+        tex(d.normalAlphaTex, 'data'),
+        tex(d.roughness, 'data'),
+        tex(d.metalness, 'data'),
+        tex(d.secondaryDiffuseAlpha, 'data'),
+        d.gradient ? this.store.texture(d.gradient, 'color', { lut: true }) : Promise.resolve(null),
+      ]);
+      mat.transparent = true;
+      mat.depthWrite = false;
+      mat.polygonOffset = true;
+      mat.polygonOffsetFactor = -1;
+      mat.polygonOffsetUnits = -4;
+      const u = {
+        uDecalMap: { value: map },
+        uDecalColor: { value: lin(d.diffuseColor ?? '#ffffff') },
+        uDecalAlpha: { value: d.diffuseAlpha ?? 0 },
+        uDecalSec: { value: sec },
+        uDecalSecP: { value: new THREE.Vector2(d.secondaryMaskUVScale ?? 1, d.secondaryMaskInfluence ?? 0) },
+        uDecalNormal: { value: nrm },
+        uDecalNormalA: { value: d.normalAlpha ?? 0 },
+        uDecalNormalATex: { value: nAlpha },
+        uDecalRough: { value: rough },
+        uDecalMetal: { value: metal },
+        uDecalRM: { value: new THREE.Vector4(d.roughnessMetalnessAlpha ?? 0, d.roughnessScale ?? 1, d.roughnessBias ?? 0, d.metalnessBias ?? 0) },
+        uDecalMetalScale: { value: d.metalnessScale ?? 1 },
+        uDecalSec2: { value: sec2 },
+        uDecalSec2Int: { value: d.secondaryDiffuseAlphaIntensity ?? 0 },
+        uDecalSec2Color: { value: lin(d.secondaryDiffuseColor ?? '#ffffff') },
+        uDecalGrad: { value: grad },
+        uDecalGradInt: { value: d.gradientIntensity ?? 1 },
+        uDecalMetalEnv: { value: DECAL_METAL_ENV },
+        uInkPaper: { value: lin(TATTOO_INK.paper) },
+      };
+      // текстуры кожи (их держит материал головы) и слоя: чистка памяти видит их через userData
+      mat.userData.uniforms = u;
+      const defs = decalDefines(d, { map: !!map, grad: !!grad, sec: !!sec, nrm: !!nrm, nAlpha: !!nAlpha, rough: !!rough, metal: !!metal, sec2: !!sec2 });
+      mat.defines = { ...(mat.defines ?? {}), ...defs };
+      // Слою не хватает текстурных блоков: под ним не рисуем детальную нормаль кожи — слой с
+      // таким числом карт (импланты) закрывает кожу сам, а неполное покрытие у его края узкое
+      if (decalSamplers(defs) > DECAL_SAMPLER_BUDGET) {
+        delete mat.defines.SKIN_DETAIL;
+        delete mat.defines.SKIN_MICRO;
+      }
+      const skinCompile = mat.onBeforeCompile;
+      mat.onBeforeCompile = (s: Shader, r: THREE.WebGLRenderer) => {
+        skinCompile.call(mat, s, r);
+        Object.assign(s.uniforms, u);
+        s.vertexShader = s.vertexShader
+          .replace('#include <common>', '#include <common>\nattribute vec2 headUv;\nvarying vec2 vDecalUv;')
+          .replace(
+            '#include <uv_vertex>',
+            `#include <uv_vertex>
+vDecalUv = uv;
+// кожа головы — по её UV (ближайшая вершина головы)
+#ifdef USE_MAP
+	vMapUv = headUv;
+#endif
+#ifdef USE_NORMALMAP
+	vNormalMapUv = headUv;
+#endif
+#ifdef USE_ROUGHNESSMAP
+	vRoughnessMapUv = headUv;
+#endif`,
+          );
+        s.fragmentShader = s.fragmentShader
+          .replace('#include <common>', '#include <common>\n' + DECAL_PARS_GLSL)
+          .replace('#include <color_fragment>', DECAL_ALBEDO_GLSL + '\n#include <color_fragment>')
+          .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n' + DECAL_RM_GLSL)
+          .replace('gSoftN = normalize(', DECAL_NORMAL_GLSL + '\ngSoftN = normalize(')
+          .replace('gCrease = mix(', 'gSoftN = normalize( gSoftN + gDecalRelief );\ngCrease = mix(')
+          .replace('#include <lights_physical_fragment>', DECAL_COMPOSE_GLSL)
+          .replace(
+            '#include <lights_fragment_end>',
+            // металл слоя отражает окружение (у кожи оно почти погашено, envMapIntensity 0,12)
+            '#if defined( DECAL_METAL ) && defined( USE_ENVMAP )\nradiance *= mix( 1.0, uDecalMetalEnv, metalnessFactor );\n#endif\n#include <lights_fragment_end>',
+          )
+          .replace('#include <opaque_fragment>', 'diffuseColor.a = gDecalA;\n#include <opaque_fragment>');
+        if (import.meta.env.DEV && !s.fragmentShader.includes('gDecalCS, saturate( gDecalCA * invA )')) console.warn('avatar: шейдер слоя лица не пропатчен');
+      };
+      const skinKey = mat.customProgramCacheKey.bind(mat);
+      mat.customProgramCacheKey = () => skinKey() + ':decal:' + Object.keys(defs).join(',');
+      return mat;
+    });
+  }
+
+  /** Пирсинг: цвет плашки редактора (многослойные материалы игры не переносятся), металл или пластик. */
+  /**
+   * Пирсинг. Узорные цвета (мрамор, радужная плёнка, сталь с рябью, дерево) — многослойные
+   * материалы игры: один hex плашки красил их ровным белёсым пластиком, поэтому на них
+   * ложится миниатюра цвета из редактора (pattern). Металл — с цветом плашки, но отражение
+   * окружения слабее: при 0,9 серебро, сталь и жемчуг выходили одинаково белыми.
+   */
+  piercing(p: PiercingMat): Promise<THREE.MeshStandardMaterial> {
+    return this.once(`piercing:${p.colour}:${p.metalness}:${p.roughness}:${p.pattern ?? ''}`, async () => {
+      const map = p.pattern ? await this.store.maybeTexture(p.pattern, 'color', { repeat: true }).catch(() => null) : null;
+      const metal = p.metalness > 0.5;
+      return new THREE.MeshStandardMaterial({
+        name: 'piercing',
+        color: map ? new THREE.Color(PIERCING.patternGain, PIERCING.patternGain, PIERCING.patternGain) : lin(p.colour).multiplyScalar(metal ? PIERCING.metalBase : 1),
+        map,
+        metalness: p.metalness,
+        roughness: p.roughness,
+        envMap: this.env,
+        envMapIntensity: metal ? PIERCING.metalEnv : PIERCING.plasticEnv,
+      });
     });
   }
 
   /** Тело и руки: альбедо уже запечено под тон (textures.<g>_<part>.albedoByTone). */
   bodySkin(set: BodyTexSet, part: string, tone: string): Promise<THREE.MeshPhysicalMaterial> {
     const albedo = set.albedoByTone[tone] ?? Object.values(set.albedoByTone)[0];
-    return this.once(`body:${part}:${albedo}`, async () => {
+    return this.once(`body:${part}:${albedo}:${skinSpecular(tone)}`, async () => {
       const [map, normal, orm] = await Promise.all([
         this.store.texture(albedo, 'color'),
         this.store.texture(set.normal, 'data'),
@@ -817,7 +1525,7 @@ export class Materials {
         roughnessMap: orm,
         roughness: SKIN.roughness,
         metalness: 0,
-        specularIntensity: SKIN.specular,
+        specularIntensity: skinSpecular(tone),
         envMap: this.env,
         envMapIntensity: 0.12,
       });
@@ -828,9 +1536,10 @@ export class Materials {
   }
 
   // ---------------------------------------------------------------- глаза, ресницы, брови, зубы
-  eyeball(e: EyeEntry): Promise<THREE.MeshPhysicalMaterial> {
+  eyeball(e: EyeEntry, tone?: string | null): Promise<THREE.MeshPhysicalMaterial> {
     const m = e.eyeball.maps;
-    return this.once('eye:' + m.albedo, async () => {
+    const dim = scleraDim(tone);
+    return this.once(`eye:${m.albedo}:${dim}`, async () => {
       // UV глазных яблок разнесены по тайлам (центр левого глаза — u = 1,5): нужен повтор
       const [map, normal, orm] = await Promise.all([
         this.store.texture(m.albedo, 'color', { repeat: true }),
@@ -841,7 +1550,7 @@ export class Materials {
         name: 'eyeball',
         map,
         // склера в игре не «светится»: кадр тёмный, глаз затенён веком
-        color: new THREE.Color(0.78, 0.76, 0.75),
+        color: new THREE.Color(0.78, 0.76, 0.75).multiplyScalar(dim),
         normalMap: normal,
         // Рельеф радужки под роговицей: с полной картой и гладким базовым слоем каждая
         // её прожилка ловила свои лампы — бело-розовые искры по всей радужке. Чёткий
@@ -998,7 +1707,8 @@ export class Materials {
         s.uniforms.uLowTip = { value: single ? 1 : 0 };
         s.vertexShader = s.vertexShader
           .replace('#include <common>', '#include <common>\nattribute float lashLow;\nvarying float vLashLow;')
-          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLashLow = lashLow;');
+          // нижний ряд в позе привязки висит под кромкой века: поднимаем корни к веку (оси привязки, Y вверх)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>\nvLashLow = lashLow;\ntransformed.y += lashLow * ${LOWER_LASH_LIFT.toFixed(4)};`);
         s.fragmentShader = s.fragmentShader
           .replace('#include <common>', '#include <common>\nuniform float uLowAlpha; uniform float uLowTip;\nvarying float vLashLow;')
           .replace('#include <alphamap_fragment>', LASH_ALPHA)
@@ -1023,85 +1733,27 @@ export class Materials {
   }
 
   /**
-   * Брови — декаль поверх кожи, как в игре: там декаль заменяет альбедо кожи и освещается
-   * светом кожи (с её подповерхностным рассеянием и тоном). Здесь это умножение кадра на
-   * отношение «цвет брови / альбедо кожи» (не больше 1) с долей альфы: тёмная бровь всегда
-   * темнее кожи под ней, оттенок и свет — от кожи. Отдельно освещённые брови (свой блик, без
-   * рассеяния) читались серыми и на тонах 10–12 светлее кожи, а светлая подложка
-   * (SecondaryDiffuseColor) рисовала бледные штрихи у кончиков стиля 12.
-   * skinHex — значок тона кожи (средний цвет кожи лба в sRGB).
+   * Брови как слой кожи (faceDecal), как в игре: декаль заменяет альбедо кожи и освещается
+   * светом кожи (с её подповерхностным рассеянием и тоном). Альбедо — градиент цвета по R
+   * диффуза (× интенсивность), под волосками — второй слой SecondaryDiffuseColor. Тёмные брови
+   * темнее кожи на любом тоне и тёплые, как цвет волос, а не серые.
+   * Ключ кеша — все поля слоя: каждое из них идёт в шейдер, и две брови, отличные хоть одним
+   * полем (интенсивность градиента, подложка, нормаль стиля), не должны делить материал.
    */
-  brows(style: BrowStyle, colour: BrowColour, gradient: string, skinHex = '#a8886b'): Promise<THREE.MeshBasicMaterial> {
-    return this.once(`brow:${style.diffuseRGBA}:${gradient}:${colour.SecondaryDiffuseColor}:${skinHex}`, async () => {
-      const [diff, sec, grad] = await Promise.all([
-        this.store.texture(style.diffuseRGBA, 'data'),
-        this.store.texture(style.secondaryAlpha, 'data'),
-        this.store.texture(gradient, 'color', { lut: true }),
-      ]);
-      const mat = new THREE.MeshBasicMaterial({
-        name: 'brows',
-        map: diff,
-        transparent: true,
-        depthWrite: false,
-        toneMapped: false,
-        // кадр × множитель: кожа под бровью только темнеет
-        blending: THREE.CustomBlending,
-        blendEquation: THREE.AddEquation,
-        blendSrc: THREE.DstColorFactor,
-        blendDst: THREE.ZeroFactor,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -4,
-      });
-      const u = {
-        uSec: { value: sec },
-        uGrad: { value: grad },
-        uGradInt: { value: colour.GradientMapIntensity },
-        uDiffAlpha: { value: colour.DiffuseAlpha },
-        uSecInt: { value: colour.SecondaryDiffuseAlphaIntensity },
-        uSecColor: { value: lin(colour.SecondaryDiffuseColor) },
-        uSkin: { value: lin(skinHex) },
-      };
-      keepUniforms(mat, u);
-      mat.onBeforeCompile = (s: Shader) => {
-        Object.assign(s.uniforms, u);
-        s.fragmentShader = s.fragmentShader
-          .replace(
-            '#include <common>',
-            `#include <common>
-uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform float uDiffAlpha; uniform float uSecInt; uniform vec3 uSecColor; uniform vec3 uSkin;`,
-          )
-          .replace(
-            '#include <map_fragment>',
-            `{
-	vec4 d = texture2D( map, vMapUv );
-	float aS = d.a * uDiffAlpha;
-	vec3 cS = texture2D( uGrad, vec2( d.r, 0.5 ) ).rgb * uGradInt;
-	float aB = texture2D( uSec, vMapUv ).g * uSecInt;
-	float a = clamp( aS + aB * ( 1.0 - aS ), 0.0, 1.0 );
-	vec3 c = ( cS * aS + uSecColor * aB * ( 1.0 - aS ) ) / max( a, 1e-4 );
-	// Светлота — отношение яркостей брови и кожи; оттенок брови — только в меру её
-	// насыщенности: значок кожи теплее и насыщеннее реального альбедо, и полное отношение
-	// цветов уводило натуральные коричневые брови в серо-голубой
-	const vec3 LUM = vec3( 0.2126, 0.7152, 0.0722 );
-	float rel = dot( c, LUM ) / max( dot( uSkin, LUM ), 1e-4 );
-	float mx = max( c.r, max( c.g, c.b ) );
-	float sat = ( mx - min( c.r, min( c.g, c.b ) ) ) / max( mx, 1e-4 );
-	vec3 hueC = c / max( dot( c, LUM ), 1e-4 );
-	vec3 hueS = uSkin / max( dot( uSkin, LUM ), 1e-4 );
-	vec3 k = rel * mix( vec3( 1.0 ), hueC / hueS, smoothstep( 0.45, 0.85, sat ) );
-	// Тёмные волоски (каштан, чёрный, мерло) и на тёмной коже темнее её: пряди затеняют друг
-	// друга. На тонах 11–12 альбедо такой брови светлее кожи, и без предела бровь пропадала.
-	// Светлые брови (блонд, платина, пастель) предела не имеют
-	float darkHair = 1.0 - smoothstep( 0.05, 0.16, dot( c, LUM ) );
-	k = clamp( min( k, vec3( mix( 1.0, ${g4(BROW_DARK_MAX)}, darkHair ) ) ), 0.0, 1.0 );
-	diffuseColor = vec4( mix( vec3( 1.0 ), k, a * opacity ), 1.0 );
-}`,
-          );
-      };
-      mat.customProgramCacheKey = () => 'brows_mul';
-      return mat;
-    });
+  browDecal(g: SkinGender, gender: string, skinApp: string | null, skinType: string, style: BrowStyle, colour: BrowColour, gradient: string): Promise<THREE.MeshPhysicalMaterial> {
+    const def: FaceDecalMat & DecalGradient = {
+      type: 'decal',
+      diffuse: style.diffuseRGBA,
+      diffuseAlpha: colour.DiffuseAlpha,
+      gradient,
+      gradientIntensity: colour.GradientMapIntensity,
+      secondaryDiffuseAlpha: style.secondaryAlpha,
+      secondaryDiffuseAlphaIntensity: colour.SecondaryDiffuseAlphaIntensity,
+      secondaryDiffuseColor: colour.SecondaryDiffuseColor,
+      normal: style.normal,
+      normalAlpha: BROW_NORMAL_ALPHA,
+    };
+    return this.faceDecal(g, gender, skinApp, skinType, `brow:${browKey(def)}`, def);
   }
 
   /** Зубы, дёсны и язык: натуральные — skin.mt с затемнением глубины рта по маске. */
@@ -1186,7 +1838,8 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
    * NormalAlpha. pubic — тёмный ореол текстуры волос (щетина) гасится по яркости
    * (pubicHaloAlpha): с цветными волосами он читается серым пятном.
    */
-  intimateDecal(name: string, m: IntimateDecalMat, pubic: boolean): Promise<THREE.MeshStandardMaterial> {
+  intimateDecal(name: string, m: IntimateDecalMat, pubic: boolean): Promise<THREE.Material> {
+    if (!pubic && isInkDecal(m.diffuse)) return this.bodyInk(name, m);
     return this.once('intimate_decal:' + name, async () => {
       const [map, normal, rough] = await Promise.all([
         this.store.texture(m.diffuse, 'color'),
@@ -1229,6 +1882,43 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
         };
         mat.customProgramCacheKey = () => 'intimate_pubic';
       }
+      return mat;
+    });
+  }
+
+  /**
+   * Тату тела: множитель поверх уже освещённой кожи (MultiplyBlending), как DECAL_INK у лица —
+   * чернила темнее кожи на любом тоне и никогда её не светлят; свет и тени кожи сохраняются.
+   */
+  private bodyInk(name: string, m: IntimateDecalMat): Promise<THREE.Material> {
+    return this.once('intimate_decal:' + name, async () => {
+      const map = await this.store.texture(m.diffuse, 'color');
+      const mat = new THREE.MeshBasicMaterial({
+        name: 'body_ink',
+        map,
+        transparent: true,
+        blending: THREE.MultiplyBlending,
+        premultipliedAlpha: true,
+        depthWrite: false,
+        toneMapped: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -4,
+      });
+      const u = { uInkPaper: { value: lin(TATTOO_INK.paper) }, uInkAlpha: { value: m.diffuseAlpha ?? 1 } };
+      keepUniforms(mat, u);
+      mat.onBeforeCompile = (s: Shader) => {
+        Object.assign(s.uniforms, u);
+        s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uInkPaper; uniform float uInkAlpha;').replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+{
+	${INK_GLSL('diffuseColor.rgb', 'diffuseColor.a', 'uInkAlpha')}
+	diffuseColor = vec4( mix( vec3( 1.0 ), inkF, inkA ), 1.0 );
+}`,
+        );
+      };
+      mat.customProgramCacheKey = () => 'body_ink';
       return mat;
     });
   }
@@ -1327,12 +2017,20 @@ uniform sampler2D uSec; uniform sampler2D uGrad; uniform float uGradInt; uniform
         envMap: this.env,
         envMapIntensity: 0.04,
       });
-      const u = { uRamp: { value: ramp }, uShadow: { value: m.shadowStrength ?? 0.5 }, uIdGain: { value: 1.0 }, uSpec: { value: 0.4 }, uAlbedo: { value: HAIR_ALBEDO } };
+      const u = {
+        uRamp: { value: ramp },
+        uShadow: { value: m.shadowStrength ?? 0.5 },
+        uIdGain: { value: 1.0 },
+        uSpec: { value: 0.4 },
+        uAlbedo: { value: hairAlbedo(m.profile) },
+        uSat: { value: hairGrade(m.profile).s },
+      };
       keepUniforms(mat, u);
+      mat.userData.hairProfile = m.profile;
       mat.onBeforeCompile = (s: Shader) => {
         Object.assign(s.uniforms, u);
         s.fragmentShader = s.fragmentShader
-          .replace('#include <common>', '#include <common>\nuniform sampler2D uRamp; uniform float uShadow; uniform float uIdGain; uniform float uSpec; uniform vec3 uAlbedo;\nvec3 gHairTint = vec3( 1.0 );')
+          .replace('#include <common>', '#include <common>\nuniform sampler2D uRamp; uniform float uShadow; uniform float uIdGain; uniform float uSpec; uniform vec3 uAlbedo; uniform float uSat;\nvec3 gHairTint = vec3( 1.0 );')
           .replace('#include <lights_physical_pars_fragment>', HAIR_LIGHTS)
           .replace(
             '#include <lights_physical_fragment>',
@@ -1348,6 +2046,7 @@ material.specularF90 = 0.5 * uSpec;`,
 	vec3 rt = texture2D( uRamp, vec2( pk.r, 0.25 ) ).rgb;
 	vec3 id = texture2D( uRamp, vec2( pk.g, 0.75 ) ).rgb;
 	vec3 col = rt * min( id * uIdGain, vec3( 1.0 ) );
+	${HAIR_SAT_GLSL}
 	col *= mix( 1.0 - 0.5 * uShadow, 1.0, smoothstep( 0.0, 0.3, pk.r ) );
 	diffuseColor.rgb *= col * uAlbedo;
 	gHairTint = col / max( max( col.r, max( col.g, col.b ) ), 1e-3 );
@@ -1390,10 +2089,12 @@ material.specularF90 = 0.5 * uSpec;`,
         uSec: { value: sec },
         uSecInfl: { value: sec ? m.secondaryMaskInfluence ?? 0 : 0 },
         uSecScale: { value: m.secondaryMaskUVScale ?? 1 },
-        uAlbedo: { value: HAIR_ALBEDO },
+        uAlbedo: { value: hairAlbedo(m.gradientLUT) },
+        uSat: { value: hairGrade(m.gradientLUT).s },
         uStubble: { value: new THREE.Vector3(CAP_STUBBLE.scale, CAP_STUBBLE.floor, CAP_STUBBLE.radius) },
       };
       keepUniforms(mat, u);
+      mat.userData.hairProfile = (m.gradientLUT ?? '').replace(/^.*__/, '');
       const hasDiff = !!diff;
       const hasSec = !!sec && !!mask;
       mat.onBeforeCompile = (s: Shader) => {
@@ -1403,7 +2104,7 @@ material.specularF90 = 0.5 * uSpec;`,
             '#include <common>',
             `#include <common>
 uniform sampler2D uLut; uniform float uDiffConst; uniform vec3 uCapColor; uniform sampler2D uSec; uniform float uSecInfl; uniform float uSecScale;
-uniform vec3 uAlbedo; uniform vec3 uStubble;
+uniform vec3 uAlbedo; uniform float uSat; uniform vec3 uStubble;
 ${STUBBLE_GLSL}`,
           )
           .replace('#include <lights_physical_pars_fragment>', CAP_LIGHTS)
@@ -1411,7 +2112,9 @@ ${STUBBLE_GLSL}`,
             '#include <map_fragment>',
             `{
 	float g = ${hasDiff ? 'texture2D( map, vMapUv ).r' : 'uDiffConst'};
-	diffuseColor.rgb = texture2D( uLut, vec2( g, 0.5 ) ).rgb * uCapColor * uAlbedo;
+	vec3 col = texture2D( uLut, vec2( g, 0.5 ) ).rgb * uCapColor;
+	${HAIR_SAT_GLSL}
+	diffuseColor.rgb = col * uAlbedo;
 }`,
           )
           .replace(
@@ -1454,17 +2157,33 @@ diffuseColor.a *= mix( uStubble.y, 1.0, stubbleDots( vMapUv * uStubble.x, uStubb
     });
   }
 
-  accessory(m: HairMaterial): Promise<THREE.MeshStandardMaterial> {
-    return this.once('acc:' + (m.fallbackColor ?? ''), async () =>
-      new THREE.MeshStandardMaterial({
+  /**
+   * Аксессуар причёски (резинки, заколки, палочки, бусины). Материалы игры запечены в альбедо
+   * и ORM (multilayered: сталь / ткань / золото по маскам слоёв): палочки пучка 084 лежат в
+   * золотом слое атласа. С одним средним цветом атласа (fallbackColor, серый металл) они
+   * выходили белыми металлическими спицами. Средний цвет — только когда карт нет.
+   */
+  accessory(m: HairMaterial, hm?: HairManifest | null): Promise<THREE.MeshStandardMaterial> {
+    const albedo = m.albedo ? hm?.textures[m.albedo]?.file ?? null : null;
+    const orm = m.orm ? hm?.textures[m.orm]?.file ?? null : null;
+    return this.once(`acc:${albedo ?? m.fallbackColor ?? ''}:${orm ?? ''}`, async () => {
+      const [map, ormMap] = await Promise.all([
+        this.store.maybeTexture(albedo, 'color', { repeat: true }),
+        this.store.maybeTexture(orm, 'data', { repeat: true }),
+      ]);
+      return new THREE.MeshStandardMaterial({
         name: 'hair_accessory',
-        color: lin(m.fallbackColor ?? '#1d1c1e'),
-        roughness: m.roughness ?? 0.5,
-        metalness: m.metalness ?? 0,
+        map,
+        color: map ? new THREE.Color(1, 1, 1) : lin(m.fallbackColor ?? '#1d1c1e'),
+        roughnessMap: ormMap,
+        metalnessMap: ormMap,
+        // зеркальный хром (RoughnessScale 0) без «светлячков» на env-карте
+        roughness: ormMap ? 1 : Math.max(0.08, m.roughness ?? 0.5),
+        metalness: ormMap ? 1 : (m.metalness ?? 0),
         envMap: this.env,
         envMapIntensity: 0.4,
-      }),
-    );
+      });
+    });
   }
 
   dispose() {

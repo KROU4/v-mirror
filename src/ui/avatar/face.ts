@@ -13,21 +13,21 @@ type V3 = [number, number, number];
 
 /**
  * Улыбка раздела «Зубы»: сдвиг костей губ, мм в осях персонажа [наружу, вверх, назад].
- * Челюсть по cc_behaviour.md §2.3 (xf-studio, ui_expose_teeth) — около 2,15°, но наши кости
- * губ не повторяют лицевой граф игры, и с таким углом нижний ряд открывался целиком; здесь
- * 1–1,6°. В игре это мягкая открытая улыбка: видны верхние резцы, нижние зубы почти закрыты нижней
- * губой. Если верхняя губа поднимается слабее, чем опускаются челюсть и нижняя губа, выходит
- * оскал — верхние зубы под губой, нижний ряд открыт целиком.
+ * Челюсть по cc_behaviour.md §2.3 (xf-studio, ui_expose_teeth) — около 2,15°, губы
+ * раздвигаются примерно на 15 мм при почти сомкнутом прикусе: видны оба ряда зубов. Прежняя
+ * поза (челюсть 0,85–1,6°, нижняя губа на месте) показывала лишь полоску верхних резцов.
+ * Верхняя губа поднимается сильнее, чем опускается нижняя: иначе выходит оскал — верхние зубы
+ * под губой, нижний ряд открыт целиком.
  */
 export const SMILE = {
   // С 2,15° (и нижней губой назад на 3 мм) мужская улыбка выходила узким прямоугольным
   // оскалом: оба ряда открыты почти одинаково
-  jawDeg: 1.6,
+  jawDeg: 2.15,
   // Верхняя губа: подъём растёт от центра к краям — линия губы идёт полумесяцем (∪).
   // С 3,8 мм у центра верхние резцы у мужчины выглядывали узкой полоской
-  lipUpMid: [0.3, 4.3, -0.3] as V3,
-  lipUp2: [1.5, 5.7, 0.4] as V3,
-  lipUp3: [3.0, 7.0, 1.0] as V3,
+  lipUpMid: [0.3, 6.1, -0.3] as V3,
+  lipUp2: [1.5, 7.5, 0.4] as V3,
+  lipUp3: [3.0, 8.8, 1.0] as V3,
   // кожа над верхней губой
   rowAMid: [0.2, 1.3, -0.2] as V3,
   rowA2: [1.2, 2.8, 0.3] as V3,
@@ -39,15 +39,15 @@ export const SMILE = {
   // краям — заметно, вслед за уголками (иначе между уголком и губой открывается розовый
   // клин изнанки). Назад к зубам — не больше 1,5 мм у центра: при 3–4 мм губа
   // подворачивается, и над ней светлой лентой вдоль всего нижнего ряда выходит изнанка.
-  lipDnMid: [0.3, 0.6, 1.5] as V3,
-  lipDn2: [2.0, 2.0, 1.5] as V3,
+  lipDnMid: [0.3, -2.4, 1.5] as V3,
+  lipDn2: [2.0, -1.0, 1.5] as V3,
   lipDn3: [5.5, 7.5, 3.0] as V3,
   // кожа под нижней губой и у уголков (кости на челюсти)
   rowA4: [5.5, 9.0, 3.0] as V3,
-  rowA5: [1.5, 0.8, 2.5] as V3,
-  rowA6: [0.3, -1.0, 0.8] as V3,
+  rowA5: [1.5, -2.2, 2.5] as V3,
+  rowA6: [0.3, -4.0, 0.8] as V3,
   rowB4: [4.0, 7.0, 2.0] as V3,
-  rowB5: [2.0, 2.8, 1.0] as V3,
+  rowB5: [2.0, -0.2, 1.0] as V3,
   // уголки — вверх и назад, выше центра губ (улыбка, а не растянутый в линию рот)
   corner: [6.5, 12.0, 3.0] as V3,
   // щёки поднимаются и чуть выдаются вперёд, носогубная складка углубляется
@@ -65,20 +65,20 @@ type SmileKey = Exclude<keyof Smile, 'jawDeg'>;
  * и нижнюю губу опускаем меньше.
  */
 const SMILE_FEMALE: Partial<Smile> = {
-  jawDeg: 0.85,
-  lipUpMid: [0.3, 4.8, -0.5],
-  lipUp2: [1.5, 6.1, 0.2],
-  lipUp3: [3.0, 7.5, 1.0],
+  jawDeg: 1.6,
+  lipUpMid: [0.3, 6.6, -0.5],
+  lipUp2: [1.5, 7.9, 0.2],
+  lipUp3: [3.0, 9.3, 1.0],
   rowAMid: [0.2, 2.4, -0.3],
   rowA2: [1.2, 3.8, 0.3],
   rowBMid: [0, 1.2, 0],
   rowB2: [1.5, 3.2, 0.3],
-  // нижняя губа прикрывает нижний ряд почти целиком (с 1,2 мм нижние резцы были видны
-  // целиком — два ряда зубов), края идут за уголками наружу и вверх
-  lipDnMid: [0.3, 2.0, 1.2],
-  lipDn2: [2.0, 3.0, 1.5],
+  // нижняя губа опускается меньше, чем у мужчины (губы полнее): открыты кромки нижних резцов,
+  // края идут за уголками наружу и вверх
+  lipDnMid: [0.3, -1.0, 1.2],
+  lipDn2: [2.0, 0.0, 1.5],
   lipDn3: [5.5, 7.0, 3.0],
-  rowA6: [0.3, 0.6, 0.8],
+  rowA6: [0.3, -2.4, 0.8],
   corner: [6.0, 12.5, 3.0],
   rowA4: [5.5, 9.5, 3.0],
 };
@@ -126,6 +126,29 @@ export const BLINK_OVERSHOOT = 1.12;
 /** Прищур улыбки: в основном поднимается нижнее веко (щёки), верхнее почти не двигается. */
 export const SMILE_SQUINT = { upper: 0.04, lower: 0.35 };
 
+/**
+ * Моргание: пауза между морганиями (с) от min до max со случайным разбросом, сами фазы (с).
+ * Прежние 1,8–3,4 с и 0,36 с давали ~25 морганий в минуту и закрытые глаза в каждом десятом
+ * кадре — V казалась сонной, а снимки строк выходили с закрытыми глазами. У человека в покое
+ * 10–20 морганий в минуту по 100–150 мс.
+ */
+export const BLINK = { min: 3, max: 6, close: 0.06, hold: 0.02, open: 0.08, double: 0.1, doubleGap: 0.12 };
+
+/** Длительность одного моргания, с. */
+export const blinkDuration = () => BLINK.close + BLINK.hold + BLINK.open;
+
+/** Пауза до следующего моргания для случайного r ∈ [0, 1). */
+export const nextBlinkDelay = (r: number) => BLINK.min + r * (BLINK.max - BLINK.min);
+
+/** Закрытость век (0..1) через t с после начала моргания. */
+export function blinkAt(t: number): number {
+  const { close, hold, open } = BLINK;
+  if (t < 0 || t >= close + hold + open) return 0;
+  if (t < close) return smooth(t / close);
+  if (t < close + hold) return 1;
+  return 1 - smooth((t - close - hold) / open);
+}
+
 /** Угол век (доля хода) для моргания blink 0..1 и улыбки teeth 0..1. */
 export function lidPose(blink: number, teeth: number): { upper: number; lower: number } {
   const b = THREE.MathUtils.clamp(blink, 0, 1);
@@ -134,6 +157,25 @@ export function lidPose(blink: number, teeth: number): { upper: number; lower: n
     upper: Math.min(BLINK_OVERSHOOT, b * BLINK_OVERSHOOT + SMILE_SQUINT.upper * t * (1 - b)),
     lower: Math.max(b, SMILE_SQUINT.lower * t),
   };
+}
+
+/**
+ * Веки идут за взглядом по вертикали (как у человека): без этого взгляд вверх, в камеру над
+ * линией глаз, и саккады загоняли радужку под неподвижное верхнее веко — глаза то прикрыты на
+ * треть, то шире, V выглядела сонной. Доля поворота века на градус взгляда (вверх — веко
+ * поднимается, вниз — опускается); при моргании слежение гаснет.
+ */
+export const LID_FOLLOW = { upper: 0.7, lower: 0.25 };
+
+/**
+ * Поворот век (°, со знаком хода закрытия) от вертикали взгляда pitch (рад, + вверх) при
+ * закрытости closed 0..1: upperDeg/lowerDeg — ход века на моргание (знак — направление).
+ */
+export function lidFollow(pitch: number, closed: number, upperDeg: number, lowerDeg: number): { upper: number; lower: number } {
+  const k = 1 - THREE.MathUtils.clamp(closed, 0, 1);
+  const deg = (pitch / DEG) * k;
+  // верхнее: взгляд вверх открывает (против хода закрытия); нижнее: вверх — чуть прикрывает
+  return { upper: -Math.sign(upperDeg) * LID_FOLLOW.upper * deg, lower: Math.sign(lowerDeg) * LID_FOLLOW.lower * deg };
 }
 
 /**
@@ -277,23 +319,15 @@ export class FaceRig {
       this.nextBlink -= dt;
       if (this.nextBlink <= 0) {
         this.blinkT = 0;
-        this.doubleBlink = Math.random() < 0.15;
+        this.doubleBlink = Math.random() < BLINK.double;
       }
       return 0;
     }
     this.blinkT += dt;
-    const t = this.blinkT;
-    const CLOSE = 0.1;
-    const HOLD = 0.03;
-    const OPEN = 0.23;
-    let v: number;
-    if (t < CLOSE) v = smooth(t / CLOSE);
-    else if (t < CLOSE + HOLD) v = 1;
-    else if (t < CLOSE + HOLD + OPEN) v = 1 - smooth((t - CLOSE - HOLD) / OPEN);
-    else {
-      v = 0;
+    const v = blinkAt(this.blinkT);
+    if (this.blinkT >= blinkDuration()) {
       this.blinkT = -1;
-      this.nextBlink = this.doubleBlink ? 0.12 : 1.8 + Math.random() * 1.6;
+      this.nextBlink = this.doubleBlink ? BLINK.doubleGap : nextBlinkDelay(Math.random());
       this.doubleBlink = false;
     }
     return v;
@@ -327,8 +361,10 @@ export class FaceRig {
     // Веки: моргание с небольшим перехлёстом до полного смыкания, прищур улыбки — снизу
     const lid = lidPose(blink, teeth);
     this.lidsClosed = Math.min(1, lid.upper);
-    for (const l of this.lidsUp) l.bone.quaternion.copy(l.rest).multiply(new THREE.Quaternion().setFromAxisAngle(UP_LOCAL, this.upperDeg * lid.upper * DEG));
-    for (const l of this.lidsDn) l.bone.quaternion.copy(l.rest).multiply(new THREE.Quaternion().setFromAxisAngle(UP_LOCAL, this.lowerDeg * lid.lower * DEG));
+    // слежение за взглядом — по вертикали прошлого кадра (глаза поворачиваются ниже)
+    const follow = lidFollow(this.look.y + this.sac.y, lid.upper, this.upperDeg, this.lowerDeg);
+    for (const l of this.lidsUp) l.bone.quaternion.copy(l.rest).multiply(new THREE.Quaternion().setFromAxisAngle(UP_LOCAL, (this.upperDeg * lid.upper + follow.upper) * DEG));
+    for (const l of this.lidsDn) l.bone.quaternion.copy(l.rest).multiply(new THREE.Quaternion().setFromAxisAngle(UP_LOCAL, (this.lowerDeg * lid.lower + follow.lower) * DEG));
     for (const c of this.corners) {
       const a = this.upperDeg * 0.5 * Math.min(1, lid.upper) * DEG;
       c.bone.position.copy(c.rest).sub(c.center).applyAxisAngle(c.axis, a).add(c.center);

@@ -2,10 +2,12 @@
 // одном скелете. Сборка по манифестам набора ассетов; внешний вид меняется заменой
 // материалов и весов морфов, причёска, нагота и зубы догружаются отдельно.
 import * as THREE from 'three';
+import { isPackFileMissing } from '../../assets/pack';
 import type { Gender } from '../../model/catalog';
 import type {
   AssetStore,
   BodyManifest,
+  DecalManifest,
   FaceManifest,
   HairHint,
   HairManifest,
@@ -13,6 +15,7 @@ import type {
   SkinManifest,
 } from './assets';
 import { loadJson } from './assets';
+import { buildHeadIndex, resolveFaceLayer, transferHeadAttrs, type HeadIndex, type HeadPart } from './decals';
 import { FaceRig } from './face';
 import { morphWeight, resolveIntimate, type IntimateManifest } from './intimate';
 import { morphTargetMatches, type AvatarLook } from './look';
@@ -28,7 +31,7 @@ const CODE: Record<Gender, 'pwa' | 'pma'> = { female: 'pwa', male: 'pma' };
 type MorphMesh = THREE.SkinnedMesh & { morphTargetDictionary: Record<string, number>; morphTargetInfluences: number[] };
 
 /** Порядок прозрачных слоёв поверх кожи. */
-const ORDER = { brows: 2, wet: 3, tear: 3, cap: 4, decal: 4, hairFringe: 6 };
+const ORDER = { faceDecal: 1, brows: 2, wet: 3, tear: 3, cap: 4, decal: 4, hairFringe: 6 };
 
 function meshesOf(root: THREE.Object3D): THREE.SkinnedMesh[] {
   const out: THREE.SkinnedMesh[] = [];
@@ -52,6 +55,35 @@ export function markLowerLashes(g: THREE.BufferGeometry, eyeCenter: { l: number[
   g.setAttribute('lashLow', new THREE.Float32BufferAttribute(low, 1));
 }
 
+/** Части нет в наборе: набор собран старой версией без неё (файл есть, а раздела в нём нет). */
+function partMissing(detail: string): Error {
+  const e = new Error(detail);
+  e.name = 'PackPartMissing';
+  return e;
+}
+
+/**
+ * Отказ окончательный до смены набора: файла или раздела нет. Разовая ошибка чтения (перезапуск
+ * dev-сервера, сбой чтения из папки, сеть) таким не считается — следующее изменение вида
+ * пробует снова, и строка не помечается «не показано в 3D».
+ */
+export function isPartMissing(e: unknown): boolean {
+  return isPackFileMissing(e) || (e instanceof Error && e.name === 'PackPartMissing');
+}
+
+/**
+ * Необязательный JSON набора. Отказ остаётся в кеше, только когда файла нет (в старом наборе
+ * каждое изменение вида иначе запрашивало бы его снова); при прочих ошибках кеш сбрасывается.
+ */
+function optionalJson<T>(rel: string, forget: (p: Promise<T>) => void): Promise<T> {
+  const p: Promise<T> = loadJson<T>(rel).catch((e: unknown) => {
+    if (!isPartMissing(e)) forget(p);
+    throw e;
+  });
+  p.catch(() => {});
+  return p;
+}
+
 const chunkOf = (name: string) => Number(/submesh_(\d+)/.exec(name)?.[1] ?? -1);
 
 interface IntimateBuilt {
@@ -59,6 +91,14 @@ interface IntimateBuilt {
   file: string;
   kind: 'skin' | 'decal';
   /** подмеш (submesh_NN) → меш */
+  subs: Map<number, MorphMesh>;
+}
+
+interface DecalBuilt {
+  stem: string;
+  file: string;
+  kind: 'decal' | 'piercing';
+  /** чанк → меш-образец (на сцене — его экземпляры, decalInstance) */
   subs: Map<number, MorphMesh>;
 }
 
@@ -229,6 +269,8 @@ export class Character {
       m.renderOrder = ORDER.brows;
       this.brows.push(m);
     }
+    // Брови — слой кожи (Materials.browDecal): UV и касательные кожи под каждой вершиной
+    for (const m of this.brows) this.skinUnder(m.geometry);
     const bodyMeshes = body ? meshesOf(body.scene) : [];
     for (const m of bodyMeshes) {
       // В редакторе у женского тела голени и стопы заменены ногами редактора (cs_flat)
@@ -338,11 +380,11 @@ export class Character {
       this.mats.headSkin(skinG, g, look.skinApp, look.skinType),
       this.mats.bodySkin(texSets[`${this.code}_body`], `${this.code}_body`, tone),
       this.mats.bodySkin(texSets[`${this.code}_arms`], `${this.code}_arms`, tone),
-      eye ? this.mats.eyeball(eye) : null,
+      eye ? this.mats.eyeball(eye, tone) : null,
       eye ? this.mats.eyeShadow(eye) : null,
       eye ? this.mats.eyeTearline(eye).catch(() => null) : null,
       lash ? this.mats.lashes(lash, true) : null,
-      browStyle && browCol ? this.mats.brows(browStyle, browCol, exception?.gradientMapPng ?? browCol.gradientMapPng, look.skinHex ?? undefined) : null,
+      browStyle && browCol ? this.mats.browDecal(skinG, g, look.skinApp, look.skinType, browStyle, browCol, exception?.gradientMapPng ?? browCol.gradientMapPng) : null,
       teethE ? this.mats.teeth(teethE).catch(() => null) : null,
       nailE ? this.mats.nails(nailE).catch(() => null) : null,
     ]);
@@ -383,13 +425,8 @@ export class Character {
 
   // ---------------------------------------------------------------- нагота
   private intimateManifest(): Promise<IntimateManifest> {
-    if (!this.intimateM) {
-      const p = loadJson<IntimateManifest>('body/intimate.json');
-      p.catch(() => {
-        if (this.intimateM === p) this.intimateM = null;
-      });
-      this.intimateM = p;
-    }
+    // Отсутствие файла запоминается до смены набора (движок и персонаж пересоздаются вместе с ним)
+    if (!this.intimateM) this.intimateM = optionalJson<IntimateManifest>('body/intimate.json', (p) => this.intimateM === p && (this.intimateM = null));
     return this.intimateM;
   }
 
@@ -474,7 +511,7 @@ export class Character {
       p?.then((b) => {
         for (const mesh of b.subs.values()) {
           mesh.removeFromParent();
-          freeMesh(mesh);
+          this.freeBound(mesh);
         }
         this.dropGlb(b.file);
       }).catch(() => {});
@@ -500,7 +537,7 @@ export class Character {
         const m = p.core as MorphMesh;
         if (m.morphTargetDictionary && m.morphTargetInfluences) beard.push(m);
       }
-    for (const m of [...this.morphMeshes, ...beard]) {
+    for (const m of [...this.morphMeshes, ...beard, ...this.decalLive.values()]) {
       const inf = m.morphTargetInfluences;
       inf.fill(0);
       for (const [name, i] of Object.entries(m.morphTargetDictionary)) {
@@ -619,7 +656,7 @@ export class Character {
             }
           });
         } else {
-          const mat = await (mdef.type === 'cap' ? this.mats.hairCap(hm, mdef) : this.mats.accessory(mdef)).catch(() => null);
+          const mat = await (mdef.type === 'cap' ? this.mats.hairCap(hm, mdef) : this.mats.accessory(mdef, hm)).catch(() => null);
           assign.push(() => {
             part.core.visible = !!mat;
             if (mat) part.core.material = mat;
@@ -652,6 +689,8 @@ export class Character {
    */
   async prepareBeard(look: AvatarLook): Promise<() => void> {
     const hm = look.beardApp ? await this.hairManifest : null;
+    // Набор собран до бород: в манифесте волос нет секции beards
+    if (hm && !hm.beards) throw partMissing('hair manifest: no beards');
     const apps = hm?.beards?.apps[look.beardApp ?? ''];
     const comps = apps ? (look.beardColour ? apps[look.beardColour] : undefined) ?? apps.default ?? Object.values(apps)[0] : undefined;
     if (!hm || !comps?.length) return () => this.setBeard([], '');
@@ -687,7 +726,7 @@ export class Character {
               }
             });
           } else {
-            const mat = await (mdef.type === 'beardShadow' ? this.mats.beardShadow(hm, mdef) : this.mats.accessory(mdef)).catch(() => null);
+            const mat = await (mdef.type === 'beardShadow' ? this.mats.beardShadow(hm, mdef) : this.mats.accessory(mdef, hm)).catch(() => null);
             assign.push(() => {
               part.core.visible = !!mat;
               if (mat) part.core.material = mat;
@@ -719,7 +758,7 @@ export class Character {
           this.hairs.delete(stem);
           this.hairsReady.delete(stem);
           p?.then((b) => {
-            b.group.traverse(freeMesh);
+            b.group.traverse(this.freeBound);
             const glb = hm.meshes[stem]?.glb;
             if (glb) this.dropGlb(glb);
           }).catch(() => {});
@@ -728,7 +767,170 @@ export class Character {
       .catch(() => {});
   }
 
+  // ---------------------------------------------------------------- слои лица
+  private decalM: Promise<DecalManifest> | null = null;
+  private decalParts = new Map<string, Promise<DecalBuilt>>();
+  private decalReady = new Map<string, DecalBuilt>();
+  /** показанные экземпляры: ключ «строка|меш|чанк» → меш на скелете V */
+  private decalLive = new Map<string, MorphMesh>();
+  private decalOrder: string[] = [];
+  private headIndex: HeadIndex | null = null;
+
+  private decalManifest(): Promise<DecalManifest> {
+    if (!this.decalM) this.decalM = optionalJson<DecalManifest>('tex/face/decals.json', (p) => this.decalM === p && (this.decalM = null));
+    return this.decalM;
+  }
+
+  /** Атрибуты кожи под мешем слоя (headUv, tangent) — для материала слоя лица. */
+  private skinUnder(g: THREE.BufferGeometry, label = '') {
+    if (g.getAttribute('headUv')) return;
+    const t = transferHeadAttrs(g.getAttribute('position').array as Float32Array, this.headAttrs());
+    g.setAttribute('headUv', new THREE.Float32BufferAttribute(t.uv, 2));
+    if (t.tangent) g.setAttribute('tangent', new THREE.Float32BufferAttribute(t.tangent, 4));
+    if (import.meta.env.DEV && t.misses) console.debug(`[avatar] слой ${label}: ${t.misses} вершин далеко от кожи`);
+  }
+
+  /** Индекс вершин головы в осях привязки (для transferHeadAttrs): один на голову, не на каждый меш слоя. */
+  private headAttrs(): HeadIndex {
+    if (!this.headIndex) {
+      const copy = (a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined, n: number) => {
+        if (!a) return null;
+        const out = new Float32Array(a.count * n);
+        for (let i = 0; i < a.count; i++) for (let c = 0; c < n; c++) out[i * n + c] = a.getComponent(i, c);
+        return out;
+      };
+      const out: HeadPart[] = [];
+      for (const m of this.head) {
+        const pos = copy(m.geometry.getAttribute('position'), 3);
+        const uv = copy(m.geometry.getAttribute('uv'), 2);
+        if (pos && uv) out.push({ pos, uv, tangent: copy(m.geometry.getAttribute('tangent'), 4) });
+      }
+      this.headIndex = buildHeadIndex(out);
+    }
+    return this.headIndex;
+  }
+
+  private buildDecal(m: DecalManifest, stem: string): Promise<DecalBuilt> {
+    let p = this.decalParts.get(stem);
+    if (!p) {
+      p = (async () => {
+        const info = m.meshes[stem];
+        if (!info) throw new Error('decal: нет меша ' + stem);
+        const gl = await this.gltf(info.glb);
+        const subs = new Map<number, MorphMesh>();
+        for (const mesh of meshesOf(gl.scene)) {
+          mesh.removeFromParent();
+          this.sk.bind(mesh);
+          // кожа под слоем: UV и касательные ближайших вершин головы (материал декали читает кожу по ним)
+          if (info.kind === 'decal') this.skinUnder(mesh.geometry, `${stem}/${mesh.name}`);
+          const sub = info.submeshes.find((s) => s.glbMesh === mesh.name);
+          subs.set(sub?.chunk ?? chunkOf(mesh.name), mesh as MorphMesh);
+        }
+        const built: DecalBuilt = { stem, file: info.glb, kind: info.kind, subs };
+        if (this.decalParts.get(stem) === p) this.decalReady.set(stem, built);
+        return built;
+      })();
+      p.catch(() => this.decalParts.delete(stem));
+      this.decalParts.set(stem, p);
+    }
+    return p;
+  }
+
+  /** Экземпляр чанка меша слоя для строки редактора (один меш может нужен двум строкам — свой экземпляр у каждой). */
+  private decalInstance(key: string, tpl: MorphMesh, kind: 'decal' | 'piercing'): MorphMesh {
+    let m = this.decalLive.get(key);
+    if (!m) {
+      const inst = new THREE.SkinnedMesh(tpl.geometry, tpl.material) as unknown as MorphMesh;
+      inst.name = tpl.name + '_' + key;
+      inst.bind(tpl.skeleton, tpl.bindMatrix);
+      inst.frustumCulled = false;
+      inst.castShadow = kind === 'piercing';
+      inst.receiveShadow = true;
+      inst.renderOrder = kind === 'decal' ? ORDER.faceDecal : 0;
+      inst.layers.enable(HEAD_LAYER);
+      if (tpl.morphTargetDictionary) {
+        inst.morphTargetDictionary = tpl.morphTargetDictionary;
+        inst.morphTargetInfluences = new Array(tpl.morphTargetInfluences.length).fill(0);
+      }
+      m = inst;
+    }
+    return m;
+  }
+
+  /**
+   * Слои лица (tex/face/decals.json): макияж глаз, губ и скул, веснушки, изъяны, тату, шрамы,
+   * кибер-импланты, пирсинг. Каждая строка — свои меши (чанки из маски игры) с материалом
+   * appearance. Возвращает функцию «надеть» или null, когда менять нечего (те же меши с теми
+   * же материалами): тогда движок не прогревает шейдеры и не держит полный fps впустую.
+   * Без файла слоёв в наборе V остаётся как есть.
+   */
+  async prepareDecals(look: AvatarLook): Promise<(() => void) | null> {
+    if (!look.faceLayers.length && !this.decalLive.size) return null;
+    const m = await this.decalManifest();
+    const tone = this.toneOf(look);
+    const skinG = this.skinM[this.gender];
+    const want: { key: string; build: Promise<DecalBuilt | null>; chunk: number; mat: Promise<THREE.Material | null> }[] = [];
+    for (const pick of look.faceLayers) {
+      for (const c of resolveFaceLayer(m.apps, pick, this.code, tone)) {
+        const info = m.meshes[c.mesh];
+        if (!info) continue;
+        const keys = info.appearances[c.app] ?? [];
+        const build = this.buildDecal(m, c.mesh).catch(() => null);
+        for (const sub of info.submeshes) {
+          if (!c.chunks.includes(sub.chunk)) continue;
+          const mk = keys[sub.chunk];
+          const def = mk ? m.materials[mk] : undefined;
+          if (!def || !mk) continue;
+          const mat =
+            def.type === 'piercing'
+              ? this.mats.piercing(def)
+              : this.mats.faceDecal(skinG, this.gender, look.skinApp, look.skinType, mk, def);
+          want.push({ key: `${pick.slot}|${c.mesh}|${sub.chunk}`, build, chunk: sub.chunk, mat: mat.catch(() => null) });
+        }
+      }
+    }
+    const ready = await Promise.all(want.map(async (w) => ({ w, b: await w.build, mat: await w.mat })));
+    const shown = ready.filter(({ w, b, mat }) => b?.subs.get(w.chunk) && mat);
+    if (shown.length === this.decalLive.size && shown.every(({ w, mat }) => this.decalLive.get(w.key)?.material === mat)) return null;
+    return () => {
+      const next = new Map<string, MorphMesh>();
+      for (const { w, b, mat } of ready) {
+        const tpl = b?.subs.get(w.chunk);
+        if (!b || !tpl || !mat) continue;
+        const inst = this.decalInstance(w.key, tpl, b.kind);
+        inst.material = mat;
+        next.set(w.key, inst);
+      }
+      for (const [k, mesh] of this.decalLive) if (!next.has(k)) mesh.removeFromParent();
+      for (const mesh of next.values()) if (mesh.parent !== this.root) this.root.add(mesh);
+      this.decalLive = next;
+      this.applyMorphs(look);
+      this.evictDecals([...new Set(ready.filter((r) => r.b).map((r) => r.b!.stem))]);
+    };
+  }
+
+  /** Давно снятые меши слоёв лица: геометрия освобождается, glb выгружается из кеша. */
+  private evictDecals(live: string[]) {
+    const r = touchRecent(this.decalOrder, live, KEEP_RECENT.decals);
+    this.decalOrder = r.order;
+    for (const stem of r.evict) {
+      const p = this.decalParts.get(stem);
+      this.decalParts.delete(stem);
+      this.decalReady.delete(stem);
+      p?.then((b) => {
+        b.subs.forEach(this.freeBound);
+        this.dropGlb(b.file);
+      }).catch(() => {});
+    }
+  }
+
   /** Давно снятые причёски: геометрия освобождается, glb выгружается из кеша. */
+  /** Выгрузить меш, привязанный к скелету: геометрия и его собственные кости (dyng_*). */
+  private freeBound = (o: THREE.Object3D) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh) this.sk.release(o as THREE.SkinnedMesh);
+    freeMesh(o);
+  };
+
   private evictHair(hm: HairManifest) {
     const r = touchRecent(this.hairOrder, this.hairOn.map((b) => b.stem), KEEP_RECENT.hair);
     this.hairOrder = r.order;
@@ -738,7 +940,7 @@ export class Character {
       this.hairsReady.delete(stem);
       // материалы и текстуры причёски освобождает Materials.trim: на живых мешах их больше нет
       p?.then((b) => {
-        b.group.traverse(freeMesh);
+        b.group.traverse(this.freeBound);
         const glb = hm.meshes[stem]?.glb;
         if (glb) this.dropGlb(glb);
       }).catch(() => {});
@@ -773,7 +975,7 @@ export class Character {
       if (u?.uMouthLight) u.uMouthLight.value = k;
     }
     // Рельеф карты нормалей у кромки губ гаснет, пока рот открыт (SKIN_LIP_FADE)
-    for (const m of this.head) {
+    for (const m of [...this.head, ...this.decalLive.values()]) {
       const u = (m.material as THREE.Material).userData.skin as { uMouthOpen?: { value: number } } | undefined;
       if (u?.uMouthOpen) u.uMouthOpen.value = this.face.mouthOpen;
     }
@@ -825,6 +1027,7 @@ export class Character {
     // причёски и части наготы, которые сейчас сняты, на сцене не висят (и те, что ещё грузятся)
     for (const p of this.hairs.values()) p.then((b) => b.group.traverse(freeMesh)).catch(() => {});
     for (const p of this.intimateParts.values()) p.then((b) => b.subs.forEach(freeMesh)).catch(() => {});
+    for (const p of this.decalParts.values()) p.then((b) => b.subs.forEach(freeMesh)).catch(() => {});
     // Меши унесены из кешированных сцен: эти glb больше никому не годятся
     for (const rel of [...this.glbs]) this.dropGlb(rel);
   }

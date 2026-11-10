@@ -52,8 +52,8 @@
   "en": "big messy top, shaved sides"
  },
  "033_player": {
-  "ru": "длинные, косой зачёс закрывает один глаз",
-  "en": "long, side-swept over one eye"
+  "ru": "длинные, косой зачёс закрывает один глаз, другая сторона выбрита (андеркат)",
+  "en": "long, side-swept over one eye, other side shaved (undercut)"
  },
  "034_militech_agent": {
   "ru": "маллет: пышный зачёс сверху, сзади до плеч",
@@ -120,8 +120,8 @@
   "en": "punk: tall swept-up top, long back"
  },
  "056_rogue_old": {
-  "ru": "длинные, зачёсаны на одну сторону, ниже плеч",
-  "en": "long, swept to one side, past the shoulders"
+  "ru": "длинные, зачёсаны на одну сторону, ниже плеч, одна сторона выбрита (андеркат)",
+  "en": "long, swept to one side, past the shoulders, one side shaved (undercut)"
  },
  "058_voodoo_01": {
   "ru": "собраны в небрежный высокий узел, пряди выбиваются",
@@ -196,8 +196,8 @@
   "en": "long straight, slicked back off the forehead, falling to one side, thin braid at the temple"
  },
  "093_sumo": {
-  "ru": "гладко собраны в высокий пучок-самурай",
-  "en": "sleek high samurai top knot"
+  "ru": "гладко собраны в высокий пучок-самурай, лоб высокий, передняя часть головы выбрита",
+  "en": "sleek samurai top knot, shaved front"
  },
  "095_panam": {
   "ru": "высокая растрёпанная укладка, пряди у лица",

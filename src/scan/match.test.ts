@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PhotoAnalysis } from './analyze';
 import { getIndex } from '../model/catalog';
+import { morphInfo } from '../model/descriptors';
 import { chroma, hairLike, hexToRgb, hueOf, rgbToLab, scaleLightness, skinLike, type RGB } from './colors';
 import {
   colorKey,
@@ -12,6 +13,7 @@ import {
   irisRing,
   LOCAL_COLOR_MAX_CONF,
   LOCAL_OVER_LLM_MARGIN,
+  LIPS_NONE_CONF,
   localSuggestions,
   mergeSuggestions,
   MORPH_EXPR_MAX_CONF,
@@ -19,6 +21,17 @@ import {
   SKIN_MAX_CONF,
   skinSuggestion,
   type Suggestion,
+  photoEyeOpenZ,
+  PHOTO_EYE_OPEN,
+  HEAVY_LID_EYES,
+  HEAVY_LID_Z,
+  heavyLidRows,
+  screenHeavyLids,
+  beardKind,
+  beardStyleKey,
+  BEARD_KIND_STYLE,
+  linkedColorKey,
+  NATURAL_BROW_KEYS,
 } from './match';
 
 describe('кожа или волосы над лбом', () => {
@@ -258,5 +271,146 @@ describe('кожа, брови, ресницы и борода по замеру
     const s = pick('male', 'beard', photo({}, { monochrome: true, beardScore: 0.9 }))!;
     expect(s.conf).toBeLessThanOrEqual(0.2);
     expect(String((s.why as { en: string }).en)).toMatch(/rough/);
+  });
+});
+
+describe('скан на трёх референсах (раунд 4)', () => {
+  const pick = (g: 'male' | 'female', slot: string, a: PhotoAnalysis) => localSuggestions(g, a).find((s) => s.slotId === slot);
+  /** Признаки глаз и мимика — замеры MediaPipe на фото Киану, Педро и Зендаи (w3/scan/before_local). */
+  const FACES = {
+    keanu: { f: { eyeWidth: 0.435, eyeOpen: 0.266, eyeTilt: 5.776, eyeSpacing: 1.178 }, b: { eyeSquintLeft: 0.81, eyeSquintRight: 0.6, eyeBlinkLeft: 0.15, eyeBlinkRight: 0.08 } },
+    pedro: { f: { eyeWidth: 0.4, eyeOpen: 0.244, eyeTilt: 1.753, eyeSpacing: 1.333 }, b: { eyeSquintLeft: 0.55, eyeSquintRight: 0.42, eyeBlinkLeft: 0.25, eyeBlinkRight: 0.15, mouthSmileLeft: 0.8, mouthSmileRight: 0.76 } },
+    zendaya: { f: { eyeWidth: 0.448, eyeOpen: 0.309, eyeTilt: 6.965, eyeSpacing: 1.102 }, b: { eyeSquintLeft: 0.46, eyeSquintRight: 0.42, eyeBlinkLeft: 0.14, eyeBlinkRight: 0.04 } },
+  };
+  const face = (k: keyof typeof FACES) => colourPhoto({}, { features: FACES[k].f, blendshapes: FACES[k].b } as unknown as Partial<PhotoAnalysis>);
+  const eyeNo = (g: 'male' | 'female', a: PhotoAnalysis) => {
+    const v = getIndex(g).slotById.get('eyes')!.variants[0];
+    return v.options.findIndex((o) => o.i === pick(g, 'eyes', a)!.value) + 1;
+  };
+
+  it('раскрытие глаз фото сравнивается с нормой фото, прищур и моргание возвращаются', () => {
+    expect(photoEyeOpenZ(face('pedro'))).toBeGreaterThan(-1);
+    expect(photoEyeOpenZ(face('keanu'))).toBeGreaterThan(-1);
+    expect(photoEyeOpenZ(face('zendaya'))).toBeGreaterThan(photoEyeOpenZ(face('pedro')));
+    const narrow = colourPhoto({}, { features: { eyeOpen: PHOTO_EYE_OPEN.mean - 2 * PHOTO_EYE_OPEN.sd } } as unknown as Partial<PhotoAnalysis>);
+    expect(photoEyeOpenZ(narrow)).toBeCloseTo(-2, 5);
+  });
+
+  it('прищур на фото не даёт полуприкрытых «сонных» глаз', () => {
+    for (const k of ['keanu', 'pedro'] as const) expect([...heavyLidRows('male')], k).not.toContain(eyeNo('male', face(k)));
+  });
+
+  it('форма глаз модели с тяжёлыми веками при открытых глазах на фото уступает замеру', () => {
+    const heavyRow = [...heavyLidRows('male')][0];
+    expect(heavyRow).toBeDefined();
+    const a = face('pedro');
+    const llm: Suggestion[] = [
+      { slotId: 'eyes', number: heavyRow, conf: 0.9, src: 'llm' },
+      { slotId: 'nose', number: 2, conf: 0.9, src: 'llm' },
+    ];
+    const screened = screenHeavyLids('male', a, llm);
+    expect(screened.map((s) => s.slotId)).toEqual(['nose']);
+    const merged = mergeSuggestions(localSuggestions('male', a), screened);
+    const eyes = merged.find((s) => s.slotId === 'eyes')!;
+    expect(eyes.src).toBe('local');
+    expect([...heavyLidRows('male')]).not.toContain(eyeNo('male', a));
+    // Узкие глаза на фото (или без замера) — ответ модели остаётся
+    const narrow = colourPhoto({}, { features: { eyeOpen: PHOTO_EYE_OPEN.mean - 2 * PHOTO_EYE_OPEN.sd } } as unknown as Partial<PhotoAnalysis>);
+    expect(screenHeavyLids('male', narrow, llm)).toHaveLength(2);
+    expect(screenHeavyLids('male', null, llm)).toHaveLength(2);
+  });
+
+  it('тяжёлые веки: узкий разрез по данным рендеров у обоих тел и добавка по кадрам редактора', () => {
+    const sorted = (s: Set<number>) => [...s].sort((a, b) => a - b);
+    for (const g of ['male', 'female'] as const) {
+      const morphs = new Set(getIndex(g).slotById.get('eyes')!.variants[0].options.map((o) => o.morph));
+      for (const m of HEAVY_LID_EYES[g]) expect(morphs.has(m), `${g} ${m}`).toBe(true);
+      // каждый вариант, который описание называет «narrow, hooded», — в списке
+      const rows = heavyLidRows(g);
+      morphInfo(g, 'eyes').options.forEach((o, k) => {
+        if ((o.z.eyeOpen ?? 0) <= HEAVY_LID_Z) expect(rows.has(k + 1), `${g} ${k + 1}`).toBe(true);
+        if (/narrow, hooded/.test(o.text.en)) expect(rows.has(k + 1), `${g} ${k + 1} ${o.text.en}`).toBe(true);
+      });
+    }
+    // номера строк в промпте и замере (каталог 2.5): у мужского — и 9 «deep-set, downturned,
+    // narrow, hooded» (раньше скан ставил её Педро), у женского список не пуст
+    expect(sorted(heavyLidRows('male'))).toEqual([7, 9, 12, 18, 19, 20, 21]);
+    expect(sorted(heavyLidRows('female'))).toEqual([6, 18, 20, 21, 22]);
+  });
+
+  it('при раскрытии глаз около нормы и прищуре скан не берёт варианты с узким разрезом', () => {
+    for (const g of ['male', 'female'] as const) {
+      const info = morphInfo(g, 'eyes');
+      for (const k of ['keanu', 'pedro', 'zendaya'] as const) {
+        const no = eyeNo(g, face(k));
+        expect(info.options[no - 1].z.eyeOpen ?? 0, `${g} ${k} → ${no}`).toBeGreaterThan(HEAVY_LID_Z);
+        expect([...heavyLidRows(g)], `${g} ${k}`).not.toContain(no);
+      }
+    }
+  });
+
+  it('по-настоящему узкие глаза при спокойном лице могут получить тяжёлое веко', () => {
+    const narrow = colourPhoto({}, { features: { eyeWidth: 0.44, eyeOpen: 0.22, eyeTilt: 3.4, eyeSpacing: 1.2 } } as unknown as Partial<PhotoAnalysis>);
+    expect(photoEyeOpenZ(narrow)).toBeLessThan(-1);
+    expect(eyeNo('male', narrow)).toBeGreaterThan(0);
+  });
+
+  it('тип бороды по зонам: полная, короткая с усами, щетина', () => {
+    expect(beardKind({ beardScore: 1, mustacheScore: 1, sideBeardScore: 1 })).toBe('full'); // Киану
+    expect(beardKind({ beardScore: 1, mustacheScore: 0.96, sideBeardScore: 0.69 })).toBe('short'); // Педро
+    expect(beardKind({ beardScore: 0.4, mustacheScore: 0.2, sideBeardScore: 0.1 })).toBe('stubble');
+    const style = (a: Partial<PhotoAnalysis>) => {
+      const s = pick('male', 'beard', colourPhoto({ skin: '#d99076', hair: '#2e1a16' }, a))!;
+      const o = getIndex('male').slotById.get('beard')!.variants[0].options.find((x) => x.i === s.value)!;
+      return beardStyleKey('male', o);
+    };
+    expect(style({ beardScore: 1, mustacheScore: 1, sideBeardScore: 1 })).toBe(BEARD_KIND_STYLE.full);
+    expect(style({ beardScore: 1, mustacheScore: 0.96, sideBeardScore: 0.69 })).toBe(BEARD_KIND_STYLE.short);
+    expect(style({ beardScore: 0.4 })).toBe(BEARD_KIND_STYLE.stubble);
+    expect(style({ beardScore: 0.1 })).toBe('');
+  });
+
+  it('цвет бороды — как у волос, а не рыжая щетина на коже', () => {
+    const a = colourPhoto({ skin: '#d99076', hair: '#2e1a16', chin: '#68413d' }, { beardScore: 1, mustacheScore: 1, sideBeardScore: 0.7 });
+    expect(pick('male', 'beard_color', a)?.colorKey).toBe(linkedColorKey('beard_color', pick('male', 'hair_color', a)!.colorKey!));
+    expect(pick('male', 'beard_color', a)?.colorKey).not.toMatch(/ginger|merlot/);
+  });
+
+  it('у крашеных рыжих волос брови тёмные (Зендая)', () => {
+    const a = colourPhoto({ skin: '#f4a591', hair: '#512f2c', brows: '#754943' });
+    expect(pick('female', 'hair_color', a)?.colorKey).toBe('red_merlot');
+    expect(pick('female', 'eyebrows_color', a)?.colorKey).toBe('brown_liquorice');
+    expect(pick('female', 'eyelash_color', a)?.colorKey).toBe('brown_liquorice');
+    expect(pick('female', 'eyebrows_color', a)?.hex).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it('связанные цвета: брови и ресницы естественные, борода хранит седину', () => {
+    expect(linkedColorKey('eyebrows_color', 'black_salt_n_pepper')).toBe('brown_liquorice');
+    expect(linkedColorKey('eyebrows_color', 'black_carbon')).toBe('black_carbon');
+    expect(linkedColorKey('eyelash_color', 'pink_magenta')).toBe('brown_liquorice');
+    expect(linkedColorKey('beard_color', 'black_salt_n_pepper')).toBe('black_salt_n_pepper');
+    expect(linkedColorKey('beard_color', 'blue_sapphire')).toBe('brown_liquorice');
+    // Red Merlot — краска: борода, как и брови, тёмно-каштановая; натуральная рыжина остаётся
+    expect(linkedColorKey('beard_color', 'red_merlot')).toBe('brown_liquorice');
+    expect(linkedColorKey('beard_color', 'ginger_strawberry')).toBe('ginger_strawberry');
+    // все ключи существуют в палитре бровей игры
+    const keys = new Set(getIndex('male').slotById.get('eyebrows_color')!.variants.flatMap((v) => v.options.map(colorKey)));
+    for (const k of NATURAL_BROW_KEYS) expect(keys.has(k), k).toBe(true);
+  });
+
+  it('цвет помады не выдаётся, если итоговый тип помады «нет»', () => {
+    for (const g of ['male', 'female'] as const) expect(getIndex(g).slotById.get('makeupLips_type')!.variants[0].options[0].label.en).toBe('OFF');
+    const local: Suggestion[] = [
+      { slotId: 'makeupLips_type', value: 0, conf: LIPS_NONE_CONF, src: 'local' },
+      { slotId: 'makeupLips_color', number: 1, conf: 0.35, src: 'local' },
+    ];
+    expect(mergeSuggestions(local).some((x) => x.slotId === 'makeupLips_color')).toBe(false);
+    // модель включила блеск — цвет остаётся
+    const llm: Suggestion[] = [{ slotId: 'makeupLips_type', number: 3, conf: 0.6, src: 'llm' }];
+    const m = mergeSuggestions(local, llm);
+    expect(m.find((x) => x.slotId === 'makeupLips_type')?.number).toBe(3);
+    expect(m.some((x) => x.slotId === 'makeupLips_color')).toBe(true);
+    // модель сказала «нет» (номер 1) — локальный цвет снимается
+    expect(mergeSuggestions(local, [{ slotId: 'makeupLips_type', number: 1, conf: 0.6, src: 'llm' }]).some((x) => x.slotId === 'makeupLips_color')).toBe(false);
   });
 });

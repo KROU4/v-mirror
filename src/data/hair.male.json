@@ -108,24 +108,24 @@
   "en": "slicked back into a short ponytail, short sides"
  },
  "059_voodoo_02": {
-  "ru": "лохматая средней длины, перья, закрывает уши",
-  "en": "shaggy medium length, feathered, covers ears"
+  "ru": "длинные рваные пряди, зачёсаны назад до затылка, закрывают уши",
+  "en": "long feathered layers swept back to the nape, covers the ears, spiky ends"
  },
  "060_voodoo_03": {
   "ru": "короткие торчащие дреды-твисты",
   "en": "short spiky twists / dreads"
  },
  "061_midlength_wavy": {
-  "ru": "волнистые до подбородка, зачёсаны назад",
-  "en": "wavy chin length, swept back"
+  "ru": "длинные пышные волны, зачёсаны назад, ниже челюсти до шеи, закрывают уши",
+  "en": "long voluminous waves swept back off the face, past the jaw to the neck, covers the ears"
  },
  "062_slick_back": {
   "ru": "короткая, зачёс набок, естественная",
   "en": "short, natural side sweep"
  },
  "063_messy_bob": {
-  "ru": "волнистые до челюсти, небрежное каре",
-  "en": "wavy jaw-length messy bob"
+  "ru": "небрежные волны до плеч, пробор по центру",
+  "en": "shoulder-length messy waves, centre part"
  },
  "065_afro_knots": {
   "ru": "пышное кудрявое афро сверху, бока короткие",
@@ -140,8 +140,8 @@
   "en": "medium shaggy layers, fringe down to the brows, covers the ears"
  },
  "075_peralez": {
-  "ru": "короткая растрёпанная, равной длины",
-  "en": "short tousled, even length"
+  "ru": "короткая, зачёсана вверх и назад, аккуратные виски",
+  "en": "short, swept up and back, neat tapered sides"
  },
  "082_afro_bun": {
   "ru": "высокий кудрявый пучок на макушке, бока выбриты",
@@ -164,8 +164,8 @@
   "en": "short neat classic cut"
  },
  "093_sumo": {
-  "ru": "гладко собраны в высокий пучок-самурай",
-  "en": "sleek high samurai top knot"
+  "ru": "гладко собраны в высокий пучок-самурай, лоб высокий, передняя часть головы выбрита",
+  "en": "sleek samurai top knot, shaved front"
  },
  "094_saul": {
   "ru": "длинные волнистые до плеч",
@@ -180,20 +180,20 @@
   "en": "liberty spikes mohawk, shaved sides"
  },
  "112_kicinski": {
-  "ru": "короткая текстурная, растрёпана набок",
-  "en": "short textured, messy side sweep"
+  "ru": "бока и виски коротко под машинку, длинный верх зачёсан набок, углы на висках открыты",
+  "en": "clipper-short sides and temples, longer top swept to one side, bare temple corners"
  },
  "113_iwinski": {
-  "ru": "средне-короткая с боковым пробором, зачёсана набок",
-  "en": "medium-short with a side part, swept to one side"
+  "ru": "средней длины, зачёсана назад и набок, концы на ушах и у воротника",
+  "en": "medium length, swept back and to one side, ends over the ears and at the collar"
  },
  "120_arasaka_bun": {
   "ru": "маленький пучок на макушке, короткие бока",
   "en": "small top knot, short sides"
  },
  "122_roy": {
-  "ru": "короткие растрёпанные кудри",
-  "en": "short messy curls"
+  "ru": "короткие растрёпанные кудри на макушке, линия роста волос высокая, с залысинами: виски и углы лба голые",
+  "en": "short messy curls, receding hairline, bare temples"
  },
  "140_short_afro": {
   "ru": "очень короткая текстурная",

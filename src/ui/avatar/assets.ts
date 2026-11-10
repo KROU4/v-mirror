@@ -92,6 +92,9 @@ export interface HairMaterial {
   fallbackColor?: string;
   roughness?: number;
   metalness?: number;
+  /** аксессуар (shading 'baked'): запечённые альбедо (sRGB) и ORM (G — шероховатость, B — металл), id в textures */
+  albedo?: string | null;
+  orm?: string | null;
 }
 /** Часть сборки бороды: меш, его appearance и номера показанных чанков (chunkMask игры). */
 export interface BeardComponent {
@@ -122,6 +125,63 @@ export interface HairManifest {
   beards?: { apps: Record<string, Record<string, BeardComponent[]>> };
   hints: Record<'female' | 'male', Record<string, HairHint>>;
   hintsPlain?: Record<'female' | 'male', Record<string, HairHint>>;
+}
+
+/**
+ * Слой лица (mesh_decal игры): заменяет альбедо, нормаль и шероховатость кожи под собой.
+ * Цвет = diffuse.rgb × diffuseColor, альфа = diffuse.a × diffuseAlpha × (1 − маска × влияние).
+ */
+export interface FaceDecalMat {
+  type: 'decal';
+  diffuse?: string;
+  diffuseColor?: string;
+  diffuseAlpha?: number;
+  secondaryMask?: string;
+  secondaryMaskUVScale?: number;
+  secondaryMaskInfluence?: number;
+  normal?: string;
+  normalAlpha?: number;
+  normalAlphaTex?: string;
+  roughnessMetalnessAlpha?: number;
+  roughness?: string;
+  roughnessScale?: number;
+  roughnessBias?: number;
+  metalness?: string;
+  metalnessScale?: number;
+  metalnessBias?: number;
+  /** mesh_decal_double_diffuse: второй слой цвета (как у бровей) */
+  secondaryDiffuseAlpha?: string;
+  secondaryDiffuseAlphaIntensity?: number;
+  secondaryDiffuseColor?: string;
+}
+/** Пирсинг: настоящий меш с многослойным материалом игры — здесь цвет плашки редактора. */
+export interface PiercingMat {
+  type: 'piercing';
+  colour: string;
+  metalness: number;
+  roughness: number;
+  name?: string;
+  /** узорный цвет: миниатюра цвета из редактора (путь в пакете, swatches/icons/*.webp) */
+  pattern?: string;
+}
+export interface FaceLayerComponent {
+  mesh: string;
+  app: string;
+  chunks: number[];
+}
+/** tex/face/decals.json: слои лица (макияж, тату, шрамы, кибер-импланты, пирсинг). */
+export interface DecalManifest {
+  apps: Record<string, Record<string, FaceLayerComponent[]>>;
+  meshes: Record<
+    string,
+    {
+      glb: string;
+      submeshes: { chunk: number; glbMesh: string }[];
+      appearances: Record<string, (string | null)[]>;
+      kind: 'decal' | 'piercing';
+    }
+  >;
+  materials: Record<string, FaceDecalMat | PiercingMat>;
 }
 
 export interface BodyGlb {

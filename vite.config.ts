@@ -196,7 +196,9 @@ export function basePath(raw: string | undefined): string {
  * Content-Security-Policy of the static site (GitHub Pages cannot send headers, so it is a
  * meta tag). Network access only to the site itself and openrouter.ai: the OpenRouter key in
  * localStorage cannot be sent anywhere else, glTF from a pack cannot beacon out, and the
- * usage-metrics logger of MediaPipe (odml.pa.googleapis.com) is blocked.
+ * usage-metrics logger of MediaPipe (odml.pa.googleapis.com) is blocked. The meta tag does not
+ * reach the detector's module worker (it takes its policy from its own response headers), so
+ * the worker applies the same rule itself: src/scan/worker-net-guard.ts.
  * WebAssembly (MediaPipe) needs 'wasm-unsafe-eval'; pack files are blob: URLs.
  */
 export const CSP = [
@@ -257,6 +259,8 @@ export default defineConfig(({ command }) => {
     server: { port: 5177, strictPort: true },
     // the catalog (~2.6 MB of data) as JSON.parse('…'): V8 parses that much faster than a literal
     json: { stringify: true },
+    // the Face Landmarker worker is a module worker: it imports the ES-module wasm loader at run time
+    worker: { format: 'es' },
     build: {
       sourcemap: false,
       // the catalog data (both body types, ~1.3 MB each) dominates the entry; keep it and React in

@@ -31,6 +31,20 @@ describe('каталог', () => {
   });
 });
 
+describe('строки без подписи', () => {
+  it('шея — не строка редактора: в игре её нет, тон шеи идёт за цветом кожи', () => {
+    for (const g of ['male', 'female'] as const) {
+      const { slotById } = getIndex(g);
+      const neck = slotById.get('neck')!;
+      expect(neck.auto).toBe(true);
+      expect(neck.variants[0].link).toBe('skin color');
+      const tones = (id: string) => slotById.get(id)!.variants[0].options.map((o) => o.app?.split('__').pop());
+      expect(tones('neck')).toEqual(tones('skin_color'));
+      expect(visibleSlots(defaultState(g)).some((v) => v.slot.id === 'neck')).toBe(false);
+    }
+  });
+});
+
 describe('зависимости опций', () => {
   it('цвет волос привязан к выбранной причёске', () => {
     let s = defaultState('male');

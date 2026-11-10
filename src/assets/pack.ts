@@ -362,10 +362,20 @@ export function disconnectPack() {
   }
 }
 
+/**
+ * HEAD request whose (empty) body is read to the end: Chromium logs a HEAD response that is
+ * never consumed as net::ERR_ABORTED, which looks like a failed asset in the network log.
+ */
+async function head(e: PackEnv, url: string): Promise<Response | null> {
+  const r = await e.fetch(url, { method: 'HEAD' }).catch(() => null);
+  if (r && typeof r.text === 'function') await r.text().catch(() => '');
+  return r;
+}
+
 async function probeDev(e: PackEnv): Promise<PackManifest | null | false> {
   // HEAD: the body is not needed here (Character reads the manifest itself), and a cancelled
   // GET shows up as an aborted request in the network log
-  const r = await e.fetch(e.devBase + REQUIRED, { method: 'HEAD' }).catch(() => null);
+  const r = await head(e, e.devBase + REQUIRED);
   if (!r || !r.ok || !(r.headers.get('content-type') ?? '').includes('json')) return false;
   const m = await e
     .fetch(e.devBase + 'pack.json')
@@ -454,7 +464,7 @@ export async function gameAssetUrl(path: string): Promise<string> {
   if (!p) {
     const g = gen;
     p = r.file(rel).then((f) => {
-      if (!f) throw new Error(`${rel}: not in the asset pack`);
+      if (!f) throw fileMissing(rel, 'not in the asset pack');
       if (g !== gen) throw notConnected(rel);
       return e.createObjectURL(f);
     });
@@ -467,6 +477,22 @@ export async function gameAssetUrl(path: string): Promise<string> {
     urls.set(rel, p);
   }
   return p;
+}
+
+/** The pack has no such file (HTTP 404 in dev, no entry in the folder or archive). */
+function fileMissing(rel: string, detail: string): Error {
+  const err = new Error(`${rel}: ${detail}`);
+  err.name = 'PackFileMissing';
+  return err;
+}
+
+/**
+ * The load failed because the file is not in the pack, not because reading it failed once
+ * (dev server restart, a failed read from a folder handle, network). Only the first is final
+ * for optional parts of a pack.
+ */
+export function isPackFileMissing(e: unknown): boolean {
+  return e instanceof Error && e.name === 'PackFileMissing';
 }
 
 const stripBom = (t: string) => (t.charCodeAt(0) === 0xfeff ? t.slice(1) : t);
@@ -488,11 +514,12 @@ export function fetchGameJson<T>(path: string): Promise<T> {
       if (s.status !== 'ready') throw notConnected(rel);
       if (s.source?.kind === 'dev') {
         const r = await getEnv().fetch(getEnv().devBase + rel);
+        if (r.status === 404) throw fileMissing(rel, 'not in the asset pack (404)');
         if (!r.ok) throw new Error(`${rel}: ${r.status}`);
         return JSON.parse(stripBom(await r.text()));
       }
       const f = await reader?.file(rel);
-      if (!f) throw new Error(`${rel}: not in the asset pack`);
+      if (!f) throw fileMissing(rel, 'not in the asset pack');
       return JSON.parse(stripBom(await f.text()));
     })();
     const cache = jsons;
@@ -517,12 +544,7 @@ export async function hasGameAsset(path: string): Promise<boolean> {
   const s = await ready();
   if (s.status !== 'ready') return false;
   if (s.source?.kind === 'dev') {
-    try {
-      const r = await getEnv().fetch(getEnv().devBase + rel, { method: 'HEAD' });
-      return r.ok;
-    } catch {
-      return false;
-    }
+    return !!(await head(getEnv(), getEnv().devBase + rel))?.ok;
   }
   try {
     return !!(await reader?.file(rel));

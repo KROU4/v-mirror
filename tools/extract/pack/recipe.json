@@ -1368,10 +1368,752 @@
    "face/texpng/engine/textures/editor/normal.png"
   ],
   "base\\characters\\common\\skin\\face\\noise_decal_d01.xbm": [
-   "beard/png/base/characters/common/skin/face/noise_decal_d01.png"
+   "beard/png/base/characters/common/skin/face/noise_decal_d01.png",
+   "decal/png/base/characters/common/skin/face/noise_decal_d01.png"
   ],
   "base\\characters\\head\\player_base_heads\\player_man_average\\h0_000_pma_c__basehead\\textures\\hb_000_base__basehead_d01.xbm": [
    "beard/png/base/characters/head/player_base_heads/player_man_average/h0_000_pma_c__basehead/textures/hb_000_base__basehead_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_01_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_01_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_01_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_01_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_01_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_01_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_01_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_01_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_01_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_01_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_02_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_02_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_02_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_02_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_02_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_02_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_02_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_02_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_02_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_02_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_04_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_04_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_04_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_04_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_04_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_04_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_04_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_04_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_05_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_05_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_05_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_05_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_05_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_05_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_05_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_05_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_05_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_05_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_08_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_08_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_08_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_08_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_08_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_08_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_08_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_08_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_08_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_08_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_09_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_09_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_09_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_09_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_09_d03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_09_d03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_09_d04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_09_d04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_09_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_09_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_09_m02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_09_m02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_09_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_09_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_09_n02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_09_n02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_09_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_09_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_09_r02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_09_r02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_10_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_10_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_10_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_10_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_10_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_10_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_10_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_10_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_10_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_10_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_11_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_11_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_11_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_11_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_11_d03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_11_d03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_11_d04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_11_d04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_11_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_11_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_11_m02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_11_m02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_11_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_11_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_11_n02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_11_n02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_11_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_11_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_11_r02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_11_r02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_12_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_12_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_12_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_12_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_12_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_12_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_12_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_12_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_12_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_12_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_13_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_13_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_13_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_13_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_13_d03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_13_d03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_13_d04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_13_d04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_13_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_13_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_13_m02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_13_m02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_13_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_13_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_13_n02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_13_n02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_13_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_13_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_13_r02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_13_r02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_14_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_14_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_14_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_14_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_14_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_14_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_14_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_14_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_14_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_14_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_15_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_15_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_15_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_15_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_15_d03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_15_d03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_15_d04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_15_d04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_15_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_15_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_15_m02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_15_m02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_15_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_15_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_15_n02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_15_n02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_15_r01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_15_r01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\cyberware\\face\\textures\\hx_cyberware_15_r02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/cyberware/face/textures/hx_cyberware_15_r02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d05.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d05.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d06.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d06.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d07.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d07.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d08.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d08.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d09.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d09.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d10.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d10.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d11.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d11.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d12.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d12.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d13.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d13.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d14.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d14.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d15.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d15.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d16.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d16.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d17.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d17.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d18.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d18.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d19.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d19.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d20.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d20.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d21.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d21.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d22.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d22.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d23.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d23.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d24.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d24.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d25.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d25.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d26.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d26.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d27.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d27.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d28.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d28.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d29.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d29.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d30.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d30.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d31.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d31.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d32.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d32.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d33.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d33.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d34.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d34.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d35.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d35.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_01_d36.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_01_d36.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_cyberware_01_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_cyberware_01_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_cyberware_01_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_cyberware_01_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_cyberware_01_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_cyberware_01_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\eyes\\textures\\hx_eyes_makeup_cyberware_01_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/eyes/textures/hx_eyes_makeup_cyberware_01_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_cyberware_04_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_cyberware_04_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_cyberware_04_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_cyberware_04_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_cyberware_04_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_cyberware_04_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_cyberware_04_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_cyberware_04_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_cyberware_06_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_cyberware_06_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_cyberware_06_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_cyberware_06_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_cyberware_06_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_cyberware_06_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_freckles_makeup_cyberware_06_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_freckles_makeup_cyberware_06_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_05.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_05.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_06.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_06.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_07.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_07.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_08.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_08.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_09.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_09.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_10.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_10.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_11.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_11.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_12.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_12.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_13.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_13.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_13a.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_13a.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_14.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_14.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_15.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_15.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_16.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_16.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_17.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_17.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_18.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_18.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_19.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_19.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_20.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_20.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_m08.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_m08.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\freckles\\textures\\hx_makeup_m16.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/freckles/textures/hx_makeup_m16.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a18.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a18.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a20.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a20.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a21.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a21.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a22.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a22.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a23.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a23.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a24.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a24.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a25.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a25.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a26.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a26.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a27.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a27.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a29.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a29.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a30.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a30.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_a31.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_a31.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d05.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d05.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d06.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d06.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d07.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d07.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d08.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d08.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d09.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d09.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d10.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d10.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d11.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d11.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d12.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d12.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d13.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d13.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d14.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d14.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d15.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d15.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d16.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d16.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d17.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d17.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d18.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d18.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d19.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d19.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d20.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d20.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d21.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d21.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d22.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d22.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d23.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d23.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d24.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d24.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d25.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d25.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d26.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d26.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d27.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d27.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d28.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d28.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d29.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d29.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d30.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d30.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d31.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d31.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d32.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d32.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d33.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d33.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d34.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d34.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d35.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d35.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d36.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d36.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d37.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d37.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_d38.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_d38.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_m21.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_m21.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_m22.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_m22.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_m23.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_m23.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_m24.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_m24.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_m25.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_m25.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_m26.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_m26.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_m28.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_m28.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_m34.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_m34.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_m36.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_m36.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\makeup\\lips\\textures\\hx_lips_makeup_01_n28.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/makeup/lips/textures/hx_lips_makeup_01_n28.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_d03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_d03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_d04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_d04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_d05.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_d05.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_m01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_m01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_m02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_m02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_m03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_m03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_m04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_m04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_m05.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_m05.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_n01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_n01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_n02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_n02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_n03.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_n03.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\scars\\face\\textures\\h0_000_pma__basehead_scars_n04.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/scars/face/textures/h0_000_pma__basehead_scars_n04.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_01_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_01_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_02_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_02_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_02_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_02_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_03_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_03_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_04_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_04_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_05_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_05_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_06_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_06_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_07_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_07_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_08_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_08_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_09_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_09_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_10_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_10_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_11_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_11_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_12_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_12_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_13_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_13_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__customisation_13_d02.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__customisation_13_d02.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__tygerclaw_01_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__tygerclaw_01_d01.png"
+  ],
+  "base\\characters\\common\\character_customisation_items\\tattoos\\face\\textures\\head_tattoo__valentino_01_d01.xbm": [
+   "decal/png/base/characters/common/character_customisation_items/tattoos/face/textures/head_tattoo__valentino_01_d01.png"
+  ],
+  "base\\characters\\common\\eyes\\pimples_d01.xbm": [
+   "decal/png/base/characters/common/eyes/pimples_d01.png"
+  ],
+  "engine\\textures\\editor\\hairdefault_u.xbm": [
+   "decal/png/engine/textures/editor/hairdefault_u.png"
+  ],
+  "engine\\textures\\editor\\roughmetal.xbm": [
+   "decal/png/engine/textures/editor/roughmetal.png"
   ]
  },
  "serialize": {
@@ -3286,6 +4028,156 @@
   ],
   "base\\characters\\head\\player_base_heads\\player_man_average\\hb_000_pma__morphs_thick_beard_afro.morphtarget": [
    "beard/glb/hb_000_pma__morphs_thick_beard_afro.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_cyberware_01.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_cyberware_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_cyberware_02.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_cyberware_02.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_cyberware_04.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_cyberware_04.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_cyberware_06.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_cyberware_06.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_cyberware_07.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_cyberware_07.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_makeup_eyes_01.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_makeup_eyes_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_makeup_freckles_01.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_makeup_freckles_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_makeup_lips_01.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_makeup_lips_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_pimples_01.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_pimples_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_scars_01.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_scars_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_scars_02.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_scars_02.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_tattoo_01.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_tattoo_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_tattoo_02.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_tattoo_02.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_tattoo_03.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_tattoo_03.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_tattoo_04.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_tattoo_04.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_tattoo_05.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_tattoo_05.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_tattoo_06.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_tattoo_06.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_tattoo_07.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_tattoo_07.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_tattoo_08.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_tattoo_08.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_tattoo_09.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_tattoo_09.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\hx_000_pma__morphs_tattoo_10.morphtarget": [
+   "decal/glb/hx_000_pma__morphs_tattoo_10.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_cyberware_01.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_cyberware_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_cyberware_02.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_cyberware_02.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_cyberware_04.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_cyberware_04.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_cyberware_06.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_cyberware_06.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_cyberware_07.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_cyberware_07.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_makeup_eyes_01.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_makeup_eyes_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_makeup_freckles_01.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_makeup_freckles_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_makeup_lips_01.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_makeup_lips_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_pimples_01.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_pimples_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_scars_01.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_scars_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_scars_02.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_scars_02.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_tattoo_01.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_tattoo_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_tattoo_02.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_tattoo_02.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_tattoo_03.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_tattoo_03.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_tattoo_04.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_tattoo_04.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_tattoo_05.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_tattoo_05.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_tattoo_06.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_tattoo_06.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_tattoo_07.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_tattoo_07.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_tattoo_08.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_tattoo_08.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_tattoo_09.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_tattoo_09.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\hx_000_pwa__morphs_tattoo_10.morphtarget": [
+   "decal/glb/hx_000_pwa__morphs_tattoo_10.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\i1_000_pma__morphs_earring_01.morphtarget": [
+   "decal/glb/i1_000_pma__morphs_earring_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\i1_000_pma__morphs_earring_02.morphtarget": [
+   "decal/glb/i1_000_pma__morphs_earring_02.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\i1_000_pma__morphs_earring_03.morphtarget": [
+   "decal/glb/i1_000_pma__morphs_earring_03.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_man_average\\i1_000_pma__morphs_earring_04.morphtarget": [
+   "decal/glb/i1_000_pma__morphs_earring_04.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\i1_000_pwa__morphs_earring_01.morphtarget": [
+   "decal/glb/i1_000_pwa__morphs_earring_01.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\i1_000_pwa__morphs_earring_02.morphtarget": [
+   "decal/glb/i1_000_pwa__morphs_earring_02.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\i1_000_pwa__morphs_earring_03.morphtarget": [
+   "decal/glb/i1_000_pwa__morphs_earring_03.morphtarget.glb"
+  ],
+  "base\\characters\\head\\player_base_heads\\player_female_average\\i1_000_pwa__morphs_earring_04.morphtarget": [
+   "decal/glb/i1_000_pwa__morphs_earring_04.morphtarget.glb"
   ]
  },
  "pack": {
@@ -3716,6 +4608,9 @@
   },
   "beard/plan.json": {
    "from": "beard__plan.json.gz"
+  },
+  "decal/plan.json": {
+   "from": "decal__plan.json.gz"
   }
  },
  "steps": [
@@ -3732,6 +4627,7 @@
   "hair/notes.py",
   "hair/accessories.py",
   "hair/beards.py",
+  "face/decals.py",
   "body/legs_lifted.py",
   "intimate/build.py"
  ],
@@ -4169,6 +5065,56 @@
   "body/tex/underwear/ml_t1_057_wa_tank__bra_albedo.png",
   "body/tex/underwear/ml_t1_057_wa_tank__bra_orm.png",
   "body/tex/underwear/t1_057_wa_tank__bra_n01_gl.png",
+  "glb/face/decals/hx_000_pma__morphs_cyberware_01.glb",
+  "glb/face/decals/hx_000_pma__morphs_cyberware_02.glb",
+  "glb/face/decals/hx_000_pma__morphs_cyberware_04.glb",
+  "glb/face/decals/hx_000_pma__morphs_cyberware_06.glb",
+  "glb/face/decals/hx_000_pma__morphs_cyberware_07.glb",
+  "glb/face/decals/hx_000_pma__morphs_makeup_eyes_01.glb",
+  "glb/face/decals/hx_000_pma__morphs_makeup_freckles_01.glb",
+  "glb/face/decals/hx_000_pma__morphs_makeup_lips_01.glb",
+  "glb/face/decals/hx_000_pma__morphs_pimples_01.glb",
+  "glb/face/decals/hx_000_pma__morphs_scars_01.glb",
+  "glb/face/decals/hx_000_pma__morphs_scars_02.glb",
+  "glb/face/decals/hx_000_pma__morphs_tattoo_01.glb",
+  "glb/face/decals/hx_000_pma__morphs_tattoo_02.glb",
+  "glb/face/decals/hx_000_pma__morphs_tattoo_03.glb",
+  "glb/face/decals/hx_000_pma__morphs_tattoo_04.glb",
+  "glb/face/decals/hx_000_pma__morphs_tattoo_05.glb",
+  "glb/face/decals/hx_000_pma__morphs_tattoo_06.glb",
+  "glb/face/decals/hx_000_pma__morphs_tattoo_07.glb",
+  "glb/face/decals/hx_000_pma__morphs_tattoo_08.glb",
+  "glb/face/decals/hx_000_pma__morphs_tattoo_09.glb",
+  "glb/face/decals/hx_000_pma__morphs_tattoo_10.glb",
+  "glb/face/decals/hx_000_pwa__morphs_cyberware_01.glb",
+  "glb/face/decals/hx_000_pwa__morphs_cyberware_02.glb",
+  "glb/face/decals/hx_000_pwa__morphs_cyberware_04.glb",
+  "glb/face/decals/hx_000_pwa__morphs_cyberware_06.glb",
+  "glb/face/decals/hx_000_pwa__morphs_cyberware_07.glb",
+  "glb/face/decals/hx_000_pwa__morphs_makeup_eyes_01.glb",
+  "glb/face/decals/hx_000_pwa__morphs_makeup_freckles_01.glb",
+  "glb/face/decals/hx_000_pwa__morphs_makeup_lips_01.glb",
+  "glb/face/decals/hx_000_pwa__morphs_pimples_01.glb",
+  "glb/face/decals/hx_000_pwa__morphs_scars_01.glb",
+  "glb/face/decals/hx_000_pwa__morphs_scars_02.glb",
+  "glb/face/decals/hx_000_pwa__morphs_tattoo_01.glb",
+  "glb/face/decals/hx_000_pwa__morphs_tattoo_02.glb",
+  "glb/face/decals/hx_000_pwa__morphs_tattoo_03.glb",
+  "glb/face/decals/hx_000_pwa__morphs_tattoo_04.glb",
+  "glb/face/decals/hx_000_pwa__morphs_tattoo_05.glb",
+  "glb/face/decals/hx_000_pwa__morphs_tattoo_06.glb",
+  "glb/face/decals/hx_000_pwa__morphs_tattoo_07.glb",
+  "glb/face/decals/hx_000_pwa__morphs_tattoo_08.glb",
+  "glb/face/decals/hx_000_pwa__morphs_tattoo_09.glb",
+  "glb/face/decals/hx_000_pwa__morphs_tattoo_10.glb",
+  "glb/face/decals/i1_000_pma__morphs_earring_01.glb",
+  "glb/face/decals/i1_000_pma__morphs_earring_02.glb",
+  "glb/face/decals/i1_000_pma__morphs_earring_03.glb",
+  "glb/face/decals/i1_000_pma__morphs_earring_04.glb",
+  "glb/face/decals/i1_000_pwa__morphs_earring_01.glb",
+  "glb/face/decals/i1_000_pwa__morphs_earring_02.glb",
+  "glb/face/decals/i1_000_pwa__morphs_earring_03.glb",
+  "glb/face/decals/i1_000_pwa__morphs_earring_04.glb",
   "glb/face/ht_000_pma__morphs.morphtarget.glb",
   "glb/face/ht_000_pma_c__basehead.glb",
   "glb/face/ht_000_pwa__morphs.morphtarget.glb",
@@ -4519,6 +5465,261 @@
   "tex/face/brows/heb_wa__base_ds15_a.png",
   "tex/face/brows/heb_wa__base_ds16.png",
   "tex/face/brows/heb_wa__base_ds16_a.png",
+  "tex/face/decals.json",
+  "tex/face/decals/h0_000_pma__basehead_scars_d01.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_d03.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_d04.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_d05.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_m01_mask.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_m02_mask.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_m03_mask.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_m04_mask.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_m05_mask.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_n01_normal.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_n02_normal.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_n03_normal.png",
+  "tex/face/decals/h0_000_pma__basehead_scars_n04_normal.png",
+  "tex/face/decals/hairdefault_u_mask.png",
+  "tex/face/decals/head_tattoo__customisation_01_d01.png",
+  "tex/face/decals/head_tattoo__customisation_02_d01.png",
+  "tex/face/decals/head_tattoo__customisation_02_d02.png",
+  "tex/face/decals/head_tattoo__customisation_03_d01.png",
+  "tex/face/decals/head_tattoo__customisation_04_d01.png",
+  "tex/face/decals/head_tattoo__customisation_05_d01.png",
+  "tex/face/decals/head_tattoo__customisation_06_d01.png",
+  "tex/face/decals/head_tattoo__customisation_07_d01.png",
+  "tex/face/decals/head_tattoo__customisation_08_d01.png",
+  "tex/face/decals/head_tattoo__customisation_09_d01.png",
+  "tex/face/decals/head_tattoo__customisation_10_d01.png",
+  "tex/face/decals/head_tattoo__customisation_11_d01.png",
+  "tex/face/decals/head_tattoo__customisation_12_d01.png",
+  "tex/face/decals/head_tattoo__customisation_13_d01.png",
+  "tex/face/decals/head_tattoo__customisation_13_d02.png",
+  "tex/face/decals/head_tattoo__tygerclaw_01_d01.png",
+  "tex/face/decals/head_tattoo__valentino_01_d01.png",
+  "tex/face/decals/hx_cyberware_01_d01.png",
+  "tex/face/decals/hx_cyberware_01_d02_mask.png",
+  "tex/face/decals/hx_cyberware_01_m01_mask.png",
+  "tex/face/decals/hx_cyberware_01_n01_normal.png",
+  "tex/face/decals/hx_cyberware_01_r01_mask.png",
+  "tex/face/decals/hx_cyberware_02_d01.png",
+  "tex/face/decals/hx_cyberware_02_d02_mask.png",
+  "tex/face/decals/hx_cyberware_02_m01_mask.png",
+  "tex/face/decals/hx_cyberware_02_n01_normal.png",
+  "tex/face/decals/hx_cyberware_02_r01_mask.png",
+  "tex/face/decals/hx_cyberware_04_d01.png",
+  "tex/face/decals/hx_cyberware_04_d02_mask.png",
+  "tex/face/decals/hx_cyberware_04_n01_normal.png",
+  "tex/face/decals/hx_cyberware_04_r01_mask.png",
+  "tex/face/decals/hx_cyberware_05_d01.png",
+  "tex/face/decals/hx_cyberware_05_d02_mask.png",
+  "tex/face/decals/hx_cyberware_05_m01_mask.png",
+  "tex/face/decals/hx_cyberware_05_n01_normal.png",
+  "tex/face/decals/hx_cyberware_05_r01_mask.png",
+  "tex/face/decals/hx_cyberware_08_d01.png",
+  "tex/face/decals/hx_cyberware_08_d02_mask.png",
+  "tex/face/decals/hx_cyberware_08_m01_mask.png",
+  "tex/face/decals/hx_cyberware_08_n01_normal.png",
+  "tex/face/decals/hx_cyberware_08_r01_mask.png",
+  "tex/face/decals/hx_cyberware_09_d01.png",
+  "tex/face/decals/hx_cyberware_09_d02_mask.png",
+  "tex/face/decals/hx_cyberware_09_d03.png",
+  "tex/face/decals/hx_cyberware_09_d04_mask.png",
+  "tex/face/decals/hx_cyberware_09_m01_mask.png",
+  "tex/face/decals/hx_cyberware_09_m02_mask.png",
+  "tex/face/decals/hx_cyberware_09_n01_normal.png",
+  "tex/face/decals/hx_cyberware_09_n02_normal.png",
+  "tex/face/decals/hx_cyberware_09_r01_mask.png",
+  "tex/face/decals/hx_cyberware_09_r02_mask.png",
+  "tex/face/decals/hx_cyberware_10_d01.png",
+  "tex/face/decals/hx_cyberware_10_d02_mask.png",
+  "tex/face/decals/hx_cyberware_10_m01_mask.png",
+  "tex/face/decals/hx_cyberware_10_n01_normal.png",
+  "tex/face/decals/hx_cyberware_10_r01_mask.png",
+  "tex/face/decals/hx_cyberware_11_d01.png",
+  "tex/face/decals/hx_cyberware_11_d02_mask.png",
+  "tex/face/decals/hx_cyberware_11_d03.png",
+  "tex/face/decals/hx_cyberware_11_d04_mask.png",
+  "tex/face/decals/hx_cyberware_11_m01_mask.png",
+  "tex/face/decals/hx_cyberware_11_m02_mask.png",
+  "tex/face/decals/hx_cyberware_11_n01_normal.png",
+  "tex/face/decals/hx_cyberware_11_n02_normal.png",
+  "tex/face/decals/hx_cyberware_11_r01_mask.png",
+  "tex/face/decals/hx_cyberware_11_r02_mask.png",
+  "tex/face/decals/hx_cyberware_12_d01.png",
+  "tex/face/decals/hx_cyberware_12_d02_mask.png",
+  "tex/face/decals/hx_cyberware_12_m01_mask.png",
+  "tex/face/decals/hx_cyberware_12_n01_normal.png",
+  "tex/face/decals/hx_cyberware_12_r01_mask.png",
+  "tex/face/decals/hx_cyberware_13_d01.png",
+  "tex/face/decals/hx_cyberware_13_d02_mask.png",
+  "tex/face/decals/hx_cyberware_13_d03.png",
+  "tex/face/decals/hx_cyberware_13_d04_mask.png",
+  "tex/face/decals/hx_cyberware_13_m01_mask.png",
+  "tex/face/decals/hx_cyberware_13_m02_mask.png",
+  "tex/face/decals/hx_cyberware_13_n01_normal.png",
+  "tex/face/decals/hx_cyberware_13_n02_normal.png",
+  "tex/face/decals/hx_cyberware_13_r01_mask.png",
+  "tex/face/decals/hx_cyberware_13_r02_mask.png",
+  "tex/face/decals/hx_cyberware_14_d01.png",
+  "tex/face/decals/hx_cyberware_14_d02_mask.png",
+  "tex/face/decals/hx_cyberware_14_m01_mask.png",
+  "tex/face/decals/hx_cyberware_14_n01_normal.png",
+  "tex/face/decals/hx_cyberware_14_r01_mask.png",
+  "tex/face/decals/hx_cyberware_15_d01.png",
+  "tex/face/decals/hx_cyberware_15_d02_mask.png",
+  "tex/face/decals/hx_cyberware_15_d03.png",
+  "tex/face/decals/hx_cyberware_15_d04_mask.png",
+  "tex/face/decals/hx_cyberware_15_m01_mask.png",
+  "tex/face/decals/hx_cyberware_15_m02_mask.png",
+  "tex/face/decals/hx_cyberware_15_n01_normal.png",
+  "tex/face/decals/hx_cyberware_15_n02_normal.png",
+  "tex/face/decals/hx_cyberware_15_r01_mask.png",
+  "tex/face/decals/hx_cyberware_15_r02_mask.png",
+  "tex/face/decals/hx_eyes_makeup_01_d01.png",
+  "tex/face/decals/hx_eyes_makeup_01_d02.png",
+  "tex/face/decals/hx_eyes_makeup_01_d03.png",
+  "tex/face/decals/hx_eyes_makeup_01_d04.png",
+  "tex/face/decals/hx_eyes_makeup_01_d05.png",
+  "tex/face/decals/hx_eyes_makeup_01_d06.png",
+  "tex/face/decals/hx_eyes_makeup_01_d07.png",
+  "tex/face/decals/hx_eyes_makeup_01_d08.png",
+  "tex/face/decals/hx_eyes_makeup_01_d09.png",
+  "tex/face/decals/hx_eyes_makeup_01_d10.png",
+  "tex/face/decals/hx_eyes_makeup_01_d11.png",
+  "tex/face/decals/hx_eyes_makeup_01_d12.png",
+  "tex/face/decals/hx_eyes_makeup_01_d13.png",
+  "tex/face/decals/hx_eyes_makeup_01_d14.png",
+  "tex/face/decals/hx_eyes_makeup_01_d15.png",
+  "tex/face/decals/hx_eyes_makeup_01_d16.png",
+  "tex/face/decals/hx_eyes_makeup_01_d17.png",
+  "tex/face/decals/hx_eyes_makeup_01_d18.png",
+  "tex/face/decals/hx_eyes_makeup_01_d19.png",
+  "tex/face/decals/hx_eyes_makeup_01_d20.png",
+  "tex/face/decals/hx_eyes_makeup_01_d21.png",
+  "tex/face/decals/hx_eyes_makeup_01_d22.png",
+  "tex/face/decals/hx_eyes_makeup_01_d23.png",
+  "tex/face/decals/hx_eyes_makeup_01_d24.png",
+  "tex/face/decals/hx_eyes_makeup_01_d25.png",
+  "tex/face/decals/hx_eyes_makeup_01_d26.png",
+  "tex/face/decals/hx_eyes_makeup_01_d26_mask.png",
+  "tex/face/decals/hx_eyes_makeup_01_d27.png",
+  "tex/face/decals/hx_eyes_makeup_01_d27_mask.png",
+  "tex/face/decals/hx_eyes_makeup_01_d28.png",
+  "tex/face/decals/hx_eyes_makeup_01_d29.png",
+  "tex/face/decals/hx_eyes_makeup_01_d30.png",
+  "tex/face/decals/hx_eyes_makeup_01_d30_mask.png",
+  "tex/face/decals/hx_eyes_makeup_01_d31.png",
+  "tex/face/decals/hx_eyes_makeup_01_d32.png",
+  "tex/face/decals/hx_eyes_makeup_01_d33.png",
+  "tex/face/decals/hx_eyes_makeup_01_d34.png",
+  "tex/face/decals/hx_eyes_makeup_01_d34_mask.png",
+  "tex/face/decals/hx_eyes_makeup_01_d35.png",
+  "tex/face/decals/hx_eyes_makeup_01_d35_mask.png",
+  "tex/face/decals/hx_eyes_makeup_01_d36.png",
+  "tex/face/decals/hx_eyes_makeup_cyberware_01_d01.png",
+  "tex/face/decals/hx_eyes_makeup_cyberware_01_d02_mask.png",
+  "tex/face/decals/hx_eyes_makeup_cyberware_01_m01_mask.png",
+  "tex/face/decals/hx_eyes_makeup_cyberware_01_n01_normal.png",
+  "tex/face/decals/hx_freckles_makeup_01.png",
+  "tex/face/decals/hx_freckles_makeup_02.png",
+  "tex/face/decals/hx_freckles_makeup_03.png",
+  "tex/face/decals/hx_freckles_makeup_04.png",
+  "tex/face/decals/hx_freckles_makeup_cyberware_04_d01.png",
+  "tex/face/decals/hx_freckles_makeup_cyberware_04_d02_mask.png",
+  "tex/face/decals/hx_freckles_makeup_cyberware_04_m01_mask.png",
+  "tex/face/decals/hx_freckles_makeup_cyberware_04_n01_normal.png",
+  "tex/face/decals/hx_freckles_makeup_cyberware_06_d01.png",
+  "tex/face/decals/hx_freckles_makeup_cyberware_06_d02_mask.png",
+  "tex/face/decals/hx_freckles_makeup_cyberware_06_m01_mask.png",
+  "tex/face/decals/hx_freckles_makeup_cyberware_06_n01_normal.png",
+  "tex/face/decals/hx_lips_makeup_01_a18_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a20_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a21_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a22_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a23_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a24_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a25_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a26_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a27_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a29_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a30_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_a31_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_d01.png",
+  "tex/face/decals/hx_lips_makeup_01_d02.png",
+  "tex/face/decals/hx_lips_makeup_01_d03.png",
+  "tex/face/decals/hx_lips_makeup_01_d04.png",
+  "tex/face/decals/hx_lips_makeup_01_d05.png",
+  "tex/face/decals/hx_lips_makeup_01_d06.png",
+  "tex/face/decals/hx_lips_makeup_01_d07.png",
+  "tex/face/decals/hx_lips_makeup_01_d08.png",
+  "tex/face/decals/hx_lips_makeup_01_d09.png",
+  "tex/face/decals/hx_lips_makeup_01_d10.png",
+  "tex/face/decals/hx_lips_makeup_01_d11.png",
+  "tex/face/decals/hx_lips_makeup_01_d12.png",
+  "tex/face/decals/hx_lips_makeup_01_d13.png",
+  "tex/face/decals/hx_lips_makeup_01_d14.png",
+  "tex/face/decals/hx_lips_makeup_01_d15.png",
+  "tex/face/decals/hx_lips_makeup_01_d16.png",
+  "tex/face/decals/hx_lips_makeup_01_d17.png",
+  "tex/face/decals/hx_lips_makeup_01_d18.png",
+  "tex/face/decals/hx_lips_makeup_01_d18_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_d19.png",
+  "tex/face/decals/hx_lips_makeup_01_d20.png",
+  "tex/face/decals/hx_lips_makeup_01_d21.png",
+  "tex/face/decals/hx_lips_makeup_01_d22.png",
+  "tex/face/decals/hx_lips_makeup_01_d23.png",
+  "tex/face/decals/hx_lips_makeup_01_d24.png",
+  "tex/face/decals/hx_lips_makeup_01_d25.png",
+  "tex/face/decals/hx_lips_makeup_01_d26.png",
+  "tex/face/decals/hx_lips_makeup_01_d27.png",
+  "tex/face/decals/hx_lips_makeup_01_d28.png",
+  "tex/face/decals/hx_lips_makeup_01_d29.png",
+  "tex/face/decals/hx_lips_makeup_01_d30.png",
+  "tex/face/decals/hx_lips_makeup_01_d31.png",
+  "tex/face/decals/hx_lips_makeup_01_d32.png",
+  "tex/face/decals/hx_lips_makeup_01_d33.png",
+  "tex/face/decals/hx_lips_makeup_01_d34.png",
+  "tex/face/decals/hx_lips_makeup_01_d35.png",
+  "tex/face/decals/hx_lips_makeup_01_d36.png",
+  "tex/face/decals/hx_lips_makeup_01_d37.png",
+  "tex/face/decals/hx_lips_makeup_01_d38.png",
+  "tex/face/decals/hx_lips_makeup_01_m21_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_m22_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_m23_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_m24_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_m25_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_m26_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_m28_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_m34_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_m36_mask.png",
+  "tex/face/decals/hx_lips_makeup_01_n28_normal.png",
+  "tex/face/decals/hx_makeup_01.png",
+  "tex/face/decals/hx_makeup_02.png",
+  "tex/face/decals/hx_makeup_03.png",
+  "tex/face/decals/hx_makeup_04.png",
+  "tex/face/decals/hx_makeup_05.png",
+  "tex/face/decals/hx_makeup_06.png",
+  "tex/face/decals/hx_makeup_07.png",
+  "tex/face/decals/hx_makeup_08.png",
+  "tex/face/decals/hx_makeup_09.png",
+  "tex/face/decals/hx_makeup_10.png",
+  "tex/face/decals/hx_makeup_11.png",
+  "tex/face/decals/hx_makeup_12.png",
+  "tex/face/decals/hx_makeup_13.png",
+  "tex/face/decals/hx_makeup_13a.png",
+  "tex/face/decals/hx_makeup_14.png",
+  "tex/face/decals/hx_makeup_15.png",
+  "tex/face/decals/hx_makeup_16.png",
+  "tex/face/decals/hx_makeup_17.png",
+  "tex/face/decals/hx_makeup_18.png",
+  "tex/face/decals/hx_makeup_19.png",
+  "tex/face/decals/hx_makeup_20.png",
+  "tex/face/decals/hx_makeup_m08_mask.png",
+  "tex/face/decals/hx_makeup_m16_mask.png",
+  "tex/face/decals/noise_decal_d01_mask.png",
+  "tex/face/decals/pimples_d01.png",
+  "tex/face/decals/roughmetal_mask.png",
   "tex/face/eyes/eye_he_000_base_d02__eye_black_albedo.png",
   "tex/face/eyes/eye_he_000_base_d02__eye_blue_albedo.png",
   "tex/face/eyes/eye_he_000_base_d02__eye_blue_light_albedo.png",

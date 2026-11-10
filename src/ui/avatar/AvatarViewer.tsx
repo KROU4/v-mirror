@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { getPackState, subscribePack } from '../../assets/pack';
 import type { CharacterState } from '../../model/state';
 import type { AvatarEngine, SlotFocus } from './engine';
-import { lookOf } from './look';
+import { lookOf, type PackPart } from './look';
 
 /**
  * Что сейчас со сценой: набора нет (или выбрана не та папка — причину показывает панель
@@ -36,6 +36,28 @@ export function faceYaw(yaw: number): number {
   return Math.abs(yaw - home) > FACE_YAW_LIMIT ? home : yaw;
 }
 
+/**
+ * Строки, чьи варианты лежат на спине: шрамы тела (scars_000/001) в игре на спине и пояснице,
+ * спереди перебор вариантов ничего не меняет. На такой строке V разворачивается спиной.
+ */
+export const BACK_VIEW_SLOTS: ReadonlySet<string> = new Set(['body_scars_switcher']);
+
+/** Угол «спиной к камере», ближайший к текущему. */
+export function backYaw(yaw: number): number {
+  return nearestDefaultYaw(yaw - 180) + 180;
+}
+
+/**
+ * Угол при переходе со строки prev на строку next: на строку со спины — спиной; со строки со
+ * спины на другую строку тела — снова лицом (к ближайшему углу по умолчанию). Иначе угол
+ * пользователя не трогаем.
+ */
+export function yawForRow(yaw: number, prev: string | undefined, next: string | undefined): number {
+  if (next && BACK_VIEW_SLOTS.has(next)) return backYaw(yaw);
+  if (prev && BACK_VIEW_SLOTS.has(prev)) return nearestDefaultYaw(yaw);
+  return yaw;
+}
+
 const TEXT = {
   ru: {
     loading: 'Загрузка модели V',
@@ -62,6 +84,7 @@ export default function AvatarViewer({
   spin = 0,
   fallback,
   onStatus,
+  onMissing,
   lang = 'ru',
 }: {
   state: CharacterState;
@@ -75,6 +98,8 @@ export default function AvatarViewer({
   /** что показать без 3D (нет набора, нет WebGL, ошибка загрузки) */
   fallback: ReactNode;
   onStatus?: (s: AvatarStatus) => void;
+  /** части набора, которых в нём нет (их строки 3D не рисует); пустой список — при смене набора */
+  onMissing?: (parts: PackPart[]) => void;
   lang?: 'ru' | 'en';
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -101,6 +126,8 @@ export default function AvatarViewer({
   focusRef.current = focus;
   const onStatusRef = useRef(onStatus);
   onStatusRef.current = onStatus;
+  const onMissingRef = useRef(onMissing);
+  onMissingRef.current = onMissing;
 
   useEffect(() => {
     onStatusRef.current?.(status);
@@ -122,6 +149,7 @@ export default function AvatarViewer({
     let lostTimer = 0;
     const mark = (s: 'loading' | 'ready' | 'error') => !cancelled && setScene({ pack: packId, s });
     mark('loading');
+    onMissingRef.current?.([]);
     import('./engine')
       .then(({ AvatarEngine }) => {
         if (cancelled) return;
@@ -131,6 +159,7 @@ export default function AvatarViewer({
             // V нарисована с последним видом — в том числе когда вызов, которого ждал интерфейс,
             // вытеснен повторным надеванием после догрузки зубов и ногтей
             onShown: () => mark('ready'),
+            onMissing: (parts) => !cancelled && onMissingRef.current?.(parts),
             // Контекст WebGL потерян (сброс драйвера, нехватка памяти): three восстановится сам,
             // если браузер вернёт контекст; не вернул за CONTEXT_RESTORE_MS — показываем портрет
             onContext: (state) => {

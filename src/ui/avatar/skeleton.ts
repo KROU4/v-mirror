@@ -101,8 +101,15 @@ export class MasterSkeleton {
   readonly bindWorld = new Map<string, THREE.Matrix4>();
   readonly restPos = new Map<string, THREE.Vector3>();
   readonly restQuat = new Map<string, THREE.Quaternion>();
-  /** кости, которых нет в json (dyng_* у причёсок): висят на Head */
-  private extras = new Map<string, THREE.Bone>();
+  /**
+   * Кости, которых нет в json (dyng_* у причёсок): висят на Head. Ключ — имя и поза привязки:
+   * у разных причёсок кости с одним именем (dyng_back_left_01) стоят в разных местах, и общая
+   * кость по одному имени тянула пряди следующей причёски в позу предыдущей (длинные пряди
+   * маллета задирались на 15 см и исчезали за шеей). refs — сколько привязанных мешей её держат.
+   */
+  private extras = new Map<string, { bone: THREE.Bone; refs: number }>();
+  /** ключи собственных костей меша (для release) */
+  private extrasOf = new WeakMap<THREE.SkinnedMesh, string[]>();
 
   constructor(json: SkeletonJson) {
     let root: THREE.Bone | null = null;
@@ -133,7 +140,15 @@ export class MasterSkeleton {
   }
 
   get(name: string): THREE.Bone | undefined {
-    return this.bones.get(name) ?? this.extras.get(name);
+    const b = this.bones.get(name);
+    if (b) return b;
+    for (const e of this.extras.values()) if (e.bone.name === name) return e.bone;
+    return undefined;
+  }
+
+  /** Сколько собственных костей мешей висит на скелете (для проверок утечек). */
+  get extraCount(): number {
+    return this.extras.size;
   }
 
   /** Вернуть все кости в позу привязки (перед кадром анимации лицо собирается заново). */
@@ -150,20 +165,25 @@ export class MasterSkeleton {
    * Кости «болтания» пениса (dyng_penis_*) висят на Hips, и у каждого меша свои: их позы
    * привязки в разных glb расходятся до 5 мм (intimate.json, loaderNotes).
    */
-  private extraBone(name: string, inverseBind: THREE.Matrix4, owner: string): THREE.Bone {
+  private extraBone(name: string, inverseBind: THREE.Matrix4, owner: string, keys: string[]): THREE.Bone {
     const hips = name.startsWith('dyng_penis') && this.bones.has('Hips');
-    const key = hips ? owner + '|' + name : name;
-    let bone = this.extras.get(key);
-    if (bone) return bone;
+    const world = inverseBind.clone().invert();
+    // поза привязки с точностью 0,1 мм: одинаково привязанные меши делят кость
+    const key = hips ? owner + '|' + name : name + '@' + world.elements.map((x) => Math.round(x * 1e4)).join(',');
+    keys.push(key);
+    const hit = this.extras.get(key);
+    if (hit) {
+      hit.refs++;
+      return hit.bone;
+    }
     const parentName = hips ? 'Hips' : this.bones.has('Head') ? 'Head' : this.root.name;
     const parent = this.bones.get(parentName)!;
-    const world = inverseBind.clone().invert();
     const local = this.bindWorld.get(parentName)!.clone().invert().multiply(world);
-    bone = new THREE.Bone();
+    const bone = new THREE.Bone();
     bone.name = name;
     local.decompose(bone.position, bone.quaternion, bone.scale);
     parent.add(bone);
-    this.extras.set(key, bone);
+    this.extras.set(key, { bone, refs: 1 });
     return bone;
   }
 
@@ -176,8 +196,23 @@ export class MasterSkeleton {
     patchSkinning8();
     eightInfluences(mesh.geometry);
     const src = mesh.skeleton;
-    const bones = src.bones.map((b, i) => this.bones.get(b.name) ?? this.extraBone(b.name, src.boneInverses[i], owner));
+    const keys: string[] = [];
+    const bones = src.bones.map((b, i) => this.bones.get(b.name) ?? this.extraBone(b.name, src.boneInverses[i], owner, keys));
     mesh.bind(new THREE.Skeleton(bones, src.boneInverses.map((m) => m.clone())), IDENTITY);
     mesh.frustumCulled = false;
+    if (keys.length) this.extrasOf.set(mesh, keys);
+  }
+
+  /** Меш выгружен: его собственные кости, которые больше никто не держит, снимаются со скелета. */
+  release(mesh: THREE.SkinnedMesh) {
+    const keys = this.extrasOf.get(mesh);
+    if (!keys) return;
+    this.extrasOf.delete(mesh);
+    for (const k of keys) {
+      const e = this.extras.get(k);
+      if (!e || --e.refs > 0) continue;
+      e.bone.removeFromParent();
+      this.extras.delete(k);
+    }
   }
 }

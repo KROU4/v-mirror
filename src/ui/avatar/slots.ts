@@ -50,9 +50,11 @@ const BY_SLOT: Record<string, CameraSlot> = {
   skin_type_switcher: 'UI_Skin',
   hairstyle: 'UI_Hairs',
   hair_color: 'UI_Hairs',
-  beard: 'UI_Hairs',
-  beard_part: 'UI_Hairs',
-  beard_color: 'UI_Hairs',
+  // Борода: в GetSlotName её строки сверяются сразу за jaw; кадр лица 1,2 м с клипом подбородка
+  // (поворот головы показывает бороду сбоку). На кадре волос 2,0 м борода была мелкой.
+  beard: 'UI_Jaw',
+  beard_part: 'UI_Jaw',
+  beard_color: 'UI_Jaw',
   eyes: 'UI_Eyes',
   eyes_color: 'UI_Eyes',
   eyebrows: 'UI_Eyes',

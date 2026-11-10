@@ -2,6 +2,7 @@
 // подробное — из src/data/hair.<g>.json (описано по рендерам мешей, см. tools/calibrate).
 import hairMale from '../data/hair.male.json';
 import hairFemale from '../data/hair.female.json';
+import twoTone from '../data/hair.twotone.json';
 import type { Gender, Loc, Option } from './catalog';
 
 type HairDesc = Record<string, Loc>; // ключ — имя меша (meshHint)
@@ -52,4 +53,21 @@ export function hairDescriptions(gender: Gender, opts: Option[]): Loc[] {
 
 export function hairLabel(o: Option, gender: Gender = 'male'): string {
   return hairDescription(gender, o).ru;
+}
+
+const TWO_TONE = twoTone as unknown as Record<Gender, Record<string, string[]>>;
+
+/**
+ * Цвета (app: 02_red_merlot…), которыми эта причёска в игре красится лишь частично: концы,
+ * пряди или верх, остальное — естественный оттенок (src/data/hair.twotone.json, собран
+ * tools/extract/hair_twotone.mjs по мешам игры). Например, длинные 32 с Red Merlot — каштан
+ * с бордовыми концами.
+ */
+export function twoToneColours(gender: Gender, o: Option): readonly string[] {
+  return TWO_TONE[gender]?.[hairKey(o)] ?? [];
+}
+
+/** Причёска с этим цветом волос (ключ без номера: red_merlot) в игре двухцветная. */
+export function isTwoTone(gender: Gender, o: Option, colourKey: string): boolean {
+  return twoToneColours(gender, o).some((app) => app.replace(/^\d+_/, '') === colourKey);
 }

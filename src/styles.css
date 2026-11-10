@@ -240,7 +240,9 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
   backdrop-filter: blur(6px);
 }
 .info-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--red-text); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; font-size: 16px; }
-.info-head b { font-size: 26px; line-height: 1; color: var(--cream); font-weight: 500; }
+.info-head > span { min-width: 0; }
+/* «01 / 08» never breaks between the number and the total */
+.info-head b { flex: none; white-space: nowrap; font-size: 26px; line-height: 1; color: var(--cream); font-weight: 500; }
 .info-head small { font-size: 15px; color: var(--ink-3); }
 .info p { margin: 6px 0 0; color: var(--cream-2); font-size: 14px; line-height: 1.35; }
 .info .info-prov { color: var(--cyan); }
@@ -381,12 +383,20 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
   background: rgb(16, 6, 10); border: 1px solid var(--red-line);
 }
 .scan-wrap[hidden] { display: none; }
-.scan-close { position: sticky; float: right; top: 0; z-index: 1; width: 44px; height: 44px; margin: -10px -14px 0 8px; display: grid; place-items: center; border: 0; background: transparent; color: var(--red-text); }
+/* The close button floats over the top-right corner without taking width: as an ordinary float
+   it made the whole scan grid (a block formatting context) 40 px narrower beside it */
+.scan-close { position: sticky; float: right; top: 0; z-index: 1; width: 44px; height: 44px; margin: -10px -14px 0 -30px; display: grid; place-items: center; border: 0; background: transparent; color: var(--red-text); }
+.scan-wrap { container-type: inline-size; }
+.scan-title { padding-right: 40px; }
 .scan-close:hover { color: var(--cream); }
 .scan-close svg { width: 22px; height: 22px; }
 .scan { display: grid; gap: 20px; }
 .scan h1 { color: var(--cyan-soft); text-transform: uppercase; letter-spacing: 0.02em; }
 .scan-grid { display: grid; grid-template-columns: minmax(220px, 360px) minmax(0, 1fr); gap: 22px; align-items: start; }
+/* A narrow scan panel (1280–1440 px screens): one column instead of a squeezed text column */
+@container (max-width: 700px) {
+  .scan-grid { grid-template-columns: minmax(0, 1fr); }
+}
 .drop {
   position: relative; display: grid; place-items: center; text-align: center; gap: 10px; min-height: 280px; padding: 24px;
   border: 1.5px dashed var(--red); background: var(--red-fill); color: var(--cream-2); cursor: pointer;
@@ -507,8 +517,9 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
   .cc-name { font-size: 22px; padding: 2px 4px 6px; }
   .cc-chip { width: 26px; height: 22px; }
   .cc-title p { font-size: 11.5px; margin-top: 8px; }
+  .cc { --stage-h: min(46vh, 440px); }
   .cc-stage {
-    order: 1; height: min(46vh, 440px); flex: none; position: sticky; top: 0; z-index: 4;
+    order: 1; height: var(--stage-h); flex: none; position: sticky; top: 0; z-index: 4;
     background: radial-gradient(ellipse 80% 90% at 50% 45%, #3a121c, var(--bg-1) 70%);
     border-bottom: 1px solid var(--red-line);
   }
@@ -517,9 +528,16 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
   .info { left: 16px; right: 16px; width: auto; bottom: 10px; padding: 8px 12px; }
   .info p { display: none; }
   .info-head b { font-size: 22px; }
-  .picker { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 60vh; background: rgb(18, 8, 12); }
+  /* Colour grid as a bottom sheet under the stuck viewer: V stays in sight while colours change
+     (App scrolls the page so the viewer is stuck at the top when the grid opens) */
+  .picker {
+    position: fixed; left: 8px; right: 8px; top: var(--stage-h); bottom: 8px; width: auto; max-height: none;
+    background: rgb(18, 8, 12); animation-name: sheet-in;
+  }
+  @keyframes sheet-in { from { opacity: 0; transform: translateY(16px); } }
   .cc-stage:has(.picker) .info { visibility: hidden; }
-  .picker-grid { grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); }
+  .picker-head { padding-left: 14px; }
+  .picker-grid { grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 5px; padding: 10px; overscroll-behavior: contain; }
   .scan-wrap { position: relative; inset: auto; min-height: 100%; padding: 18px 16px 24px; }
   .scan-grid { grid-template-columns: 1fr; }
   .cc-left { order: 2; padding: 14px 16px 0; overflow: visible; }
@@ -557,10 +575,20 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
   .done-btn { min-height: 40px; padding: 0 10px; font-size: 12px; }
   .done-tail, .done-count { display: none; }
   /* Строка, к которой листаем стрелками, не прячется под прилипшей головой */
-  .crow { scroll-margin-top: calc(min(46vh, 440px) + 8px); }
+  .crow { scroll-margin-top: calc(var(--stage-h) + 8px); }
   .list-actions { padding: 12px 0 0; }
   .cc-foot { display: none; }
   .toast-host { top: auto; bottom: 16px; }
+}
+/* 360–380 px phones: 44 px arrows leave room for two-word labels («Цвет бровей») on one line */
+@media (max-width: 380px) {
+  .crow { grid-template-columns: 44px minmax(0, 1fr) 44px; }
+  .crow:has(.ctrl-grid) { grid-template-columns: 44px minmax(0, 1fr) 44px 44px; }
+  .row-head { padding: 0 10px; gap: 6px; }
+  .row-label { font-size: 15px; }
+  .row-val { gap: 6px; }
+  .row-sw { width: 26px; }
+  .body-card { grid-template-columns: 52px minmax(0, 1fr); gap: 8px; }
 }
 @media (hover: none) {
   .cc-foot, .gbtn kbd, .done-btn kbd { display: none; }
@@ -681,8 +709,9 @@ svg.body-img { padding: 16px 22px 0; color: var(--red-line); }
 .kp-key { display: flex; gap: 8px; }
 .kp-key .input { flex: 1; min-width: 0; letter-spacing: 0.02em; }
 .kp-get { margin: 0; }
-.kp-remember { display: flex; align-items: center; gap: 8px; color: var(--cyan-grey); font-size: 13px; cursor: pointer; min-height: 32px; }
-.kp-remember input { width: 16px; height: 16px; margin: 0; accent-color: var(--cyan); }
+/* The box sits on the first line of a wrapped caption, not in the middle of three lines */
+.kp-remember { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; color: var(--cyan-grey); font-size: 13px; line-height: 1.4; cursor: pointer; min-height: 32px; }
+.kp-remember input { flex: none; width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--cyan); }
 .kp-privacy { margin: 0; padding: 10px 12px; border: 1px dashed var(--cyan-dim); color: var(--cyan-grey); font-size: 13px; line-height: 1.45; }
 p.status { margin: 0; font-size: 14px; line-height: 1.4; }
 .status.ok { color: var(--cyan); }

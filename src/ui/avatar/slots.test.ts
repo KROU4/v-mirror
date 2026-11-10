@@ -10,7 +10,9 @@ describe('cameraSlotFor', () => {
     expect(cameraSlotFor('eyes_color')).toBe('UI_Eyes');
     expect(cameraSlotFor('teeth')).toBe('UI_Teeth');
     expect(cameraSlotFor('hair_color')).toBe('UI_Hairs');
-    expect(cameraSlotFor('beard_color')).toBe('UI_Hairs');
+    expect(cameraSlotFor('beard')).toBe('UI_Jaw');
+    expect(cameraSlotFor('beard_part')).toBe('UI_Jaw');
+    expect(cameraSlotFor('beard_color')).toBe('UI_Jaw');
     expect(cameraSlotFor('nails_color')).toBe('UI_FingerNails');
   });
 
@@ -129,5 +131,29 @@ describe('isCloseupFocus (подзаголовок прячется на кру�
     for (const id of ['skin_color', 'hairstyle', 'nails_l']) expect(isCloseupFocus(id, 'head')).toBe(false);
     expect(isCloseupFocus('breast', 'body')).toBe(false);
     expect(isCloseupFocus(undefined)).toBe(false);
+  });
+});
+
+describe('frameZoom: кадр во весь рост на телефоне', () => {
+  it('строки тела на телефоне не отъезжают вслед за крупными планами', async () => {
+    const { frameZoom } = await import('./engine');
+    // телефон 390×844: холст 390×387, снизу плашка описания 70 px
+    const body = frameZoom('UI_Preview', 390, 387, 390, 70);
+    const head = frameZoom('UI_Eyes', 390, 387, 390, 70);
+    expect(body).toBeGreaterThan(head * 1.2);
+    // V (1,75 м) в кадре 8,3 м с FOV 15° — около 85 % видимой над плашкой высоты
+    const visible = (2 * 8.3 * Math.tan((7.5 * Math.PI) / 180)) / body;
+    const fill = 1.75 / (visible * ((387 - 70) / 387));
+    expect(fill).toBeGreaterThan(0.8);
+    expect(fill).toBeLessThan(0.92);
+  });
+
+  it('на широком экране кадры прежние', async () => {
+    const { frameZoom } = await import('./engine');
+    expect(frameZoom('UI_Preview', 1920, 1080, 1920, 0)).toBe(1);
+    expect(frameZoom('UI_Eyes', 1920, 1080, 1920, 0)).toBe(1);
+    // узкий промежуток между колонками: крупный план отъезжает, во весь рост — нет
+    expect(frameZoom('UI_Eyes', 1920, 1080, 600, 0)).toBeCloseTo((600 / 1080) * 1.3, 6);
+    expect(frameZoom('UI_Preview', 1920, 1080, 600, 0)).toBe(1);
   });
 });

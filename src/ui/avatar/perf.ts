@@ -36,7 +36,7 @@ export function nextPixelRatio(current: number, avgMs: number, deviceRatio: numb
  * Сколько недавно снятых вариантов держать в памяти: переключение туда-обратно не грузит
  * их заново, а всё, что старше, освобождается (геометрия, материалы, текстуры).
  */
-export const KEEP_RECENT = { hair: 2, beard: 3, intimateMeshes: 4, intimateMaterials: 6 };
+export const KEEP_RECENT = { hair: 2, beard: 3, intimateMeshes: 4, intimateMaterials: 6, decals: 4 };
 
 /**
  * Список «недавно использованных» (последний — самый свежий): поднять used наверх и вернуть

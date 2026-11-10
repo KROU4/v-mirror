@@ -87,6 +87,8 @@ export function visibleSlots(state: CharacterState): VisibleSlot[] {
   const active = activeVariants(state);
   const out: VisibleSlot[] = [];
   for (const slot of catalog.slots) {
+    // Слоты без подписи в игре не строки редактора: шея (neck) связана с цветом кожи
+    // (link 'skin color') и выставляется игрой, fpp_* и holstered_data — служебные
     if (slot.auto) continue;
     const variant = slot.variants.find((v) => active.has(v.name));
     if (!variant || variant.options.length < 2) continue;

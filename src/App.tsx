@@ -14,8 +14,8 @@ import {
 import { morphInfo, MORPH_SLOTS, type MorphSlot } from './model/descriptors';
 import { LINES, LINE_OF_SLOT } from './ui/lines';
 import { pad2 } from './ui/format';
-import AvatarViewer, { DEFAULT_YAW, faceYaw, type AvatarStatus } from './ui/avatar/AvatarViewer';
-import { NOT_IN_3D } from './ui/avatar/look';
+import AvatarViewer, { DEFAULT_YAW, faceYaw, yawForRow, type AvatarStatus } from './ui/avatar/AvatarViewer';
+import { notIn3d, type PackPart } from './ui/avatar/look';
 import { isCloseupFocus } from './ui/avatar/slots';
 import type { ScanProvenance } from './scan/ScanPanel';
 import { hairDescription } from './model/hair';
@@ -99,6 +99,9 @@ export default function App() {
   const [spin, setSpin] = useState(0);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [avatar, setAvatar] = useState<AvatarStatus>('no-pack');
+  // Части набора, которых в нём нет (набор собран старой версией): их строки помечаются «не в 3D»
+  const [missing3d, setMissing3d] = useState<ReadonlySet<PackPart>>(() => new Set());
+  const onMissing = useCallback((parts: PackPart[]) => setMissing3d(new Set(parts)), []);
   // Отметки «выставлено» и точки подбора по фото у каждого тела свои
   const [doneAll, setDoneAll] = useState<Record<Gender, Record<string, boolean>>>({ male: {}, female: {} });
   const [provAll, setProvAll] = useState<Record<Gender, Record<string, ScanProvenance>>>({ male: {}, female: {} });
@@ -131,8 +134,13 @@ export default function App() {
   const curHasSw = !!cur && slotHasSwatches(gender, cur.slot.id, cur.variant);
   // Переход на крупный план лица: V, развёрнутая в профиль или спиной, поворачивается к камере
   const closeup = isCloseupFocus(focus.slotId, focus.group, focus.variantName);
+  // Шрамы тела на спине: на их строке V поворачивается спиной, на следующей строке — обратно
+  const prevRow = useRef<string | undefined>(undefined);
   useEffect(() => {
+    const prev = prevRow.current;
+    prevRow.current = focus.slotId;
     if (closeup) setYaw((y) => faceYaw(y));
+    else if (prev !== focus.slotId) setYaw((y) => yawForRow(y, prev, focus.slotId));
   }, [closeup, focus.slotId]);
 
   // Состояние из ссылки уже применено — убираем хеш, иначе перезагрузка затрёт последующие правки
@@ -390,7 +398,8 @@ export default function App() {
 
       <div className="cc-proto" aria-hidden="true">
         <b>V-MIRROR</b>
-        <span>{t('proto.text')}</span>
+        {/* the separator dot starts a line, never ends one */}
+        <span>{t('proto.text').replace(/ · /g, ' · ')}</span>
       </div>
 
       <UtilBar lang={lang} setLang={setLang} onPack={() => setDialog('pack')} onKey={() => setDialog('key')} />
@@ -442,6 +451,7 @@ export default function App() {
           spin={spin}
           lang={lang}
           onStatus={setAvatar}
+          onMissing={onMissing}
           fallback={<PackHero gender={gender} state={state} webglError={avatar === 'error'} onMore={() => setDialog('pack')} />}
         />
         {scanMounted && (
@@ -457,13 +467,13 @@ export default function App() {
                 </div>
               }
             >
-              <ScanPanel gender={gender} base={state} in3d={avatar === 'ready' || avatar === 'loading'} onApply={applyScan} onGender={switchGender} onKeySettings={() => setDialog('key')} />
+              <ScanPanel active={mode === 'scan'} gender={gender} base={state} in3d={avatar === 'ready' || avatar === 'loading'} missing3d={missing3d} onApply={applyScan} onGender={switchGender} onKeySettings={() => setDialog('key')} />
             </Suspense>
           </section>
         )}
         {mode === 'edit' && cur && (
           <>
-            <InfoBox vs={cur} gender={gender} in3d={avatar === 'ready' || avatar === 'loading'} prov={prov[cur.slot.id]} done={!!done[cur.slot.id]} onDone={toggleDone} doneCount={doneCount} total={slots.length} />
+            <InfoBox vs={cur} gender={gender} in3d={avatar === 'ready' || avatar === 'loading'} missing3d={missing3d} prov={prov[cur.slot.id]} done={!!done[cur.slot.id]} onDone={toggleDone} doneCount={doneCount} total={slots.length} />
             {picker && curHasSw && <Picker vs={cur} gender={gender} prov={prov[cur.slot.id]} onChoose={(i) => choose(cur, i)} onClose={closePicker} />}
           </>
         )}
@@ -674,6 +684,7 @@ function InfoBox({
   vs,
   gender,
   in3d,
+  missing3d,
   prov,
   done,
   onDone,
@@ -684,6 +695,8 @@ function InfoBox({
   gender: Gender;
   /** the live 3D model is on screen (the 2D portrait draws these rows itself) */
   in3d: boolean;
+  /** parts of the pack it lacks: their rows are not drawn in 3D */
+  missing3d: ReadonlySet<PackPart>;
   prov?: ScanProvenance;
   done: boolean;
   onDone: () => void;
@@ -704,7 +717,7 @@ function InfoBox({
           </b>
         </div>
         {caption && <p>{caption}</p>}
-        {in3d && NOT_IN_3D.has(vs.slot.id) && <p className="info-not3d">{t('info.not3d')}</p>}
+        {in3d && notIn3d(vs.slot.id, missing3d) && <p className="info-not3d">{t('info.not3d')}</p>}
         {prov && (
           <p className="info-prov">
             {t('info.prov', { n: pad2(displayNumber(vs.variant, prov.value)), src: srcName(prov.src, t), p: Math.round(prov.conf * 100) })}
@@ -758,6 +771,14 @@ function Picker({
   useEffect(() => {
     gridRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
   }, [vs.slot.id]);
+  // Phone: the grid is a bottom sheet under the viewer. The viewer sticks to the top only once
+  // the page is scrolled past the title, so scroll that far: V stays fully visible above the grid
+  useEffect(() => {
+    if (!window.matchMedia('(max-width: 900px)').matches) return;
+    const stage = document.querySelector<HTMLElement>('.cc-stage');
+    const top = stage?.getBoundingClientRect().top ?? 0;
+    if (top > 0) window.scrollBy({ top, behavior: 'instant' });
+  }, []);
   return (
     <div className="picker" role="dialog" aria-label={t('picker.aria', { slot: label })}>
       <div className="picker-head">

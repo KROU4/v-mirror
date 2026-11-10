@@ -28,6 +28,60 @@ export interface Suggestion {
 
 export const colorKey = (o: Option) => (o.app ? o.app.split('__').pop()!.replace(/^\d+_/, '') : '');
 
+/**
+ * Стиль бороды варианта строки «Борода» (ключ меша игры: shadowbase_01, jesse_beard, patmc…);
+ * '' — без бороды. Номера стилей в строке не совпадают с номерами активаторов (beard7, beard1…).
+ */
+export function beardStyleKey(gender: Gender, o: Option): string {
+  const v = getIndex(gender).slotById.get('beard_part')?.variants.find((x) => x.name === o.activates?.[0]);
+  const hint = v?.options[0]?.meshHint;
+  return typeof hint === 'string' ? hint.split('__')[1] ?? '' : '';
+}
+
+/**
+ * Естественные цвета бровей и ресниц: краску на них не наносят, а седина в бровях — редкость.
+ * Брови и ресницы берут цвет волос только из этого набора, остальное переводится в BROW_FROM_HAIR.
+ */
+export const NATURAL_BROW_KEYS = new Set([
+  'black_carbon',
+  'brown_liquorice',
+  'brown_medium',
+  'blonde_dishwater',
+  'blonde_golden',
+  'blonde_platinum',
+  'ginger_copper',
+  'gray_gunmetal',
+  'cold_white',
+]);
+
+/**
+ * Брови при окрашенных или «смешанных» волосах: у Red Merlot (красное дерево, обычно краска) —
+ * тёмно-каштановые, у соли с перцем — тёмные без седины, у омбре — цвет корней.
+ */
+const BROW_FROM_HAIR: Record<string, string> = {
+  red_merlot: 'brown_liquorice',
+  black_salt_n_pepper: 'brown_liquorice',
+  brown_ombre: 'brown_medium',
+  ginger_strawberry: 'ginger_copper',
+};
+
+/** Цвета, которые следуют за волосами: брови, ресницы, борода. */
+export type HairLinkedSlot = 'eyebrows_color' | 'eyelash_color' | 'beard_color';
+
+/**
+ * Ключ цвета для бровей, ресниц или бороды по цвету волос. Брови и ресницы — только
+ * естественные (NATURAL_BROW_KEYS); борода повторяет и седину, и естественную рыжину
+ * (ginger_strawberry), но не краску: при волосах Red Merlot борода тёмно-каштановая, как брови.
+ */
+export function linkedColorKey(slotId: HairLinkedSlot, hairKey: string): string {
+  if (slotId === 'beard_color') {
+    if (NATURAL_BROW_KEYS.has(hairKey) || hairKey === 'black_salt_n_pepper' || hairKey === 'ginger_strawberry') return hairKey;
+    return BROW_FROM_HAIR[hairKey] ?? 'brown_liquorice';
+  }
+  if (NATURAL_BROW_KEYS.has(hairKey)) return hairKey;
+  return BROW_FROM_HAIR[hairKey] ?? 'brown_liquorice';
+}
+
 /** Самый «полный» вариант слота — для палитр, общих у всех вариантов. */
 function richestVariant(gender: Gender, slotId: string): Variant | undefined {
   const s = getIndex(gender).slotById.get(slotId);
@@ -67,6 +121,11 @@ export function swatchMean(gender: Gender, slotId: string, o: Option): string | 
 
 type ColorField = 'hex' | 'iris' | 'ring' | 'swatch';
 
+/** hex образца цвета по ключу (палитры волос, бровей, ресниц и бороды общие). */
+export function colorHex(gender: Gender, slotId: string, key: string): string | undefined {
+  return richestVariant(gender, slotId)?.options.find((o) => colorKey(o) === key)?.hex;
+}
+
 function optionColor(gender: Gender, slotId: string, o: Option, field: ColorField): string | undefined {
   if (field === 'ring') return irisRing(gender, slotId, o);
   if (field === 'swatch') return swatchMean(gender, slotId, o);
@@ -101,13 +160,14 @@ function colorSuggestion(
   gender: Gender,
   slotId: string,
   rgb: RGB | undefined,
-  opts: { field?: ColorField; wL?: number; plainOnly?: boolean; why: Loc; confScale?: number; maxConf?: number },
+  opts: { field?: ColorField; wL?: number; plainOnly?: boolean; keys?: ReadonlySet<string>; why: Loc; confScale?: number; maxConf?: number },
 ): Suggestion | null {
   if (!rgb) return null;
   const v = richestVariant(gender, slotId);
   if (!v) return null;
   const field = opts.field ?? 'hex';
-  const scored = nearestBy(v.options, rgb, (o) => optionColor(gender, slotId, o, field), opts.wL ?? 1, opts.plainOnly ?? true);
+  const pool = opts.keys ? v.options.filter((o) => opts.keys!.has(colorKey(o))) : v.options;
+  const scored = nearestBy(pool, rgb, (o) => optionColor(gender, slotId, o, field), opts.wL ?? 1, opts.plainOnly ?? true);
   if (!scored.length) return null;
   const best = scored[0];
   const conf = Math.min(opts.maxConf ?? 0.95, Math.max(0.15, Math.min(0.95, 1 - best.d / 45)) * (opts.confScale ?? 1));
@@ -180,6 +240,67 @@ export const MORPH_MAX_CONF = 0.4;
 /** Замер формы на лице с мимикой (улыбка растягивает рот, прищур сужает глаза). */
 export const MORPH_EXPR_MAX_CONF = 0.25;
 
+/**
+ * Раскрытие глаз (eyeOpen — высота разреза к ширине) у людей на фото: среднее и разброс.
+ * Глаза V в редакторе открыты шире (0,33–0,46 по рендерам вариантов), чем у человека на
+ * обычном снимке (0,24–0,32): z-оценка фото по статистике рендеров всегда выходила ниже всех
+ * вариантов, и подбор брал самые узкие, «сонные» глаза. Фото сравнивается со своей нормой.
+ */
+export const PHOTO_EYE_OPEN = { mean: 0.3, sd: 0.035 };
+/** Насколько прищур и моргание (blendshapes 0..1) закрывают глаз на фото — возвращаем на место. */
+export const EYE_OPEN_EXPR = { squint: 0.04, blink: 0.15 };
+
+/**
+ * Варианты формы глаз с тяжёлым верхним веком: на V они выглядят полуприкрытыми, сонными.
+ * Локальный замер их не выбирает, если глаза на фото не узкие при спокойном лице; модели они
+ * помечены в промпте. Список строится из данных: варианты с узким разрезом по замеру рендеров
+ * (z(eyeOpen) ≤ HEAVY_LID_Z — те, что описание называет «narrow, hooded»), у обоих тел.
+ * HEAVY_LID_EYES — добавка по кадрам редактора: веко тяжёлое, хотя разрез по точкам не узкий
+ * (мужские 18 и 19). Ключ — имя морфа варианта из каталога, а не номер строки: при пересборке
+ * каталога номера могут сдвинуться.
+ */
+export const HEAVY_LID_EYES: Readonly<Record<Gender, readonly string[]>> = {
+  male: ['h061', 'h111', 'h171', 'h181', 'h191', 'h201'],
+  female: [],
+};
+/** Порог z(eyeOpen) варианта: тот же, с которого описание формы глаз говорит «narrow, hooded». */
+export const HEAVY_LID_Z = -0.8;
+
+const heavyCache = new Map<Gender, Set<number>>();
+
+/** 1-based номера строк формы глаз (как в morphInfo и промпте) с тяжёлым веком. */
+export function heavyLidRows(gender: Gender): Set<number> {
+  const hit = heavyCache.get(gender);
+  if (hit) return new Set(hit);
+  const heavy = new Set(HEAVY_LID_EYES[gender]);
+  const opts = getIndex(gender).slotById.get('eyes')?.variants[0]?.options ?? [];
+  const out = new Set<number>();
+  morphInfo(gender, 'eyes').options.forEach((o, k) => {
+    const morph = opts.find((x) => x.i === o.i)?.morph;
+    if ((morph && heavy.has(morph)) || (o.z.eyeOpen ?? 0) <= HEAVY_LID_Z) out.add(k + 1);
+  });
+  heavyCache.set(gender, out);
+  return new Set(out);
+}
+
+/** z-оценка раскрытия глаз на фото с поправкой на прищур и моргание. */
+export function photoEyeOpenZ(a: PhotoAnalysis): number {
+  const b = a.blendshapes ?? {};
+  const avg = (...k: string[]) => k.reduce((s, x) => s + (b[x] ?? 0), 0) / k.length;
+  const open = a.features.eyeOpen + EYE_OPEN_EXPR.squint * avg('eyeSquintLeft', 'eyeSquintRight') + EYE_OPEN_EXPR.blink * avg('eyeBlinkLeft', 'eyeBlinkRight');
+  return (open - PHOTO_EYE_OPEN.mean) / PHOTO_EYE_OPEN.sd;
+}
+
+/**
+ * Форма глаз от модели с тяжёлыми веками при нормально открытых глазах на фото отбрасывается:
+ * на V такие формы выглядят полузакрытыми, а локальный замер их и так не предлагает.
+ */
+export function screenHeavyLids(gender: Gender, a: PhotoAnalysis | null | undefined, llm: Suggestion[]): Suggestion[] {
+  if (!a || !Number.isFinite(a.features.eyeOpen) || photoEyeOpenZ(a) <= -1) return llm;
+  const heavy = heavyLidRows(gender);
+  return llm.filter((s) => !(s.slotId === 'eyes' && s.number !== undefined && heavy.has(s.number)));
+}
+
 /** Морфы: ближайший вариант в пространстве z-оценок признаков. */
 function morphSuggestion(gender: Gender, slot: Exclude<MorphSlot, 'ear'>, a: PhotoAnalysis): Suggestion {
   const info = morphInfo(gender, slot);
@@ -189,9 +310,13 @@ function morphSuggestion(gender: Gender, slot: Exclude<MorphSlot, 'ear'>, a: Pho
     const st = info.featureStats[f];
     // признак не измерен (точки не нашлись) — он не сдвигает выбор ни к одному варианту
     if (!st || !Number.isFinite(a.features[f])) continue;
-    zPhoto[f] =Math.max(-3, Math.min(3, (a.features[f] - st.mean) / st.sd));
+    const z = f === 'eyeOpen' ? photoEyeOpenZ(a) : (a.features[f] - st.mean) / st.sd;
+    zPhoto[f] = Math.max(-3, Math.min(3, z));
   }
+  // Тяжёлые веки — только если глаза на фото действительно узкие (с поправкой на мимику)
+  const heavy = slot === 'eyes' && (zPhoto.eyeOpen ?? 0) > -1 ? heavyLidRows(gender) : null;
   const scored = info.options
+    .filter((_, k) => !heavy?.has(k + 1))
     .map((o) => {
       let d = 0;
       for (const [f, w] of Object.entries(weights) as [FeatureName, number][]) {
@@ -236,6 +361,30 @@ export function expressionLoad(a: PhotoAnalysis, slot: Exclude<MorphSlot, 'ear'>
   return Math.max(0, Math.min(1, v));
 }
 
+/** Естественные цвета бороды для замера по подбородку (с сединой). */
+const BEARD_NATURAL_KEYS = new Set([...NATURAL_BROW_KEYS, 'black_salt_n_pepper']);
+
+export type BeardKind = 'stubble' | 'short' | 'full';
+/** Стиль строки «Борода» (ключ меша игры) для грубого типа бороды. */
+export const BEARD_KIND_STYLE: Record<BeardKind, string> = { stubble: 'shadowbase_01', short: 'short_afro', full: 'jesse_beard' };
+const BEARD_KIND_WHY: Record<BeardKind, Loc> = {
+  stubble: { ru: 'слегка тёмный подбородок — грубо: возможно, щетина', en: 'slightly dark chin — rough guess: maybe stubble' },
+  short: { ru: 'тёмные подбородок и усы, щёки светлее — грубо: короткая борода с усами', en: 'dark chin and moustache, lighter cheeks — rough guess: short beard with moustache' },
+  full: { ru: 'тёмные подбородок, усы и щёки у челюсти — грубо: полная борода', en: 'dark chin, moustache and jaw sides — rough guess: full beard' },
+};
+
+/**
+ * Грубый тип бороды по зонам: подбородок (beardScore), усы (mustacheScore) и нижние щёки у
+ * челюсти (sideBeardScore). Щёки — главный признак полной бороды: у щетины и короткой бороды
+ * они светлее подбородка.
+ */
+export function beardKind(a: Pick<PhotoAnalysis, 'beardScore' | 'mustacheScore' | 'sideBeardScore'>): BeardKind {
+  const chin = a.beardScore, must = a.mustacheScore ?? chin, side = a.sideBeardScore ?? 0;
+  if (chin >= 0.6 && side >= 0.85) return 'full';
+  if (chin >= 0.6 && must >= 0.5) return 'short';
+  return 'stubble';
+}
+
 export function localSuggestions(gender: Gender, a: PhotoAnalysis): Suggestion[] {
   const out: (Suggestion | null)[] = [];
   const c = a.colors;
@@ -257,10 +406,19 @@ export function localSuggestions(gender: Gender, a: PhotoAnalysis): Suggestion[]
     // Брови: замер по тёмным волоскам между точками брови. Брови светлее волос локально не
     // выигрывают: замер на светлых бровях ловит кожу, а у почти всех людей брови не светлее
     // волос. Не измерены — берут цвет волос (как у модели, HAIR_LINKED)
-    let browS = colorSuggestion(gender, 'eyebrows_color', fix(c.brows?.rgb), { field: 'swatch', wL: 0.7, maxConf: M.brows, why: { ru: 'цвет бровей', en: 'brow color' } });
+    let browS = colorSuggestion(gender, 'eyebrows_color', fix(c.brows?.rgb), { field: 'swatch', wL: 0.7, maxConf: M.brows, keys: NATURAL_BROW_KEYS, why: { ru: 'цвет бровей', en: 'brow color' } });
     const hairS = out.find((x) => x?.slotId === 'hair_color') ?? null;
-    if (hairS && (!browS || (c.brows && c.hair && rgbToLab(c.brows.rgb)[0] > rgbToLab(c.hair.rgb)[0] + 3))) {
-      browS = { ...hairS, slotId: 'eyebrows_color', conf: Math.min(browS?.conf ?? 1, hairS.conf * 0.9), why: { ru: 'как цвет волос', en: 'same as the hair colour' } };
+    if (hairS?.colorKey && (!browS || (c.brows && c.hair && rgbToLab(c.brows.rgb)[0] > rgbToLab(c.hair.rgb)[0] + 3))) {
+      // Брови по волосам — естественным цветом (краска и седина на брови не переносятся)
+      const key = linkedColorKey('eyebrows_color', hairS.colorKey);
+      browS = {
+        slotId: 'eyebrows_color',
+        colorKey: key,
+        hex: colorHex(gender, 'eyebrows_color', key) ?? hairS.hex,
+        conf: Math.min(browS?.conf ?? 1, hairS.conf * 0.9),
+        src: 'local',
+        why: key === hairS.colorKey ? { ru: 'как цвет волос', en: 'same as the hair colour' } : { ru: 'естественный тон под цвет волос', en: 'natural shade for this hair colour' },
+      };
     }
     if (browS) {
       out.push(browS);
@@ -275,21 +433,28 @@ export function localSuggestions(gender: Gender, a: PhotoAnalysis): Suggestion[]
     const beard = slotById.get('beard')!.variants[0];
     if (a.beardScore < 0.25) out.push({ slotId: 'beard', value: beard.options[0].i, conf: 0.55, src: 'local', why: { ru: 'подбородок не темнее кожи', en: 'chin is not darker than the skin' } });
     else {
-      // Тип бороды по одному тёмному пятну на подбородке не определить: номер — лишь заготовка
-      // (щетина при слабом сигнале, борода при сильном), уверенность низкая, чтобы любой
-      // ответ модели её перебил. На ч/б фото — ещё ниже: тень и щетину не различить
-      const strong = a.beardScore >= 0.6;
-      const k = Math.min(beard.options.length - 1, strong ? 6 : 2);
+      // Тип бороды — грубо, по трём зонам: подбородок, полоса над губой (усы) и нижние щёки у
+      // челюсти. Уверенность низкая, чтобы любой ответ модели её перебил; на ч/б фото — ещё
+      // ниже: тень и щетину не различить
+      const kind = beardKind(a);
+      const o = beard.options.find((x) => beardStyleKey(gender, x) === BEARD_KIND_STYLE[kind]) ?? beard.options[Math.min(1, beard.options.length - 1)];
       out.push({
         slotId: 'beard',
-        value: beard.options[k].i,
+        value: o.i,
         conf: colour ? Math.min(0.3, 0.2 + a.beardScore * 0.1) : 0.15,
         src: 'local',
-        why: strong
-          ? { ru: 'тёмная зона на подбородке — грубо, тип бороды лучше уточнить моделью', en: 'dark area on the chin — rough guess, refine the beard type with the AI model' }
-          : { ru: 'слегка тёмный подбородок — грубо: возможно, щетина', en: 'slightly dark chin — rough guess: maybe stubble' },
+        why: BEARD_KIND_WHY[kind],
       });
-      if (colour) out.push(colorSuggestion(gender, 'beard_color', fix((c.chin ?? c.brows)?.rgb), { field: 'swatch', wL: 0.7, maxConf: LOCAL_COLOR_MAX_CONF.brows, why: { ru: 'цвет щетины', en: 'stubble color' } }));
+      if (colour) {
+        // Цвет бороды — как у волос (щетина на коже на фото всегда кажется рыжей); без замера
+        // волос — по подбородку, только естественные цвета
+        const hairS = out.find((x) => x?.slotId === 'hair_color');
+        if (hairS?.colorKey) {
+          const key = linkedColorKey('beard_color', hairS.colorKey);
+          out.push({ slotId: 'beard_color', colorKey: key, hex: colorHex(gender, 'beard_color', key), conf: hairS.conf * 0.8, src: 'local', why: { ru: 'как цвет волос', en: 'same as the hair colour' } });
+        } else
+          out.push(colorSuggestion(gender, 'beard_color', fix((c.chin ?? c.brows)?.rgb), { field: 'swatch', wL: 0.7, keys: BEARD_NATURAL_KEYS, maxConf: LOCAL_COLOR_MAX_CONF.brows, why: { ru: 'цвет щетины', en: 'stubble color' } }));
+      }
     }
   }
   const lipsType = slotById.get('makeupLips_type')?.variants[0];
@@ -297,7 +462,10 @@ export function localSuggestions(gender: Gender, a: PhotoAnalysis): Suggestion[]
     if (a.lipstickScore > 0.5) {
       out.push({ slotId: 'makeupLips_type', value: lipsType.options[1]?.i ?? 1, conf: 0.4 + a.lipstickScore * 0.3, src: 'local', why: { ru: 'губы заметно насыщеннее кожи', en: 'lips are clearly more saturated than the skin' } });
     } else {
-      out.push({ slotId: 'makeupLips_type', value: lipsType.options[0].i, conf: 0.45, src: 'local', why: { ru: 'помады не видно', en: 'no lipstick visible' } });
+      // Замер видит только насыщенную помаду: нюдовая и прозрачный блеск по цвету не отличаются
+      // от губ без макияжа (у глянцевых розовых губ Зендаи разница с кожей меньше, чем у
+      // естественных губ Педро). Поэтому «помады нет» — слабый вывод, его перебивает модель
+      out.push({ slotId: 'makeupLips_type', value: lipsType.options[0].i, conf: LIPS_NONE_CONF, src: 'local', why: { ru: 'яркой помады не видно', en: 'no bright lipstick visible' } });
     }
   }
   // Цвет помады — всегда по цвету губ: если модель включит помаду, оттенок не останется
@@ -350,9 +518,17 @@ export function exposureFix(skinPhoto: RGB | undefined, skinGameHex: string | un
  */
 export const LOCAL_OVER_LLM_MARGIN = 0.2;
 
+/** Уверенность локального «яркой помады нет» (по цвету не видны нюдовая помада и блеск). */
+export const LIPS_NONE_CONF = 0.3;
+
+/** Тип помады «нет» (первая опция makeupLips_type, i = 0 у обоих типов тела). */
+const lipsOff = (s: Suggestion) => (s.number !== undefined ? s.number === 1 : s.value === 0);
+
 /**
  * Объединение: в каждом слоте — подсказка с большей уверенностью, но ответ модели
  * перебивается замером, только если тот увереннее на LOCAL_OVER_LLM_MARGIN.
+ * Цвет помады при итоговом типе «нет» не показывается: его строка выключена, и в списке
+ * результатов он выглядел бы применённым.
  */
 export function mergeSuggestions(...lists: Suggestion[][]): Suggestion[] {
   const best = new Map<string, Suggestion>();
@@ -363,6 +539,8 @@ export function mergeSuggestions(...lists: Suggestion[][]): Suggestion[] {
       if (!prev || score(s, prev) > score(prev, s)) best.set(s.slotId, s);
     }
   }
+  const lips = best.get('makeupLips_type');
+  if (lips && lipsOff(lips)) best.delete('makeupLips_color');
   return [...best.values()];
 }
 

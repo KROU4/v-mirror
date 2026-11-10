@@ -3,6 +3,7 @@
 import type { Gender } from '../../model/catalog';
 import type { CharacterState } from '../../model/state';
 import { slotValue, visibleSlots } from '../../model/state';
+import type { FaceLayerPick } from './decals';
 import { INTIMATE_SLOTS, type BodyPicks } from './intimate';
 
 export interface AvatarLook {
@@ -36,18 +37,10 @@ export interface AvatarLook {
   longNails: boolean;
   /** строки наготы (соски, тату и шрамы тела, гениталии, размер, лобковые волосы и их цвет) */
   body: BodyPicks;
+  /** слои лица: макияж, веснушки, изъяны, тату, шрамы, кибер-импланты, пирсинг (tex/face/decals.json) */
+  faceLayers: FaceLayerPick[];
 }
 
-/**
- * Rows the 3D model does not draw: face decals (scars, tattoos, blemishes) and cyberware and
- * piercing meshes are not in the asset pack. The value still goes to the game list; the UI
- * says so instead of leaving the user to guess. Beards come from the pack (tex/hair beards).
- */
-export const NOT_IN_3D: ReadonlySet<string> = new Set([
-  'cyberware_switcher', 'scars', 'facial_tattoo_switcher', 'piercings', 'piercings_color',
-  'makeupEyes', 'makeupEyes_color', 'makeupLips_type', 'makeupLips', 'makeupLips_color',
-  'makeupCheeks', 'makeupCheeks_color', 'makeupPimples', 'makeupPimples_color',
-]);
 
 const first = (h: string | string[] | undefined | null): string | null => (Array.isArray(h) ? h[0] ?? null : h ?? null);
 
@@ -89,7 +82,59 @@ export function lookOf(state: CharacterState): AvatarLook {
     nailsApp: val('nails_color')?.option?.app ?? null,
     longNails,
     body,
+    faceLayers: faceLayersOf(state),
   };
+}
+
+/** Строки слоёв лица: стиль (meshHint варианта) и строка его цвета (app appearance). */
+const STYLE_COLOUR: [style: string, colour: string | null][] = [
+  ['makeupEyes', 'makeupEyes_color'],
+  ['makeupLips', 'makeupLips_color'],
+  ['makeupCheeks', 'makeupCheeks_color'],
+  ['makeupPimples', 'makeupPimples_color'],
+  ['piercings', 'piercings_color'],
+  ['facial_tattoo_switcher', null],
+];
+
+/**
+ * Optional parts of the asset pack. A pack built by an older exporter can lack them; the engine
+ * reports such a part once (EngineEvents.onMissing) and its rows are marked «not shown in 3D».
+ */
+export type PackPart = 'faceLayers' | 'beards' | 'intimate';
+
+/** Rows drawn by each optional part of the pack. */
+export const PACK_PART_SLOTS: Readonly<Record<PackPart, readonly string[]>> = {
+  faceLayers: [...STYLE_COLOUR.flatMap(([s, c]) => (c ? [s, c] : [s])), 'makeupLips_type', 'scars', 'cyberware_switcher'],
+  beards: ['beard', 'beard_part', 'beard_color'],
+  intimate: INTIMATE_SLOTS,
+};
+
+/** The row is not drawn by the 3D model because its part is missing from the connected pack. */
+export function notIn3d(slotId: string, missing: ReadonlySet<PackPart>): boolean {
+  for (const part of missing) if (PACK_PART_SLOTS[part].includes(slotId)) return true;
+  return false;
+}
+
+/**
+ * Что рисовать поверх головы. Стиль задаёт базу app игры (meshHint опции), цвет — appearance в
+ * ней. У тату appearance — тон кожи ({g}__{tone}), у кибер-импланта — номер импланта и тон
+ * кожи, у шрамов app опции и есть appearance общей базы hx_000__scars.
+ */
+export function faceLayersOf(state: CharacterState): FaceLayerPick[] {
+  const out: FaceLayerPick[] = [];
+  const val = (id: string) => slotValue(state, id);
+  for (const [style, colour] of STYLE_COLOUR) {
+    const base = first(val(style)?.option?.meshHint);
+    if (!base || base === 'none') continue;
+    const app = colour ? val(colour)?.option?.app : '{g}__{tone}';
+    out.push({ slot: style, base, app: app && app !== 'None' ? app : null });
+  }
+  const scar = val('scars')?.option?.app;
+  if (scar && scar !== 'None') out.push({ slot: 'scars', base: 'hx_000__scars', app: scar });
+  const cw = val('cyberware_switcher')?.option;
+  const n = cw?.activates?.map((a) => /^cyberware_(\d+)$/.exec(a)?.[1]).find(Boolean);
+  if (cw && first(cw.meshHint) && n && n !== '00') out.push({ slot: 'cyberware_switcher', base: first(cw.meshHint)!, app: `hx_000_{code}__cyberware_${n}__{tone}` });
+  return out;
 }
 
 /** Морф каталога включает цели меша с тем же именем или с суффиксом (_breast, …). */

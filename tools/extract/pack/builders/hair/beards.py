@@ -15,9 +15,9 @@ Outputs:
 """
 import sys, os; sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # noqa: E401,E702
 import vmpaths  # noqa: E402
-import json, re, struct
+from glbslim import slim  # noqa: E402
+import json, re
 from pathlib import Path
-import numpy as np
 from PIL import Image
 
 W = vmpaths.area('beard')
@@ -28,124 +28,6 @@ TEX_OUT = LOCAL / 'tex' / 'hair' / 'beards'
 
 plan = json.loads((W / 'plan.json').read_text(encoding='utf-8'))
 man = json.loads(MF.read_text(encoding='utf-8-sig'))
-
-# ------------------------------------------------------------------ glb slimming
-COMP = {5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32, 5126: np.float32}
-NCOMP = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT4': 16}
-
-
-def read_glb(p: Path):
-    b = p.read_bytes()
-    assert b[:4] == b'glTF', p
-    jl = struct.unpack_from('<I', b, 12)[0]
-    j = json.loads(b[20:20 + jl])
-    off = 20 + jl
-    bl = struct.unpack_from('<I', b, off)[0]
-    return j, b[off + 8: off + 8 + bl]
-
-
-def accessor_bytes(j, bin_, i):
-    a = j['accessors'][i]
-    v = j['bufferViews'][a['bufferView']]
-    n = NCOMP[a['type']]
-    dt = np.dtype(COMP[a['componentType']])
-    stride = v.get('byteStride') or n * dt.itemsize
-    start = v.get('byteOffset', 0) + a.get('byteOffset', 0)
-    if stride == n * dt.itemsize:
-        return bytes(bin_[start: start + a['count'] * stride])
-    rows = [bin_[start + k * stride: start + k * stride + n * dt.itemsize] for k in range(a['count'])]
-    return b''.join(rows)
-
-
-def slim(src: Path, dst: Path) -> dict:
-    j, bin_ = read_glb(src)
-    dropped = 0
-    for m in j['meshes']:
-        names = (m.get('extras') or {}).get('targetNames')
-        keep_idx = None
-        for prim in m['primitives']:
-            tg = prim.get('targets')
-            if not tg:
-                continue
-            if keep_idx is None:
-                keep_idx = []
-                for k, t in enumerate(tg):
-                    live = False
-                    for att in ('POSITION', 'NORMAL'):
-                        if att in t:
-                            a = np.frombuffer(accessor_bytes(j, bin_, t[att]), dtype=np.float32)
-                            if a.size and float(np.abs(a).max()) > 1e-7:
-                                live = True
-                    if live:
-                        keep_idx.append(k)
-            prim['targets'] = [{att: t[att] for att in ('POSITION', 'NORMAL') if att in t} for k, t in enumerate(tg) if k in keep_idx]
-            if not prim['targets']:
-                del prim['targets']
-            for att in ('JOINTS_1', 'WEIGHTS_1'):
-                prim['attributes'].pop(att, None)
-        if keep_idx is not None:
-            if names:
-                m['extras']['targetNames'] = [names[k] for k in keep_idx]
-            if 'weights' in m:
-                m['weights'] = [m['weights'][k] for k in keep_idx]
-            dropped += (len(names) if names else 0) - len(keep_idx)
-    # rebuild the binary chunk with only the accessors still referenced
-    used = set()
-    for m in j['meshes']:
-        for prim in m['primitives']:
-            used.update(prim['attributes'].values())
-            if 'indices' in prim:
-                used.add(prim['indices'])
-            for t in prim.get('targets', []):
-                used.update(t.values())
-    for s in j.get('skins', []):
-        if 'inverseBindMatrices' in s:
-            used.add(s['inverseBindMatrices'])
-    for an in j.get('animations', []):
-        for sm in an['samplers']:
-            used.update((sm['input'], sm['output']))
-    remap, accessors, views, out = {}, [], [], bytearray()
-    for i in sorted(used):
-        a = dict(j['accessors'][i])
-        data = accessor_bytes(j, bin_, i)
-        while len(out) % 4:
-            out.append(0)
-        views.append({'buffer': 0, 'byteOffset': len(out), 'byteLength': len(data)})
-        out += data
-        a['bufferView'] = len(views) - 1
-        a.pop('byteOffset', None)
-        remap[i] = len(accessors)
-        accessors.append(a)
-    for m in j['meshes']:
-        for prim in m['primitives']:
-            prim['attributes'] = {k: remap[v] for k, v in prim['attributes'].items()}
-            if 'indices' in prim:
-                prim['indices'] = remap[prim['indices']]
-            if 'targets' in prim:
-                prim['targets'] = [{k: remap[v] for k, v in t.items()} for t in prim['targets']]
-    for s in j.get('skins', []):
-        if 'inverseBindMatrices' in s:
-            s['inverseBindMatrices'] = remap[s['inverseBindMatrices']]
-    for an in j.get('animations', []):
-        for sm in an['samplers']:
-            sm['input'], sm['output'] = remap[sm['input']], remap[sm['output']]
-    j['accessors'], j['bufferViews'] = accessors, views
-    j['buffers'] = [{'byteLength': len(out)}]
-    for k in ('images', 'textures', 'samplers'):
-        j.pop(k, None)
-    js = json.dumps(j, separators=(',', ':')).encode()
-    js += b' ' * (-len(js) % 4)
-    while len(out) % 4:
-        out.append(0)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    with open(dst, 'wb') as f:
-        f.write(struct.pack('<III', 0x46546C67, 2, 12 + 8 + len(js) + 8 + len(out)))
-        f.write(struct.pack('<II', len(js), 0x4E4F534A))
-        f.write(js)
-        f.write(struct.pack('<II', len(out), 0x004E4942))
-        f.write(out)
-    return {'meshes': [m['name'] for m in j['meshes']], 'droppedTargets': dropped, 'mb': round(dst.stat().st_size / 1e6, 2), 'srcMb': round(src.stat().st_size / 1e6, 2)}
-
 
 # ------------------------------------------------------------------ textures
 def stem(p: str) -> str:

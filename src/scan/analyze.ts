@@ -38,6 +38,10 @@ export interface PhotoAnalysis {
   };
   /** 0..1: тёмная растительность на подбородке/щеках относительно кожи */
   beardScore: number;
+  /** 0..1: тёмная полоса над верхней губой (усы) */
+  mustacheScore?: number;
+  /** 0..1: тёмные нижние щёки у линии челюсти (полная борода, бакенбарды) */
+  sideBeardScore?: number;
   /** 0..1: губы заметно насыщеннее кожи (помада) */
   lipstickScore: number;
   /** доля «не кожи» над лбом: 0 — лысина/выбрито, 1 — густые волосы */
@@ -93,6 +97,11 @@ export async function analyzePhoto(img: HTMLImageElement | HTMLCanvasElement): P
   const brows = browPx.length >= BROW_MIN_PX ? robustColor(browPx, 0.02, 0.85) : null;
   const lips = robustColor(pixelsAround(s, [P(0), P(17), P(37), P(267), P(84), P(314)], iod * 0.03), 0.2, 0.2);
   const chin = robustColor(pixelsAround(s, [P(152), P(175), P(199), P(171), P(396), P(136), P(365)], iod * 0.06), 0.1, 0.1);
+  // Усы: полоса над верхней губой (между основанием носа и губой), бакенбарды и щёки бороды —
+  // нижняя часть щёк у линии челюсти. По ним отличаем полную бороду от усов со щетиной
+  const lerp = (a: Pt, b: Pt, t: number): Pt => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  const mustache = robustColor(pixelsAround(s, [lerp(P(164), P(0), 0.5), lerp(P(165), P(37), 0.5), lerp(P(391), P(267), 0.5)], iod * 0.035), 0.1, 0.1);
+  const jawSide = robustColor(pixelsAround(s, [lerp(P(58), P(172), 0.5), lerp(P(288), P(397), 0.5), lerp(P(214), P(135), 0.5), lerp(P(434), P(364), 0.5)], iod * 0.05), 0.1, 0.1);
 
   // Волосы. «Вверх» — по направлению от подбородка ко лбу; «вбок» — перпендикуляр к нему.
   const vx = P(10).x - P(152).x, vy = P(10).y - P(152).y;
@@ -128,11 +137,10 @@ export async function analyzePhoto(img: HTMLImageElement | HTMLCanvasElement): P
   const hairOnly = (hairline >= 0 ? [...band(hairline + 0.03), ...band(hairline + 0.06)] : hairPx).filter(notSkin);
   const hair = hairOnly.length >= 40 ? robustColor(hairOnly, 0.1, 0.25) : null;
 
-  let beardScore = 0;
-  if (skin && chin) {
-    const ratio = luminance(chin) / Math.max(1, luminance(skin));
-    beardScore = Math.max(0, Math.min(1, (0.88 - ratio) / 0.35));
-  }
+  const darkScore = (c: RGB | null) => (skin && c ? Math.max(0, Math.min(1, (0.88 - luminance(c) / Math.max(1, luminance(skin))) / 0.35)) : 0);
+  const beardScore = darkScore(chin);
+  const mustacheScore = darkScore(mustache);
+  const sideBeardScore = darkScore(jawSide);
   let lipstickScore = 0;
   if (skin && lips) {
     const ls = rgbToLab(lips), ss = rgbToLab(skin);
@@ -155,6 +163,8 @@ export async function analyzePhoto(img: HTMLImageElement | HTMLCanvasElement): P
     pitch,
     colors: { skin: m(skin), iris: m(iris), brows: m(brows), lips: m(lips), hair: m(hair), chin: m(chin) },
     beardScore,
+    mustacheScore,
+    sideBeardScore,
     lipstickScore,
     hairCoverage,
     hairSamples: hairOnly.length,
