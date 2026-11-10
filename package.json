@@ -4,6 +4,18 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Web replica of the Cyberpunk 2077 2.5 character creator that turns a reference photo into V's appearance settings",
+  "license": "MIT",
+  "homepage": "https://krou4.github.io/v-mirror/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KROU4/v-mirror.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KROU4/v-mirror/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "predev": "node tools/setup-assets.mjs",
     "dev": "vite",
