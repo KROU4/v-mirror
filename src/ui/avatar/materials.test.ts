@@ -37,8 +37,10 @@ import {
   skinScatter,
   skinToneMap,
   TATTOO_INK,
+  PIERCING,
   Materials,
   scleraDim,
+  skinSpecular,
   texturesOf,
 } from './materials';
 import * as THREE from 'three';
@@ -110,8 +112,60 @@ describe('texturesOf sees the textures of shader patches', () => {
     expect(silver.map).toBeNull();
     expect(Math.max(silver.color.r, silver.color.g, silver.color.b)).toBeLessThanOrEqual(0.75 * new THREE.Color('#c5cecc').g + 1e-6);
     expect(silver.envMapIntensity).toBeLessThan(0.9);
+    const plastic = await mats.piercing({ type: 'piercing', colour: '#b1477f', metalness: 0, roughness: 0.4, name: 'plastic_pink' });
+    expect(plastic.color.getHexString()).toBe(new THREE.Color('#b1477f').getHexString());
+    // жемчуг — перламутр (немного металла, блик), а не матовый мел
     const pearl = await mats.piercing({ type: 'piercing', colour: '#c0bab3', metalness: 0, roughness: 0.25, name: 'pearl' });
-    expect(pearl.color.getHexString()).toBe(new THREE.Color('#c0bab3').getHexString());
+    expect(pearl.metalness).toBeGreaterThan(0);
+    expect(pearl.roughness).toBeLessThan(0.25);
+    expect(pearl.envMapIntensity).toBeGreaterThan(PIERCING.plasticEnv);
+    expect(pearl.color.getHexString()).not.toBe(new THREE.Color('#c0bab3').getHexString());
+    // и не молочно-белый: цвет не светлее среднего значка игры (163, 161, 158), отражение умеренное
+    expect(pearl.color.r).toBeLessThan(new THREE.Color('#a3a19e').r);
+    expect(pearl.envMapIntensity).toBeLessThan(0.9);
+    // дерево: узор миниатюры теплее и светлее серого множителя — шарики коричневые, а не как сталь
+    const wood = await mats.piercing({ type: 'piercing', colour: '#30261c', metalness: 0, roughness: 0.7, name: 'wood', pattern: 'swatches/icons/Piercing_wood.webp' });
+    expect(names(wood)).toEqual(['swatches/icons/Piercing_wood.webp']);
+    expect(wood.color.r).toBeGreaterThan(PIERCING.patternGain);
+    expect(wood.color.r).toBeGreaterThan(wood.color.g);
+    expect(wood.color.g).toBeGreaterThan(wood.color.b);
+    // тёмный участок миниатюры на шариках не опускается ниже тёмного дерева, блик матовый
+    const floor = wood.userData.patternFloor as THREE.Color;
+    expect(floor.r).toBeGreaterThan(floor.g);
+    expect(floor.g).toBeGreaterThan(floor.b);
+    expect(wood.customProgramCacheKey()).toBe('piercing_floor');
+    expect(wood.envMapIntensity).toBeLessThan(PIERCING.plasticEnv);
+  });
+
+  it('кожа наготы: блик по тону, как у тела (на тёмной коже основание пениса без серой дымки)', async () => {
+    const mats = new Materials(store, null);
+    const dark = await mats.intimateSkin('i0_000_pma_c__basepenis_d01_albedo_06_bl_dark', { type: 'skin', gameMaterial: '06_bl_dark', albedo: 'pd.jpg' });
+    const pale = await mats.intimateSkin('i0_000_pma_c__basepenis_d01_albedo_01_ca_pale', { type: 'skin', gameMaterial: '01_ca_pale', albedo: 'pp.jpg' });
+    expect(dark.specularIntensity).toBe(skinSpecular('06_bl_dark'));
+    expect(pale.specularIntensity).toBe(skinSpecular('01_ca_pale'));
+    expect(dark.specularIntensity).toBeLessThan(pale.specularIntensity);
+    // набор без gameMaterial: тон по суффиксу имени материала
+    const esp = await mats.intimateSkin('i0_000_pwa_c__basepenis_d01_albedo_05_bl_espresso', { type: 'skin', albedo: 'pe.jpg' });
+    expect(esp.specularIntensity).toBe(skinSpecular('05_bl_espresso'));
+  });
+
+  it('тень щетины под бородой — без блика: на силуэте щеки не рисует малиновый шов', async () => {
+    const mats = new Materials(store, null);
+    const hm = { textures: { m: { file: 'beard_mask.png' } } } as unknown as HairManifest;
+    const sh = await mats.beardShadow(hm, { type: 'beardShadow', mask: 'm', diffuseColor: '#22150a', diffuseAlpha: 0.8 } as HairMaterial);
+    expect(sh.specularIntensity).toBe(0);
+    expect(sh.roughness).toBe(1);
+    expect(sh.opacity).toBeCloseTo(0.8, 5);
+  });
+
+  it('Rose Gold: цвет по значку игры, а не тёмный hex каталога #4e3a44', async () => {
+    const mats = new Materials(store, null);
+    const rg = await mats.piercing({ type: 'piercing', colour: '#4e3a44', metalness: 1, roughness: 0.3, name: 'rose_gold' });
+    const c = rg.color.clone().multiplyScalar(1 / PIERCING.metalBase);
+    const srgb = c.getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
+    // тёплый розово-медный (красный выше синего), заметно светлее прежнего
+    expect(c.r).toBeGreaterThan(c.b);
+    expect(srgb.l).toBeGreaterThan(0.38);
   });
 });
 
@@ -574,6 +628,18 @@ describe('тату: чернила умножают кожу', () => {
       expect(c[1] / c[0]).toBeCloseTo(skin[1] / skin[0], 1);
       expect(lstar(c)).toBeLessThan(lstar(skin) - (lstar(skin) > 45 ? 25 : 5));
     }
+  });
+
+  it('сплошной блэкворк (DiffuseAlpha 0,6) кроет почти чёрным, а не полупрозрачной плёнкой', () => {
+    const f = inkFactor(lin('#1e2e29'), 1, 0.6);
+    for (const s of SKINS.slice(0, 3)) {
+      const c = mul(lin(s), f);
+      // почти чёрный: L* ниже 22 на светлой и средней коже (раньше 40 % темнее кожи, L* ≈ 35–45)
+      expect(lstar(c)).toBeLessThan(22);
+    }
+    // край узора (альфа текстуры 0,3) остаётся мягким
+    const edge = inkFactor(lin('#1e2e29'), 0.3, 0.6);
+    expect(Math.min(...edge)).toBeGreaterThan(0.6);
   });
 
   it('цветные чернила сохраняют оттенок: красное тату остаётся красным, а не серым', () => {

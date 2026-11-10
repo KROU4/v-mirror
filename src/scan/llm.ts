@@ -15,7 +15,7 @@ const BEARD_STYLE: Record<string, string> = {
   big_beard_afro: 'big bushy full beard with moustache',
   default: 'short neat full beard with moustache',
   handlebar_stache: 'handlebar moustache with a thin strap along the jaw and a soul patch',
-  jesse_beard: 'medium full beard with moustache, covers cheeks and chin',
+  jesse_beard: 'medium full beard with moustache, covers cheeks and chin, bare patch under the lip',
   maelstrom_full: 'moustache and a long pointed chin beard, sparse cheeks',
   shadowbase_01: 'stubble / five o’clock shadow',
   short_afro: 'short scruffy full beard with moustache, patchy cheeks',
@@ -47,6 +47,34 @@ const BEARD_PART_LOC: Record<string, Loc> = {
 
 const pretty = (s: string) => s.replace(/_/g, ' ');
 
+/**
+ * Цвет помады словами (ключ цвета игры). Hex плашки ничего не говорил модели: Pastel Pink
+ * (#904959) на V — яркий светлый «жвачный» розовый (глянец ещё светлее: 171, 89, 102 против
+ * значка 142, 72, 87). Pink в игре — холодный лиловато-розовый (значок 117, 61, 79, тон 341°; на V
+ * матовая 337°, глянец 353°), а не нюд: розово-бежевым губам (фото 246, 153, 148, тон 3°) ближе
+ * Peach (на V 5°).
+ */
+export const LIP_WORDS: Record<string, string> = {
+  black: 'black',
+  blue: 'blue',
+  gold: 'metallic gold',
+  green: 'dark green',
+  pink: 'cool mauve pink',
+  red: 'brick red',
+  violet: 'plum violet',
+  white: 'grey-white',
+  yellow: 'mustard yellow',
+  peach: 'pink nude / coral peach (warm nude)',
+  burgundy: 'deep wine',
+  brown: 'dark brown',
+  scarlet: 'vivid scarlet',
+  pastel_pink: 'bright bubblegum pink',
+};
+const lipWords = (o: Option) => {
+  const w = LIP_WORDS[colorKey(o)];
+  return w ? `${o.label.en}: ${w}` : `${o.label.en} (${o.hex})`;
+};
+
 /** Тон кожи словами, от светлого к тёмному (по имени appearance игры). */
 const SKIN_WORDS: Record<string, string> = {
   '01_ca_pale': 'pale (very light, pink undertone)',
@@ -64,18 +92,51 @@ const SKIN_WORDS: Record<string, string> = {
 };
 const skinWords = (o: Option) => SKIN_WORDS[(o.app ?? '').split('__').pop() ?? ''] ?? o.label.en;
 
+/**
+ * Тип кожи (текстура лица, не тон) словами — по кадрам 3D-редактора (тон 07, крупный план носа),
+ * ключ — meshHint опции. Тип 01 по умолчанию — с порами и пятнами (у мужчин — веснушки и
+ * покраснение): без этой строки в промпте модель не могла выбрать чистую кожу, и у человека с
+ * ровной кожей V выходила «грязной».
+ */
+export const SKIN_TYPE_WORDS: Record<Gender, Record<string, string>> = {
+  female: {
+    h0_000__basehead: 'default: pores, faint blotches, a few freckles',
+    h0_000__basehead_d02: 'acne marks, blemishes',
+    h0_000__basehead_d03: 'dense freckles and sun spots',
+    h0_000__basehead_d04: 'smooth, clear, even',
+    h0_000__basehead_d05: 'clear, rosy cheeks, beauty mark by the mouth',
+  },
+  male: {
+    h0_000__basehead: 'default: pores, light freckles, red cheeks',
+    h0_000__basehead_d02: 'acne scars, blemishes',
+    h0_000__basehead_d03: 'weathered, freckled, blotchy, small scars',
+    h0_000__basehead_d04: 'even, dark stubble shadow on lip and chin',
+    h0_000__basehead_d05: 'smooth, rosy cheeks, beauty mark by the mouth',
+  },
+};
+const skinTypeWords = (gender: Gender, o: Option) => {
+  const h = typeof o.meshHint === 'string' ? o.meshHint : Array.isArray(o.meshHint) ? o.meshHint[0] : '';
+  return SKIN_TYPE_WORDS[gender][h ?? ''] ?? o.label.en;
+};
+
 /** Явно неестественные радужки: линзы, кольца, кибер-глаза. */
 const STYLISED_EYE = /multilayer|rebecca|cyber|ring|circle|stand|double|blood/i;
 const stylisedEye = (o: Option) => STYLISED_EYE.test(o.label.en) || o.rating[1] >= 6;
 
-/** Цвет волос словами (ключ цвета игры): то, как его назовёт человек. */
-const HAIR_WORDS: Record<string, string> = {
-  brown_liquorice: 'dark brown, almost black',
+/**
+ * Цвет волос словами (ключ цвета игры): то, как его назовёт человек. Сверено с кадрами 3D-вида:
+ * средний линейный цвет прядей против значка игры (Brown Liquorice — 55, 43, 35 против 52, 39, 32;
+ * Black Carbon — 34, 29, 26 против 35, 27, 25; Red Merlot на длинной причёске 11 — 63, 31, 29 против
+ * 58, 33, 27). Рендер совпадает со значком, поэтому слова — по тому, как цвет читается на V:
+ * «почти чёрный» у Liquorice уводил к нему чёрные волосы, и V выходила тёплой шатенкой.
+ */
+export const HAIR_WORDS: Record<string, string> = {
+  brown_liquorice: 'dark brown (brown on V, not black)',
   blonde_platinum: 'platinum blond',
-  red_merlot: 'deep auburn / dark red-brown',
-  ginger_copper: 'copper ginger',
+  red_merlot: 'wine red / deep auburn (brown with a faint red cast: 1)',
+  ginger_copper: 'orange copper, lighter than auburn',
   teal_ombre: 'dyed teal ombre',
-  black_carbon: 'jet black',
+  black_carbon: 'black / near-black',
   blonde_golden: 'golden blond',
   blonde_dishwater: 'dark ash blond / light brown',
   blue_sapphire: 'dyed sapphire blue',
@@ -94,7 +155,7 @@ const HAIR_WORDS: Record<string, string> = {
   liliac: 'dyed lilac',
   mermaid_aquamarine: 'dyed aquamarine',
   purple_ombre: 'dyed purple ombre',
-  black_salt_n_pepper: 'salt-and-pepper (dark with grey)',
+  black_salt_n_pepper: 'salt-and-pepper, light grey on V',
   green_toxic: 'dyed toxic green',
   brown_medium: 'medium brown',
   blue_sky: 'dyed sky blue',
@@ -124,16 +185,17 @@ export function hairWords(gender: Gender, slotId: string, o: Option): string {
   return `${name} (${o.hex})`;
 }
 
+/** Множитель уверенности ответа модели с формой глаз «тяжёлые веки». */
+export const HEAVY_LID_LLM_CONF = 0.5;
+
 /**
  * Естественные радужки словами: hex миниатюры у них вводит в заблуждение (карий #2c2b2c — серый).
  * Слова сверены с радужкой игровой иконки (swatches.*.json, кольцо radial): «Gradient Black» —
  * тёмная сине-серая, а не чёрно-карая, карий в игре один — Gradient Brown.
  */
-/** Множитель уверенности ответа модели с формой глаз «тяжёлые веки». */
-export const HEAVY_LID_LLM_CONF = 0.5;
-
 export const EYE_WORDS: Record<string, string> = {
-  gradient_brown: 'dark/near-black brown',
+  // единственный карий: на V средне-карий с кольцом, темнее естественного варианта нет
+  gradient_brown: 'the only brown (medium on V): any brown or near-black eyes',
   gradient_blue: 'blue',
   gradient_black: 'dark blue-grey (not brown)',
   gradient_green: 'green',
@@ -160,11 +222,21 @@ function eyeWords(gender: Gender, o: Option): string {
 function eyeColourList(gender: Gender, opts: Option[]): string {
   const natural: string[] = [];
   const styled: string[] = [];
+  const blood: string[] = [];
+  const multi: string[] = [];
   opts.forEach((o, k) => {
     if (EYE_WORDS[colorKey(o)] && !stylisedEye(o)) natural.push(`  ${k + 1}: ${eyeWords(gender, o)}`);
+    // Кровавые версии естественных цветов — названием, без цвета; «Multilayer» — один раз на
+    // группу (экономия ~800 символов промпта)
+    else if (/^Blood Gradient /.test(o.label.en)) blood.push(`${k + 1} ${o.label.en.slice('Blood Gradient '.length)}`);
+    else if (/^Multilayer /.test(o.label.en)) multi.push(`${k + 1} ${eyeWords(gender, o).slice('Multilayer '.length)}`);
     else styled.push(`${k + 1} ${eyeWords(gender, o)}`);
   });
-  if (styled.length) natural.push(`  stylised lenses / cyber eyes, only if clearly visible: ${styled.join('; ')}`);
+  const groups: string[] = [];
+  if (blood.length) groups.push(`bloodshot: ${blood.join(', ')}`);
+  if (multi.length) groups.push(`multilayer lenses: ${multi.join('; ')}`);
+  if (styled.length) groups.push(styled.join('; '));
+  if (groups.length) natural.push(`  stylised lenses / cyber eyes, only if clearly visible: ${groups.join('; ')}`);
   return natural.join('\n');
 }
 
@@ -237,7 +309,7 @@ export function buildPrompt(gender: Gender, a?: PhotoAnalysis | null, lang: 'ru'
     const desc = hairDescriptions(gender, hs.options);
     add(
       'hairstyle',
-      'hairstyle — match the length first (where the ends fall: ears, jaw, collar, shoulders), then the parting and whether it is swept back, combed forward or messy; texture (straight, wavy, curly) last; receding/shaved front only if the photo shows it',
+      'match the length first (where the ends fall: ears, jaw, collar, shoulders), then the sides (full, faded or shaved), then the parting and whether it is swept back, combed forward or messy; texture (straight, wavy, curly) last; receding/shaved front only if the photo shows it',
       list(hs.options, (o, n) => `[${o.tags[0] ?? 'none'}] ${desc[n - 1].en}`),
     );
   }
@@ -248,11 +320,21 @@ export function buildPrompt(gender: Gender, a?: PhotoAnalysis | null, lang: 'ru'
     const measuredKey = a && !a.monochrome ? localSuggestions(gender, a).find((s) => s.slotId === 'hair_color')?.colorKey : undefined;
     const measuredNo = measuredKey ? hc.options.findIndex((o) => colorKey(o) === measuredKey) + 1 : 0;
     const twoToneStyles = measuredNo && hs ? hs.options.flatMap((o, k) => (isTwoTone(gender, o, measuredKey!) ? [k + 1] : [])) : [];
+    // Чем заменить двухцветную причёску, не меняя цвет: без этого модель с гладкими длинными
+    // каштаново-рыжими волосами (32 + Red Merlot) уходила в Ginger Copper — другой цвет
+    const swaps = hs
+      ? twoToneStyles.flatMap((n) => {
+          const alt = oneToneAlternative(gender, hs.options, hs.options[n - 1], measuredKey!);
+          return alt ? [`${n}→${hs.options.indexOf(alt) + 1}`] : [];
+        })
+      : [];
     add(
       'hair_color',
       'hair colour (eyebrows, eyelashes and beard get the same colour unless you answer their own slots below)' +
         (twoToneStyles.length
-          ? `. ${twoTonePhrase(measuredNo, twoToneStyles)} (only the ends or streaks dyed, the rest a natural shade): for hair that is one colour all over do not pair them`
+          ? `. ${twoTonePhrase(measuredNo, twoToneStyles)} (only the ends or streaks dyed, the rest a natural shade): for hair that is one colour all over do not pair them — keep colour ${measuredNo} if it fits and take the nearest hairstyle outside this list` +
+            (swaps.length ? ` (${swaps.join(', ')})` : '') +
+            ', do not switch to another colour to avoid them'
           : ''),
       list(hc.options, (o) => hairWords(gender, 'hair_color', o)),
     );
@@ -261,11 +343,15 @@ export function buildPrompt(gender: Gender, a?: PhotoAnalysis | null, lang: 'ru'
     if (variantOf(gender, 'eyebrows_color'))
       add(
         'eyebrows_color',
-        'eyebrow colour — same numbering as hair_color; answer it whenever the brows differ from the hair: dyed hair (red, auburn, platinum, any bright colour) and grey hair usually come with darker natural brows. If omitted, a natural shade of the hair colour is used',
+        'eyebrow colour — same numbering as hair_color; answer it whenever the brows differ from the hair (dyed, red, platinum or grey hair usually has darker natural brows); if omitted, a natural shade of the hair colour is used',
         nums,
       );
     if (gender === 'male' && variantOf(gender, 'beard_color'))
-      add('beard_color', 'beard colour — same numbering as hair_color; answer ONLY if clearly different from the hair (e.g. grey in the beard), otherwise omit', nums);
+      add(
+        'beard_color',
+        'beard colour — same numbering as hair_color; answer ONLY if clearly different from the hair (e.g. a mostly grey beard; a few grey hairs are not), otherwise omit',
+        nums,
+      );
   }
   const br = variantOf(gender, 'eyebrows');
   if (br) add('eyebrows', 'eyebrow shape (thickness, density, arch)', list(br.options, (o) => browDescription(o)?.en ?? o.label.en));
@@ -297,6 +383,13 @@ export function buildPrompt(gender: Gender, a?: PhotoAnalysis | null, lang: 'ru'
       'skin tone, from lightest to darkest (photo lighting makes skin look lighter; judge the real complexion and ethnicity, not the brightness of the photo)',
       list(sk.options, (o) => skinWords(o)),
     );
+  const st = variantOf(gender, 'skin_type_switcher');
+  if (st)
+    add(
+      'skin_type_switcher',
+      'skin texture, not tone (freckles, spots, acne, redness): smooth clean skin on the photo is the clear option, not the default',
+      list(st.options, (o) => skinTypeWords(gender, o)),
+    );
   const ec = variantOf(gender, 'eyes_color');
   if (ec) add('eyes_color', 'eye colour — natural ones first; only pick unnatural if the photo clearly shows coloured lenses', eyeColourList(gender, ec.options));
 
@@ -326,7 +419,7 @@ export function buildPrompt(gender: Gender, a?: PhotoAnalysis | null, lang: 'ru'
   const lt = variantOf(gender, 'makeupLips_type');
   if (lt) add('makeupLips_type', 'lip makeup type (1 = none)', list(lt.options, (o) => o.label.en));
   const lc = variantOf(gender, 'makeupLips_color', 'makeupLips_glossy_01') ?? variantOf(gender, 'makeupLips_color');
-  if (lc) add('makeupLips_color', 'lipstick colour — only if lip makeup type is not 1 (none)', list(lc.options, (o) => `${o.label.en} (${o.hex})`));
+  if (lc) add('makeupLips_color', 'lipstick colour — only if lip makeup type is not 1 (none)', list(lc.options, lipWords));
   // Макияж глаз: стиль — по описаниям формы декалей игры (обычные — по строке, рисунки — одной
   // строкой), цвет — отдельно. Ответ о стиле принимается только при present.eyeMakeup = true
   const me = variantOf(gender, 'makeupEyes');
@@ -524,7 +617,7 @@ export function parseLlm(gender: Gender, text: string, allowed?: readonly string
     // Тяжёлые веки делают V сонным: такой ответ — с половинной уверенностью и пометкой
     if (slotId === 'eyes' && heavyLidRows(gender).has(n)) {
       s.conf *= HEAVY_LID_LLM_CONF;
-      s.why = `${why ? `${why}; ` : ''}heavy upper lids`;
+      s.why = { ru: `${why ? `${why}; ` : ''}тяжёлые веки`, en: `${why ? `${why}; ` : ''}heavy upper lids` };
     }
     if (o?.app && (o.hex || o.iris)) {
       s.colorKey = colorKey(o);
@@ -660,13 +753,30 @@ function applyEyeMakeup(gender: Gender, out: Suggestion[], present: boolean | un
 /** Пояснение модели о частично окрашенных волосах (тогда двухцветная пара — её выбор). */
 const TWO_TONE_WORDS = /ombre|ombré|\btips?\b|\bends?\b|streak|highlight|омбре|кончик|концы|пряд|мелир/i;
 
-const STOP = new Set(['the', 'and', 'with', 'over', 'one', 'side', 'hair', 'past']);
-const words = (s: string) => new Set(s.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2 && !STOP.has(w)));
+const STOP = new Set(['the', 'and', 'with', 'over', 'one', 'side', 'hair', 'past', 'off']);
+/** «slicked» и «sleek» — одна гладкость; множественное число — то же слово (strands = strand). */
+const SAME_WORD: Record<string, string> = { slicked: 'sleek' };
+const stem = (w: string) => SAME_WORD[w] ?? (w.length > 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
+const words = (s: string) => new Set(s.toLowerCase().split(/[^a-z]+/).map(stem).filter((w) => w.length > 2 && !STOP.has(w)));
 /**
  * Черты, которых не должно появиться у замены: выбритые зоны (женщине с гладкими длинными
- * волосами — полувыбритая голова), собранные волосы и особые формы.
+ * волосами — полувыбритая голова), собранные волосы, чёлка, растрёпанность и особые формы.
+ * Одна тонкая косичка — деталь, а не косы: длинные 32 (гладкие, без чёлки) с Red Merlot
+ * заменяются на 11 (гладкие, зачёсаны набок, тонкая косичка сбоку), а не на 16 с чёлкой на глаза.
  */
-const DISTINCT = [/shaved|undercut|buzz/, /updo|bun|ponytail|tied|knot/, /braid|dread/, /mohawk|mullet|spiky|spikes/];
+const DISTINCT = [
+  /shaved|undercut|buzz/,
+  /updo|\bbuns?\b|ponytail|tied|knot/,
+  /(?<!thin )\bbraids?\b|braided|cornrow|dread|twists/,
+  /mohawk|mullet|spiky|spikes/,
+  /bangs|fringe/,
+  /messy|shaggy|tousled/,
+  // прямым волосам не подставлять волны и кудри (32 → 65 «пышные волны» вместо гладких прямых 11)
+  /wav[ey]|curl/,
+];
+
+/** Доля общих слов описания (Жаккар), с которой похожая причёска годится в замену. */
+const ONE_TONE_MIN_SCORE = 0.2;
 
 /**
  * Похожая причёска, которую этот цвет красит целиком: тот же класс длины (тег игры) и
@@ -690,7 +800,7 @@ export function oneToneAlternative(gender: Gender, opts: readonly Option[], o: O
       best = c;
     }
   }
-  return bestScore >= 0.2 ? best : null;
+  return bestScore >= ONE_TONE_MIN_SCORE ? best : null;
 }
 
 export async function photoToDataUrl(img: HTMLImageElement, max = 768): Promise<string> {

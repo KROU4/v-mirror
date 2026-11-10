@@ -307,6 +307,9 @@ const HAIR_ALBEDO = new THREE.Vector3(0.8, 0.74, 0.7);
  * и значок расходятся по оттенку (purple_ombre ΔE 20, purple_blonde 15, mermaid_aquamarine 12):
  * значок — один средний цвет
  * двухцветной пряди, а сильнее сдвигать каналы нельзя — красные пряди станут зелёными.
+ * Мерло на прямых до ключиц (женская 11, фото Зендаи) читалось вишнёво-розовым (пряди 74, 33, 32
+ * против значка 56, 33, 26): насыщенность и яркость мерло снижены (s 0,514 → 0,44, k 1,351 → 1,27).
+ * Сдвинуть оттенок к оранжевому каналами нельзя: светлые ID-пряди уходят от своего оттенка > 25°.
  */
 export interface HairGrade {
   k: number;
@@ -318,8 +321,8 @@ export const HAIR_TINT_LIMIT = [0.85, 1.15] as const;
 export const HAIR_GRADE: Readonly<Record<string, HairGrade>> = {
   brown_liquorice: { k: 0.712, s: 1.108, tint: [1.022, 0.988, 1.057] },
   blonde_platinum: { k: 0.480, s: 0.814, tint: [1.011, 0.995, 1.020] },
-  red_merlot: { k: 1.351, s: 0.514, tint: [0.945, 1.025, 0.910] },
-  ginger_copper: { k: 1.034, s: 0.683, tint: [0.938, 1.026, 0.930] },
+  red_merlot: { k: 1.27, s: 0.44, tint: [0.945, 1.025, 0.910] },
+  ginger_copper: { k: 0.898, s: 0.683, tint: [0.884, 1.047, 0.878] },
   teal_ombre: { k: 0.821, s: 0.893, tint: [0.939, 1.010, 1.080] },
   black_carbon: { k: 1.011, s: 1.324, tint: [1.028, 0.985, 1.066] },
   blonde_golden: { k: 0.559, s: 0.883 },
@@ -426,6 +429,36 @@ export const LOWER_LASH_LIFT = 0.0016;
  * (в ней уже запечён свет студии редактора).
  */
 export const PIERCING = { metalBase: 0.75, metalEnv: 0.35, plasticEnv: 0.35, patternGain: 0.9 };
+
+/**
+ * Поправки цветов пирсинга, у которых hex плашки каталога не похож на значок цвета игры
+ * (swatches/icons/Piercing_*.webp, средний цвет непрозрачных пикселей и верхние 10 % по яркости).
+ * У меди, золота и серебра hex ≈ 1,1 × среднего значка, у Rose Gold hex #4e3a44 = 0,78 × среднего
+ * (100, 74, 80; блик 171, 121, 113): с metalBase и слабым отражением он рисовался почти чёрным
+ * сине-фиолетовым пластиком. Цвет — середина «1,1 × среднее» и «0,87 × блик», как у золота.
+ * Жемчуг (Pearl) в игре — серо-серебристый градиент (среднее 163, 161, 158) с перламутровым
+ * бликом, а матовый белый #c0bab3 без отражения читался мелом: немного металла и отражения. С
+ * цветом #b3b0ab и отражением 0,9 он рисовался молочно-белым, светлее значка: цвет ниже среднего
+ * значка (блик и отражение добавляют своё), отражение 0,5 — серо-серебристый, как значок.
+ * Дерево (Wood): узор — миниатюра со светом студии, в среднем тёмная (59, 49, 40; тёплые полосы
+ * 90, 57, 35, тёмные 31, 29, 25). На шариках пирсинга UV берут малый участок миниатюры, и с серым
+ * множителем patternGain они выходили почти чёрными, как сталь. patternTint — множитель узора
+ * по каналам (линейный): полосы коричнево-оранжевые, тёмные — тёмно-коричневые, а не серые.
+ * Одного множителя мало: шарики и штанги брали тёмный участок миниатюры и выходили тёмным
+ * серо-коричневым металлом (100, 80, 69), кольца при этом — как значок. patternFloor — нижняя
+ * граница цвета узора (sRGB): тёмные участки поднимаются до тёмного дерева, полосы остаются
+ * светлее. Серый блик пластика (отражение 0,35) приглушён: дерево матовое (в игре шероховатость 0,7).
+ */
+export interface PiercingFix extends Partial<Pick<PiercingMat, 'colour' | 'metalness' | 'roughness'>> {
+  env?: number;
+  patternTint?: readonly [number, number, number];
+  patternFloor?: string;
+}
+export const PIERCING_FIX: Readonly<Record<string, PiercingFix>> = {
+  rose_gold: { colour: '#825d5d' },
+  pearl: { colour: '#8a8884', metalness: 0.3, roughness: 0.22, env: 0.5 },
+  wood: { patternTint: [1.9, 1.1, 0.55], patternFloor: '#50301a', roughness: 0.65, env: 0.15 },
+};
 
 /** Покрытие ресниц (см. Materials.lashes). */
 const LASH_ALPHA = `
@@ -835,6 +868,11 @@ export function scleraDim(tone: string | null | undefined): number {
   return 1;
 }
 
+/** Блик кожи части наготы: по тону материала (gameMaterial, иначе суффикс имени ..._06_bl_dark). */
+export function intimateSpecular(name: string, m: { gameMaterial?: string }): number {
+  return skinSpecular(m.gameMaterial ?? name);
+}
+
 /** Доля блика кожи (specularIntensity) для appearance тона кожи или его ключа. */
 export function skinSpecular(tone: string | null | undefined): number {
   for (const [re, k] of SKIN_SPECULAR_BY_TONE) if (tone && re.test(tone)) return k;
@@ -997,8 +1035,14 @@ export const DECAL_RELIEF = 1.5;
  * оливково-бирюзовый. В игре такой слой (lerp к почти чёрному цвету) только затемняет кожу,
  * поэтому оттенок множителя гаснет по мере его темноты (яркость множителя ниже neutral[0] —
  * чистая яркость, выше neutral[1] — свой оттенок, как у красных и зелёных чернил).
+ * Тёмные чернила кроют плотно: в игре слой — lerp к цвету чернил (#1e2e29 — почти чёрный), а
+ * умножение на отношение к фону (≈ 0,1) с долей 0,87 пропускало 13 % кожи, и блэкворк на груди
+ * читался полупрозрачной коричневой футболкой (чернила лишь на 40 % темнее кожи). Для тёмных
+ * (по мере погашенного оттенка) яркость множителя возводится в степень dark.power (одним
+ * множителем на все каналы, оттенок кожи сохраняется), а доля — × dark.gain:
+ * сплошная заливка становится почти чёрной, цветные чернила не меняются.
  */
-export const TATTOO_INK = { paper: '#a7856d', gain: 1.45, neutral: [0.05, 0.4] as const };
+export const TATTOO_INK = { paper: '#a7856d', gain: 1.45, neutral: [0.05, 0.4] as const, dark: { power: 1.4, gain: 1.2 } };
 
 /** Слой — тату (по текстуре игры): head_tattoo__…, tattoo_body__… */
 export function isInkDecal(diffuse: string | null | undefined): boolean {
@@ -1012,15 +1056,25 @@ export function inkFactor(tex: RGB, alpha: number, diffuseAlpha: number, ink = T
   const f = [paper.r, paper.g, paper.b].map((p, i) => Math.min(1, tex[i] / p)) as RGB;
   const y = luma(f);
   const keep = smoothstep(ink.neutral[0], ink.neutral[1], y);
-  return f.map((v) => 1 + (y + (v - y) * keep - 1) * a) as RGB;
+  const dark = 1 - keep;
+  const k = 1 + (ink.dark.power - 1) * dark;
+  const aD = Math.min(1, a * (1 + (ink.dark.gain - 1) * dark));
+  const m = f.map((v) => y + (v - y) * keep) as RGB;
+  // степень — по яркости, одним множителем на все каналы: оттенок кожи под тату не меняется
+  const dim = Math.pow(Math.max(1e-6, luma(m)), k - 1);
+  return m.map((v) => 1 + (v * dim - 1) * aD) as RGB;
 }
 
 const INK_GLSL = (texRgb: string, texA: string, alphaU: string) => `vec3 inkF = min( ${texRgb} / uInkPaper, vec3( 1.0 ) );
+	float inkDark = 0.0;
 	{
 		float inkY = dot( inkF, vec3( 0.2126, 0.7152, 0.0722 ) );
-		inkF = mix( vec3( inkY ), inkF, smoothstep( ${g4(TATTOO_INK.neutral[0])}, ${g4(TATTOO_INK.neutral[1])}, inkY ) );
+		float inkKeep = smoothstep( ${g4(TATTOO_INK.neutral[0])}, ${g4(TATTOO_INK.neutral[1])}, inkY );
+		inkF = mix( vec3( inkY ), inkF, inkKeep );
+		inkDark = 1.0 - inkKeep;
+		inkF *= pow( max( dot( inkF, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-6 ), ${g4(TATTOO_INK.dark.power - 1)} * inkDark );
 	}
-	float inkA = saturate( ${texA} * ${alphaU} * ${TATTOO_INK.gain.toFixed(2)} );`;
+	float inkA = saturate( ${texA} * ${alphaU} * ${TATTOO_INK.gain.toFixed(2)} * ( 1.0 + ${g4(TATTOO_INK.dark.gain - 1)} * inkDark ) );`;
 
 /** Сдвиг мипа шума SecondaryMask с мелким повтором (зерно пудры у макияжа глаз). */
 export const DECAL_GRAIN_BIAS = 3;
@@ -1491,19 +1545,34 @@ vDecalUv = uv;
    * ложится миниатюра цвета из редактора (pattern). Металл — с цветом плашки, но отражение
    * окружения слабее: при 0,9 серебро, сталь и жемчуг выходили одинаково белыми.
    */
-  piercing(p: PiercingMat): Promise<THREE.MeshStandardMaterial> {
-    return this.once(`piercing:${p.colour}:${p.metalness}:${p.roughness}:${p.pattern ?? ''}`, async () => {
+  piercing(raw: PiercingMat): Promise<THREE.MeshStandardMaterial> {
+    const fix: PiercingFix = (raw.name && PIERCING_FIX[raw.name]) || {};
+    const p = { ...raw, ...fix };
+    const tint = fix.patternTint ?? [PIERCING.patternGain, PIERCING.patternGain, PIERCING.patternGain];
+    return this.once(`piercing:${p.colour}:${p.metalness}:${p.roughness}:${p.pattern ?? ''}:${fix.env ?? ''}:${tint.join(',')}:${fix.patternFloor ?? ''}`, async () => {
       const map = p.pattern ? await this.store.maybeTexture(p.pattern, 'color', { repeat: true }).catch(() => null) : null;
       const metal = p.metalness > 0.5;
-      return new THREE.MeshStandardMaterial({
+      const mat = new THREE.MeshStandardMaterial({
         name: 'piercing',
-        color: map ? new THREE.Color(PIERCING.patternGain, PIERCING.patternGain, PIERCING.patternGain) : lin(p.colour).multiplyScalar(metal ? PIERCING.metalBase : 1),
+        color: map ? new THREE.Color(...tint) : lin(p.colour).multiplyScalar(metal ? PIERCING.metalBase : 1),
         map,
         metalness: p.metalness,
         roughness: p.roughness,
         envMap: this.env,
-        envMapIntensity: metal ? PIERCING.metalEnv : PIERCING.plasticEnv,
+        envMapIntensity: fix.env ?? (metal ? PIERCING.metalEnv : PIERCING.plasticEnv),
       });
+      if (map && fix.patternFloor) {
+        const floor = { value: lin(fix.patternFloor) };
+        mat.userData.patternFloor = floor.value;
+        mat.onBeforeCompile = (sh: Shader) => {
+          sh.uniforms.uPatternFloor = floor;
+          sh.fragmentShader = sh.fragmentShader
+            .replace('#include <common>', '#include <common>\nuniform vec3 uPatternFloor;')
+            .replace('#include <map_fragment>', '#include <map_fragment>\n\tdiffuseColor.rgb = max( diffuseColor.rgb, uPatternFloor );');
+        };
+        mat.customProgramCacheKey = () => 'piercing_floor';
+      }
+      return mat;
     });
   }
 
@@ -1802,8 +1871,9 @@ vDecalUv = uv;
   // ---------------------------------------------------------------- нагота (body/intimate.json)
   /**
    * Кожа частей наготы (соски, «нет гениталий», пенис, вагина у мужского тела): как тело —
-   * альбедо уже под тон, ORM.G — шероховатость. Части лежат на коже тела вплотную, поэтому
-   * чуть сдвинуты к камере по глубине.
+   * альбедо уже под тон, ORM.G — шероховатость, блик тона (skinSpecular). Части лежат на коже
+   * тела вплотную, поэтому чуть сдвинуты к камере по глубине. С бликом светлой кожи (0,5 против
+   * 0,28 у тела на тоне 12) основание пениса на тёмной коже читалось серой трапецией.
    */
   intimateSkin(name: string, m: IntimateSkinMat): Promise<THREE.MeshPhysicalMaterial> {
     return this.once('intimate_skin:' + name, async () => {
@@ -1820,7 +1890,7 @@ vDecalUv = uv;
         roughnessMap: orm,
         roughness: SKIN.roughness,
         metalness: 0,
-        specularIntensity: SKIN.specular,
+        specularIntensity: intimateSpecular(name, m),
         envMap: this.env,
         envMapIntensity: 0.12,
         polygonOffset: true,
@@ -2136,13 +2206,17 @@ diffuseColor.a *= mix( uStubble.y, 1.0, stubbleDots( vMapUv * uStubble.x, uStubb
   /**
    * Тень щетины под бородой (mesh_decal игры): тёмный цвет DiffuseColor с альфой маски ×
    * DiffuseAlpha. Матовая, без бликов: это тон кожи под волосками, а не блестящий слой.
+   * Блика нет совсем (specularIntensity 0): у слоя roughness 1 и F0 0,04, но на силуэте щеки
+   * френель доводил отражение почти до 1, и красная контровая лампа рисовала вдоль края лица у
+   * уха тонкий малиновый шов (борода 06, кадр анфас).
    */
-  beardShadow(hm: HairManifest, m: HairMaterial): Promise<THREE.MeshStandardMaterial> {
+  beardShadow(hm: HairManifest, m: HairMaterial): Promise<THREE.MeshPhysicalMaterial> {
     const mask = m.mask ? hm.textures[m.mask]?.file ?? null : null;
     return this.once(`beardShadow:${mask}:${m.diffuseColor}:${m.diffuseAlpha}`, async () => {
       const alpha = await this.store.texture(mask ?? '', 'data');
-      return new THREE.MeshStandardMaterial({
+      return new THREE.MeshPhysicalMaterial({
         name: 'beard_shadow',
+        specularIntensity: 0,
         color: lin(m.diffuseColor ?? '#22150a'),
         alphaMap: alpha,
         opacity: m.diffuseAlpha ?? 1,

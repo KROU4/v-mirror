@@ -96,8 +96,8 @@
   "en": "short spiky top, shaved sides"
  },
  "047_swirl_pomp": {
-  "ru": "короткий закрученный кок, бока короткие",
-  "en": "short swirled quiff, short sides"
+  "ru": "закрученный кок, локон на лбу, бока выбриты до кожи",
+  "en": "swirled quiff, forehead curl, skin-faded shaved sides"
  },
  "048_dual_braids": {
   "ru": "бритая голова с двумя короткими косичками сзади",
@@ -192,8 +192,8 @@
   "en": "long messy past shoulders, strands over the face"
  },
  "091_dakota": {
-  "ru": "длинные прямые, зачёсаны назад со лба, спадают на одну сторону, тонкая косичка у виска",
-  "en": "long straight, slicked back off the forehead, falling to one side, thin braid at the temple"
+  "ru": "прямые до плеч и ключиц, зачёсаны назад со лба набок, сбоку длинная тонкая косичка",
+  "en": "straight, shoulder length to the collarbone, slicked back off the forehead to one side, long thin braid"
  },
  "093_sumo": {
   "ru": "гладко собраны в высокий пучок-самурай, лоб высокий, передняя часть головы выбрита",
@@ -220,8 +220,8 @@
   "en": "long voluminous curls, half-up ponytail"
  },
  "115_alanah": {
-  "ru": "длинные гладкие ниже плеч, глубокий боковой пробор, мягкая прядь у глаза",
-  "en": "long sleek straight hair past the shoulders, deep side part, soft strand by one eye"
+  "ru": "длинные гладкие прямые ниже плеч, глубокий боковой пробор, волосы закрывают одну сторону лица (пробора посередине нет)",
+  "en": "long sleek straight past the shoulders, deep side part, hair over one side of the face (no centre part)"
  },
  "118_gillean": {
   "ru": "длинные волнистые ниже плеч, боковой пробор",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildPrompt, EYE_WORDS, extractJson, HEAVY_LID_LLM_CONF, LlmError, parseLlm, twoTonePhrase } from './llm';
+import { buildPrompt, EYE_WORDS, extractJson, HEAVY_LID_LLM_CONF, LlmError, oneToneAlternative, parseLlm, twoTonePhrase } from './llm';
 import { getIndex, type Gender } from '../model/catalog';
-import { hairDescriptions, isTwoTone } from '../model/hair';
+import { hairDescription, hairDescriptions, isTwoTone } from '../model/hair';
 import { colorKey, heavyLidRows, irisRing } from './match';
 import { hexToRgb, hueOf, rgbToLab } from './colors';
 import type { PhotoAnalysis } from './analyze';
@@ -96,7 +96,10 @@ describe('промпт и ответ: цвета, макияж, мусор в о
   });
 
   it('у цветов волос — слова, светлый тон и тень образца (не «корни и кончики»), у неестественных глаз — пометка', () => {
-    expect(fullPack.text).toMatch(/Brown Liquorice: dark brown, almost black \(light #[0-9a-f]{6}, shade #[0-9a-f]{6}\)/);
+    expect(fullPack.text).toMatch(/Brown Liquorice: dark brown \(brown on V, not black\) \(light #[0-9a-f]{6}, shade #[0-9a-f]{6}\)/);
+    // чёрные волосы — Black Carbon, а не «почти чёрный» Liquorice (на V Liquorice — тёплый каштан)
+    expect(fullPack.text).toMatch(/Black Carbon: black \/ near-black/);
+    expect(fullPack.text).not.toMatch(/almost black/);
     expect(fullPack.text).toMatch(/platinum blond \(light #aea794/);
     expect(fullPack.text).not.toMatch(/roots #/);
     // краска — только словами, без тонов образца (экономия токенов)
@@ -107,7 +110,7 @@ describe('промпт и ответ: цвета, макияж, мусор в о
 
   it('естественные глаза — словами, у линз Rebecca — их настоящие цвета', () => {
     const eyes = fullPack.text.split('### eyes_color')[1].split('###')[0];
-    expect(eyes).toMatch(/1: [^\n]*: dark\/near-black brown\n/);
+    expect(eyes).toMatch(/1: Gradient Brown: the only brown[^\n]*\n/);
     expect(eyes).not.toMatch(/1: [^\n]*#2c2b2c/);
     expect(eyes).toMatch(/Rebecca Pink \(#bf146b\/#33ac12\)/);
     // стилизованные — одной строкой, а не 60 строк
@@ -197,6 +200,42 @@ describe('промпт и ответ: цвета, макияж, мусор в о
     expect(eyes).not.toMatch(/\n  1: [^\n]*half-closed/);
   });
 
+  it('тип кожи — в промпте словами: 1 — поры и пятна по умолчанию, чистая кожа — отдельный вариант', () => {
+    for (const g of ['male', 'female'] as const) {
+      const p = buildPrompt(g, null, 'en');
+      expect(p.slots).toContain('skin_type_switcher');
+      const sec = p.text.split('### skin_type_switcher')[1].split('###')[0];
+      expect(sec).toMatch(/\n  1: default: pores/);
+      expect(sec.trim().split('\n')).toHaveLength(6);
+      expect(sec).toMatch(/smooth clean skin on the photo is the clear option/);
+    }
+    expect(buildPrompt('female', null, 'en').text).toMatch(/### skin_type_switcher[^#]*\n  4: smooth, clear, even\n/);
+  });
+
+  it('помада словами: Pastel Pink — яркий розовый, Pink — лиловый, розово-бежевый нюд — Peach', () => {
+    const lips = fullPack.text.split('### makeupLips_color')[1].split('###')[0];
+    expect(lips).toMatch(/14: Pastel Pink: bright bubblegum pink/);
+    // Pink игры на V лиловато-розовый (значок 341°): естественным розовым губам он не подходит
+    expect(lips).toMatch(/5: Pink: cool mauve pink\n/);
+    expect(lips).not.toMatch(/5: Pink:[^\n]*nude/);
+    expect(lips).toMatch(/10: Peach: pink nude \/ coral peach/);
+    expect(lips).not.toMatch(/#904959/);
+  });
+
+  it('стилизованные линзы — группами: кровавые без цветов, «Multilayer» один раз', () => {
+    const eyes = fullPack.text.split('### eyes_color')[1].split('###')[0];
+    expect(eyes).toMatch(/bloodshot: 10 Black, 11 Blue, 12 Brown/);
+    expect(eyes).toMatch(/multilayer lenses: 19 Arasaka \(#/);
+    expect(eyes.match(/Multilayer/g)).toBeNull();
+  });
+
+  it('причёска Kerry (андеркат) описана с выбритыми боками, борода цвета — только при явной седине', () => {
+    const hs = fullPack.text.split('### hairstyle')[1].split('###')[0];
+    expect(hs).toMatch(/\n  2: \[Short\] short undercut: slicked-back top, shaved faded sides/);
+    expect(fullPack.text).toMatch(/then the sides \(full, faded or shaved\)/);
+    expect(fullPack.text).toMatch(/a few grey hairs are not/);
+  });
+
   it('промпт компактный: укладывается в бюджет бесплатных моделей', () => {
     // ~4 символа на токен: держим промпт в пределах ~4,5К токенов
     expect(fullPack.text.length).toBeLessThan(18000);
@@ -205,7 +244,11 @@ describe('промпт и ответ: цвета, макияж, мусор в о
 
   it('у каждой причёски, бороды и формы лица в промпте есть описание', () => {
     const hs = fullPack.text.split('### hairstyle')[1].split('###')[0];
-    expect(hs).toMatch(/\n  37: \[Short\] medium length, swept back and to one side/);
+    // 37 на V падает на лоб (не зачёсана назад), 1 — стрижка V по умолчанию с выбритыми висками,
+    // 9 — зачёс назад с полными боками
+    expect(hs).toMatch(/\n  37: \[Short\] medium length, tousled, falls over the forehead, full sides/);
+    expect(hs).toMatch(/\n  1: \[Buzz\] default V cut: textured top, high skin fade, bare temples/);
+    expect(hs).toMatch(/\n  9: \[Short\] short, swept back off the forehead, full sides/);
     expect(hs).toMatch(/\n  41: \[Short\] short messy curls/);
     expect(hs).not.toMatch(/: \[[A-Za-z]+\] (short|long|hairstyle)\n/);
     const beard = fullPack.text.split('### beard —')[1].split('###')[0];
@@ -273,8 +316,23 @@ describe('двухцветные причёски', () => {
     const m = /With colour (\d+), these hairstyles are two-tone in the game: ([\d, ]+)/.exec(colours);
     expect(m?.[1]).toBe(merlot);
     expect(m?.[2].split(', ').map(Number)).toContain(32);
+    // гладкие длинные одного цвета: цвет остаётся, меняется причёска (32 → 11 без чёлки и
+    // выбритых зон), а не цвет на Ginger Copper
+    expect(colours).toMatch(/keep colour \d+ if it fits and take the nearest hairstyle outside this list \([^)]*\b32→11\b/);
+    expect(colours).toMatch(/do not switch to another colour/);
     // без замера список не нужен
     expect(buildPrompt('female', null, 'en').text).not.toMatch(/are two-tone in the game/);
+  });
+
+  it('замена двухцветной причёски не добавляет волн и кудрей, которых у неё нет', () => {
+    const opts = getIndex('female').slotById.get('hairstyle')!.variants[0].options;
+    for (const colour of ['red_merlot', 'cold_white', 'goblin_green']) {
+      const alt = oneToneAlternative('female', opts, opts[31], colour);
+      expect(alt, colour).toBe(opts[10]);
+    }
+    // прямые асимметричные 22 не превращаются в волнистое каре 20
+    const alt22 = oneToneAlternative('female', opts, opts[21], 'red_merlot');
+    expect(alt22 ? hairDescription('female', alt22).en : '').not.toMatch(/wav|curl/);
   });
 
   it('ответ «причёска 32 + Red Merlot»: берётся похожая причёска, окрашенная целиком, и подсказка с возвратом', () => {
@@ -288,6 +346,8 @@ describe('двухцветные причёски', () => {
     expect(hs.value).not.toBe(opts[31].i);
     expect(isTwoTone('female', chosen, 'red_merlot')).toBe(false);
     expect(chosen.tags[0]).toBe(opts[31].tags[0]);
+    // замена без чёлки и растрёпанности, которых у 32 нет (16 — чёлка на глаза, 5 — растрёпанные)
+    expect(hs.value).toBe(opts[10].i);
     expect(r.hints?.some((h) => /switch back to/.test(h.en) && /верните/.test(h.ru))).toBe(true);
     // модель сама пишет про крашеные концы — пара остаётся, но с подсказкой
     const r3 = parseLlm('female', JSON.stringify({ slots: { hairstyle: { n: 32 }, hair_color: { n: merlot, why: 'burgundy ombre, dyed ends' } } }), f.slots);
@@ -314,7 +374,7 @@ describe('двухцветные причёски', () => {
     }
     // карий — один: Gradient Brown, Gradient Black назван сине-серым
     expect(EYE_WORDS.gradient_black).toMatch(/blue-grey/);
-    expect(EYE_WORDS.gradient_brown).toMatch(/near-black/);
+    expect(EYE_WORDS.gradient_brown).toMatch(/only brown/);
     expect(buildPrompt('male', null, 'en').text).toMatch(/Gradient Black: dark blue-grey \(not brown\)/);
   });
 
@@ -322,10 +382,13 @@ describe('двухцветные причёски', () => {
     const p = buildPrompt('male', null, 'en');
     const heavy = [...heavyLidRows('male')][0];
     const normal = [1, 2, 3, 4, 5].find((n) => !heavyLidRows('male').has(n))!;
-    const r = parseLlm('male', JSON.stringify({ slots: { eyes: { n: heavy, conf: 0.8 } } }), p.slots);
+    const r = parseLlm('male', JSON.stringify({ slots: { eyes: { n: heavy, conf: 0.8, why: 'узкие глаза' } } }), p.slots);
     const s = r.suggestions.find((x) => x.slotId === 'eyes')!;
     expect(s.conf).toBeCloseTo(0.8 * 0.95 * HEAVY_LID_LLM_CONF, 5);
-    expect(String(s.why)).toMatch(/heavy upper lids/);
+    // пометка на языке интерфейса, причина модели не теряется
+    expect(s.why).toEqual({ ru: 'узкие глаза; тяжёлые веки', en: 'узкие глаза; heavy upper lids' });
+    const bare = parseLlm('male', JSON.stringify({ slots: { eyes: { n: heavy, conf: 0.8 } } }), p.slots).suggestions.find((x) => x.slotId === 'eyes')!;
+    expect(bare.why).toEqual({ ru: 'тяжёлые веки', en: 'heavy upper lids' });
     const r2 = parseLlm('male', JSON.stringify({ slots: { eyes: { n: normal, conf: 0.8 } } }), p.slots);
     expect(r2.suggestions.find((x) => x.slotId === 'eyes')!.conf).toBeCloseTo(0.8 * 0.95, 5);
   });

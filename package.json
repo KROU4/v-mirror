@@ -14,7 +14,7 @@
     "url": "https://github.com/KROU4/v-mirror/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
     "predev": "node tools/setup-assets.mjs",

@@ -4,9 +4,11 @@
 // panel did not respond. Without module workers or OffscreenCanvas, or when the worker cannot
 // start (blocked module, missing chunk), it runs on the main thread as before.
 import type { FaceLandmarkerResult } from '@mediapipe/tasks-vision';
+import { LandmarkerError } from './landmarker.errors';
 import type { LandmarkerReply, LandmarkerRequest } from './landmarker.worker';
 
 export { isMediapipeChatter } from './landmarker.quiet';
+export { LandmarkerError, landmarkerErrorCode, type LandmarkerErrorCode } from './landmarker.errors';
 
 type Source = HTMLCanvasElement | HTMLImageElement | ImageBitmap;
 interface Backend {
@@ -60,7 +62,8 @@ function workerBackend(base: string, forget: () => void): Promise<Backend> {
       else reject(e);
     };
     /** timeoutMs — until the answer; afterStageMs — re-armed when the worker reports a stage. */
-    const call = (m: LandmarkerRequest, timeoutMs: number, transfer: Transferable[] = [], afterStageMs?: number) =>
+    /** onSent — the message (and its transferred objects) went to the worker. */
+    const call = (m: LandmarkerRequest, timeoutMs: number, transfer: Transferable[] = [], afterStageMs?: number, onSent?: () => void) =>
       new Promise<unknown>((ok, fail) => {
         if (dead) return fail(dead);
         // A hung worker (lost GPU context in OffscreenCanvas, stuck MediaPipe graph) never
@@ -68,7 +71,7 @@ function workerBackend(base: string, forget: () => void): Promise<Backend> {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const arm = (ms: number) => {
           clearTimeout(timer);
-          timer = setTimeout(() => kill(new Error('Face Landmarker did not respond')), ms);
+          timer = setTimeout(() => kill(new LandmarkerError('timeout', 'Face Landmarker did not respond')), ms);
         };
         arm(timeoutMs);
         pending.set(m.id, {
@@ -76,7 +79,16 @@ function workerBackend(base: string, forget: () => void): Promise<Backend> {
           fail: (e) => (clearTimeout(timer), fail(e)),
           stage: () => afterStageMs !== undefined && arm(afterStageMs),
         });
-        w.postMessage(m, transfer);
+        // postMessage can throw (DataCloneError for a detached or closed ImageBitmap): only this
+        // call fails, the worker stays alive — its timer and pending entry go with the call
+        try {
+          w.postMessage(m, transfer);
+        } catch (e) {
+          clearTimeout(timer);
+          pending.delete(m.id);
+          return fail(e instanceof Error ? e : new Error(String(e)));
+        }
+        onSent?.();
       });
     w.onmessage = (ev: MessageEvent<LandmarkerReply>) => {
       const r = ev.data;
@@ -85,14 +97,14 @@ function workerBackend(base: string, forget: () => void): Promise<Backend> {
       if ('stage' in r) return p.stage();
       pending.delete(r.id);
       if (r.ok) p.ok(r.result);
-      else p.fail(new Error(r.error));
+      else p.fail(r.code ? new LandmarkerError(r.code, r.error) : new Error(r.error));
     };
     // A worker that failed to load (old browser, blocked module, 404 chunk) or crashed. During
     // init the rejection lets getLandmarker fall back to the main thread; after init only the
     // backend this worker served is forgotten, so the next call starts a fresh one
     w.onerror = (ev) => {
       ev.preventDefault();
-      kill(new Error(ev.message || 'Face Landmarker worker failed'));
+      kill(new LandmarkerError('crashed', ev.message || 'Face Landmarker worker failed'));
     };
     // The download may be slow; once the files are in (stage 'loaded') the graph gets a short
     // limit. A worker that dies after the download falls back to the main thread, which takes
@@ -105,9 +117,16 @@ function workerBackend(base: string, forget: () => void): Promise<Backend> {
           async detect(source) {
             // A copy of the pixels goes to the worker; the caller keeps its own canvas or bitmap
             const bitmap = await createImageBitmap(source);
-            return (await call({ id: ++seq, type: 'detect', bitmap }, LANDMARKER_TIMEOUT_MS.detect, [bitmap])) as FaceLandmarkerResult;
+            // The copy (up to 2048 px, ≈ 16 MB) is closed here when it never reached the worker:
+            // a dead worker rejects before postMessage, and the bitmap is not transferred
+            let sent = false;
+            try {
+              return (await call({ id: ++seq, type: 'detect', bitmap }, LANDMARKER_TIMEOUT_MS.detect, [bitmap], undefined, () => (sent = true))) as FaceLandmarkerResult;
+            } finally {
+              if (!sent) bitmap.close();
+            }
           },
-          dispose: () => kill(new Error('Face Landmarker was closed')),
+          dispose: () => kill(new LandmarkerError('closed', 'Face Landmarker was closed')),
         });
       })
       .catch((e: Error) => kill(e));

@@ -12,7 +12,7 @@ vi.mock('./landmarker.core', () => ({
 
 type Handler = ((ev: unknown) => void) | null;
 let workers: FakeWorker[] = [];
-let mode: 'fail-on-start' | 'answer' | 'hang' | 'loaded-then-hang' | 'slow-download' = 'answer';
+let mode: 'fail-on-start' | 'answer' | 'hang' | 'loaded-then-hang' | 'slow-download' | 'clone-error' = 'answer';
 /** Delay of the init answer in 'slow-download', ms. */
 let downloadMs = 0;
 
@@ -27,6 +27,8 @@ class FakeWorker {
     if (mode === 'fail-on-start') queueMicrotask(() => this.onerror?.({ message: 'load failed', preventDefault() {} }));
   }
   postMessage(m: { id: number; type: string; base?: string }) {
+    // a detached or closed ImageBitmap cannot be cloned: postMessage throws, nothing is sent
+    if (m.type === 'detect' && mode === 'clone-error') throw new DOMException('ImageBitmap is detached', 'DataCloneError');
     this.posted.push(m);
     if (this.terminated) return;
     if (m.type === 'init' && mode === 'loaded-then-hang') {
@@ -151,6 +153,68 @@ describe('landmarker backends', () => {
     await expect(p).resolves.toEqual({ faceLandmarks: [['main']] });
     expect(workers[0].terminated).toBe(true);
     expect(lm.LANDMARKER_TIMEOUT_MS.build).toBeLessThan(lm.LANDMARKER_TIMEOUT_MS.load / 4);
+  });
+
+  it('worker errors carry a code for the UI text', async () => {
+    vi.useFakeTimers();
+    mode = 'answer';
+    const lm = await fresh();
+    await lm.getLandmarker();
+    mode = 'hang';
+    const p = lm.detect({} as ImageBitmap).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(lm.LANDMARKER_TIMEOUT_MS.detect + 10);
+    const e = await p;
+    expect(e).toBeInstanceOf(lm.LandmarkerError);
+    expect(lm.landmarkerErrorCode(e)).toBe('timeout');
+    // a reply with a code from the worker is rebuilt as the same coded error
+    expect(lm.landmarkerErrorCode({ name: 'LandmarkerError', code: 'download' })).toBe('download');
+    expect(lm.landmarkerErrorCode({ name: 'LandmarkerError', code: 'nope' })).toBeNull();
+    expect(lm.landmarkerErrorCode(new Error('x'))).toBeNull();
+  });
+
+  it('the photo bitmap is closed when the worker died before it was sent', async () => {
+    mode = 'answer';
+    const lm = await fresh();
+    await lm.getLandmarker();
+    const close = vi.fn();
+    // the worker crashes while the copy of the photo is being made
+    vi.stubGlobal('createImageBitmap', async () => {
+      workers[0].onerror?.({ message: 'crashed', preventDefault() {} });
+      return { close };
+    });
+    const e = await lm.detect({} as ImageBitmap).catch((x: unknown) => x);
+    expect(lm.landmarkerErrorCode(e)).toBe('crashed');
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(workers[0].posted.filter((m) => m.type === 'detect')).toHaveLength(0);
+  });
+
+  it('a bitmap handed to the worker is not closed on the main thread', async () => {
+    mode = 'answer';
+    const lm = await fresh();
+    const close = vi.fn();
+    vi.stubGlobal('createImageBitmap', async () => ({ close }));
+    await lm.detect({} as ImageBitmap);
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('postMessage that throws fails only that call: no timeout later, the worker stays', async () => {
+    vi.useFakeTimers();
+    mode = 'answer';
+    const lm = await fresh();
+    await lm.getLandmarker();
+    const close = vi.fn();
+    vi.stubGlobal('createImageBitmap', async () => ({ close }));
+    mode = 'clone-error';
+    const e = await lm.detect({} as ImageBitmap).catch((x: unknown) => x);
+    expect((e as Error).name).toBe('DataCloneError');
+    // the copy never reached the worker: it is closed here
+    expect(close).toHaveBeenCalledTimes(1);
+    // the timer of the failed call is gone: the healthy worker is not killed after the limit
+    await vi.advanceTimersByTimeAsync(lm.LANDMARKER_TIMEOUT_MS.detect + 10);
+    expect(workers[0].terminated).toBe(false);
+    mode = 'answer';
+    await expect(lm.detect({} as ImageBitmap)).resolves.toEqual({ faceLandmarks: [['worker']] });
+    expect(workers).toHaveLength(1);
   });
 
   it('disposeLandmarker terminates the worker; the next scan builds a new one', async () => {

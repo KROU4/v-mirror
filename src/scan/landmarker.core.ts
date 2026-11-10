@@ -2,6 +2,7 @@
 // main-thread fallback, so both build the detector the same way.
 import { FaceLandmarker } from '@mediapipe/tasks-vision';
 
+import { LandmarkerError } from './landmarker.errors';
 import { quietMediapipe } from './landmarker.quiet';
 
 type WasmFileset = Parameters<typeof FaceLandmarker.createFromOptions>[0];
@@ -18,8 +19,11 @@ const g = globalThis as unknown as { ModuleFactory?: Factory };
 export type LandmarkerStage = 'loaded';
 
 async function bytes(url: string): Promise<ArrayBuffer> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  // A network failure (offline, blocked) is a failed download too, not an unknown error
+  const r = await fetch(url).catch((e: unknown) => {
+    throw new LandmarkerError('download', `${url}: ${(e as Error)?.message ?? String(e)}`);
+  });
+  if (!r.ok) throw new LandmarkerError('download', `${url}: HTTP ${r.status}`);
   return r.arrayBuffer();
 }
 
@@ -44,7 +48,7 @@ export async function createLandmarker(base: string, onStage?: (s: LandmarkerSta
     bytes(abs(MODEL)),
   ]);
   const factory = mod.default ?? g.ModuleFactory;
-  if (!factory) throw new Error('MediaPipe wasm loader did not load');
+  if (!factory) throw new LandmarkerError('loader', 'MediaPipe wasm loader did not load');
   onStage?.('loaded');
   const wasmUrl = URL.createObjectURL(new Blob([wasm], { type: 'application/wasm' }));
   // An empty loader path tells MediaPipe the factory is already in place

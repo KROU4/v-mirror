@@ -8,6 +8,7 @@ export type CameraSlot =
   | 'UI_Nose'
   | 'UI_Lips'
   | 'UI_Jaw'
+  | 'UI_Beard'
   | 'UI_Teeth'
   | 'UI_Hairs'
   | 'UI_Skin'
@@ -29,6 +30,16 @@ const HEAD: Record<Gender, [number, number, number]> = { female: [-0.03, 1.62, 0
  */
 const NAILS: Record<Gender, [number, number, number]> = { female: [0, 1.5, 0], male: [-0.03, 1.53, 0] };
 const NAILS_DISTANCE = 2.6;
+/**
+ * Борода: кадр челюсти (1,2 м на голову), чуть опущенный и отъехавший. На кадре челюсти конец
+ * косички бороды 07 обрезался нижним краем, а длинная борода 08 касалась его. С прицелом ниже на
+ * 4,5 см и 1,32 м под заголовок уходила макушка (и короткая причёска по умолчанию касалась края):
+ * при 1 см и 1,48 м в кадре целиком и косичка 07, и голова с обычной причёской (проверено
+ * кадрами 1920×1080 при повороте 0 и ±30°). Кончик гребня высокого ирокеза 03 (≈25 см над
+ * макушкой) при повороте может коснуться заголовка — целиком его показывает кадр причёски.
+ */
+export const BEARD_DROP = 0.01;
+export const BEARD_DISTANCE = 1.48;
 const FULL: Record<Gender, [number, number, number]> = { female: [0, 0.9, 0], male: [0, 0.95, 0] };
 
 export function cameraShot(slot: CameraSlot, gender: Gender): CameraShot {
@@ -40,6 +51,10 @@ export function cameraShot(slot: CameraSlot, gender: Gender): CameraShot {
       return { target: NAILS[gender], distance: NAILS_DISTANCE };
     case 'UI_Preview':
       return { target: FULL[gender], distance: 8.3 };
+    case 'UI_Beard': {
+      const [x, y, z] = HEAD[gender];
+      return { target: [x, y - BEARD_DROP, z], distance: BEARD_DISTANCE };
+    }
     default:
       return { target: HEAD[gender], distance: 1.2 };
   }
@@ -50,11 +65,12 @@ const BY_SLOT: Record<string, CameraSlot> = {
   skin_type_switcher: 'UI_Skin',
   hairstyle: 'UI_Hairs',
   hair_color: 'UI_Hairs',
-  // Борода: в GetSlotName её строки сверяются сразу за jaw; кадр лица 1,2 м с клипом подбородка
-  // (поворот головы показывает бороду сбоку). На кадре волос 2,0 м борода была мелкой.
-  beard: 'UI_Jaw',
-  beard_part: 'UI_Jaw',
-  beard_color: 'UI_Jaw',
+  // Борода: в GetSlotName её строки сверяются сразу за jaw; кадр лица (поворот головы показывает
+  // бороду сбоку), но ниже и дальше, чем у челюсти (UI_Beard): длинные бороды целиком в кадре.
+  // На кадре волос 2,0 м борода была мелкой.
+  beard: 'UI_Beard',
+  beard_part: 'UI_Beard',
+  beard_color: 'UI_Beard',
   eyes: 'UI_Eyes',
   eyes_color: 'UI_Eyes',
   eyebrows: 'UI_Eyes',

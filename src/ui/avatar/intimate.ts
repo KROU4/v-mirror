@@ -49,6 +49,8 @@ export interface IntimateMesh {
 }
 export interface IntimateSkinMat {
   type: 'skin';
+  /** тон кожи материала (06_bl_dark…): блик — как у тела этого тона */
+  gameMaterial?: string;
   albedo: string;
   normal?: string | null;
   orm?: string | null;

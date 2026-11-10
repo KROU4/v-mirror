@@ -84,8 +84,8 @@
   "en": "short spiky crew cut"
  },
  "047_swirl_pomp": {
-  "ru": "короткий кок (квифф), бока покороче",
-  "en": "short quiff, tapered sides"
+  "ru": "закрученный кок, локон на лбу, бока выбриты до кожи",
+  "en": "swirled quiff, forehead curl, skin-faded shaved sides"
  },
  "048_dual_braids": {
   "ru": "бритая голова с двумя короткими косичками-рожками",
@@ -100,8 +100,8 @@
   "en": "asymmetric chin length, covers half the face"
  },
  "053_kerry_eurodyne": {
-  "ru": "короткая, зачёсана назад с объёмом сверху",
-  "en": "short, swept back with volume on top"
+  "ru": "короткий андеркат: верх зачёсан назад, бока выбриты с переходом, на виске две выбритые полосы",
+  "en": "short undercut: slicked-back top, shaved faded sides with two shaved lines"
  },
  "058_voodoo_01": {
   "ru": "зачёсана назад в короткий хвост, бока короткие",
@@ -116,12 +116,12 @@
   "en": "short spiky twists / dreads"
  },
  "061_midlength_wavy": {
-  "ru": "длинные пышные волны, зачёсаны назад, ниже челюсти до шеи, закрывают уши",
-  "en": "long voluminous waves swept back off the face, past the jaw to the neck, covers the ears"
+  "ru": "длинные волны, зачёсаны назад, спадают до плеч",
+  "en": "long waves swept back off the face, down to the shoulders"
  },
  "062_slick_back": {
-  "ru": "короткая, зачёс набок, естественная",
-  "en": "short, natural side sweep"
+  "ru": "короткая, зачёсана назад со лба, бока естественной длины закрывают виски",
+  "en": "short, swept back off the forehead, full sides"
  },
  "063_messy_bob": {
   "ru": "небрежные волны до плеч, пробор по центру",
@@ -168,8 +168,8 @@
   "en": "sleek samurai top knot, shaved front"
  },
  "094_saul": {
-  "ru": "длинные волнистые до плеч",
-  "en": "long wavy to shoulders"
+  "ru": "длинные кудри ниже плеч, пробор посередине",
+  "en": "long curls past the shoulders, centre part"
  },
  "102_maelstrom_mohawk": {
   "ru": "бритая голова с узкой короткой полоской-ирокезом",
@@ -181,11 +181,11 @@
  },
  "112_kicinski": {
   "ru": "бока и виски коротко под машинку, длинный верх зачёсан набок, углы на висках открыты",
-  "en": "clipper-short sides and temples, longer top swept to one side, bare temple corners"
+  "en": "clipper-short sides, longer top swept to one side, bare temple corners"
  },
  "113_iwinski": {
-  "ru": "средней длины, зачёсана назад и набок, концы на ушах и у воротника",
-  "en": "medium length, swept back and to one side, ends over the ears and at the collar"
+  "ru": "средней длины, растрёпанная, падает на лоб, бока полные, концы на ушах и у воротника",
+  "en": "medium length, tousled, falls over the forehead, full sides, ends at ears and collar"
  },
  "120_arasaka_bun": {
   "ru": "маленький пучок на макушке, короткие бока",
@@ -216,8 +216,8 @@
   "en": "big spiky top, short sides"
  },
  "145_v_short": {
-  "ru": "короткая стрижка: текстурный верх, короткие виски",
-  "en": "short crop: textured top, short sides"
+  "ru": "стрижка V по умолчанию: текстурный верх, высоко выбритые виски с переходом, голые уголки висков",
+  "en": "default V cut: textured top, high skin fade, bare temples"
  },
  "146_dread_undercut": {
   "ru": "колючий верх с длинной рваной чёлкой на глаза",

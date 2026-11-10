@@ -3,6 +3,7 @@ import { displayNumber, getIndex, type Gender, type Loc } from '../model/catalog
 import { slotValue, type CharacterState } from '../model/state';
 import { analyzePhoto, type PhotoAnalysis } from './analyze';
 import { getLandmarker, releaseLandmarkerSoon } from './landmarker';
+import { analyzeErrorText } from './errorText';
 import { applySuggestions, localSuggestions, mergeSuggestions, screenHeavyLids, type Source, type Suggestion } from './match';
 import { buildPrompt, callOpenRouter, LlmError, parseLlm, photoToDataUrl } from './llm';
 import { defaultModel, useOrSettings } from './openrouter';
@@ -196,7 +197,8 @@ export default function ScanPanel({
       if (seq === photoSeq.current) setAnalysis(a);
     } catch (e) {
       if (seq !== photoSeq.current) return;
-      setError((e as Error).message === 'NO_FACE' ? t('scan.noFace') : t('scan.analyzeFailed', { msg: (e as Error).message }));
+      if ((e as Error)?.message !== 'NO_FACE') console.warn('[scan] photo analysis failed:', e);
+      setError(analyzeErrorText(e, t));
     } finally {
       if (seq === photoSeq.current) setAnalyzing(false);
     }

@@ -5,12 +5,13 @@
 import './worker-net-guard';
 import type { FaceLandmarker } from '@mediapipe/tasks-vision';
 import { createLandmarker, type LandmarkerStage } from './landmarker.core';
+import { LandmarkerError, landmarkerErrorCode, type LandmarkerErrorCode } from './landmarker.errors';
 
 export type LandmarkerRequest = { id: number; type: 'init'; base: string } | { id: number; type: 'detect'; bitmap: ImageBitmap };
 /** A reply ends the request; a stage message ({ stage }) only reports progress of init. */
 export type LandmarkerReply =
   | { id: number; ok: true; result?: unknown }
-  | { id: number; ok: false; error: string }
+  | { id: number; ok: false; error: string; code?: LandmarkerErrorCode }
   | { id: number; stage: LandmarkerStage };
 
 /** The worker global scope (the project is typed with the DOM lib, not the webworker one). */
@@ -46,9 +47,10 @@ scope.onmessage = async (ev: MessageEvent<LandmarkerRequest>) => {
       await init(msg.base, (stage) => reply({ id: msg.id, stage }));
       reply({ id: msg.id, ok: true });
     } else {
-      if (!ready) throw new Error('Face Landmarker is not initialised');
-      const lm = await ready;
+      // The bitmap is closed on every path, also when the detector is not ready (≈ 16 MB)
       try {
+        if (!ready) throw new LandmarkerError('notReady', 'Face Landmarker is not initialised');
+        const lm = await ready;
         const r = lm.detect(msg.bitmap);
         // Plain data only: the result object can hold references MediaPipe reuses on the next call
         reply({
@@ -69,6 +71,6 @@ scope.onmessage = async (ev: MessageEvent<LandmarkerRequest>) => {
       }
     }
   } catch (e) {
-    reply({ id: msg.id, ok: false, error: (e as Error)?.message ?? String(e) });
+    reply({ id: msg.id, ok: false, error: (e as Error)?.message ?? String(e), code: landmarkerErrorCode(e) ?? undefined });
   }
 };

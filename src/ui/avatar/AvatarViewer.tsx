@@ -61,11 +61,13 @@ export function yawForRow(yaw: number, prev: string | undefined, next: string | 
 const TEXT = {
   ru: {
     loading: 'Загрузка модели V',
+    switching: 'Смена типа тела',
     aria: '3D-модель V с выбранными настройками. Перетащите, чтобы повернуть.',
     lost: '3D-сцена остановилась (драйвер видеокарты её сбросил). Восстанавливаю…',
   },
   en: {
     loading: 'Loading V',
+    switching: 'Switching body type',
     aria: '3D model of V with the selected settings. Drag to rotate.',
     lost: 'The 3D view stopped (the graphics driver reset it). Restoring…',
   },
@@ -113,6 +115,8 @@ export default function AvatarViewer({
   const [scene, setScene] = useState<{ pack: number | null; s: 'loading' | 'ready' | 'error' }>({ pack: null, s: 'loading' });
   const sceneState = packId !== null && scene.pack === packId ? scene.s : 'loading';
   const [lost, setLost] = useState(false);
+  /** новое тело готовится, на сцене пока прежняя V (смена типа тела) */
+  const [switching, setSwitching] = useState(false);
   // Не та папка (pack.status 'error') — это «набора нет»: причину объясняет панель набора, а не сцена
   const status: AvatarStatus = packId === null ? (pack.status === 'connecting' ? 'connecting' : 'no-pack') : sceneState;
   const drag = useRef<{ x: number; yaw: number; id: number; cur: number } | null>(null);
@@ -160,6 +164,7 @@ export default function AvatarViewer({
             // вытеснен повторным надеванием после догрузки зубов и ногтей
             onShown: () => mark('ready'),
             onMissing: (parts) => !cancelled && onMissingRef.current?.(parts),
+            onSwitching: (busy) => !cancelled && setSwitching(busy),
             // Контекст WebGL потерян (сброс драйвера, нехватка памяти): three восстановится сам,
             // если браузер вернёт контекст; не вернул за CONTEXT_RESTORE_MS — показываем портрет
             onContext: (state) => {
@@ -224,6 +229,7 @@ export default function AvatarViewer({
     failRef.current = fail;
     return () => {
       cancelled = true;
+      setSwitching(false);
       if (failRef.current === fail) failRef.current = null;
       window.clearTimeout(lostTimer);
       setLost(false);
@@ -277,8 +283,10 @@ export default function AvatarViewer({
   if (packId === null || sceneState === 'error') return <>{fallback}</>;
 
   const t = TEXT[lang] ?? TEXT.ru;
+  // Смена типа тела — тоже загрузка: на сцене прежняя V, пока новое тело не встало
+  const busy = sceneState === 'ready' && switching;
   return (
-    <div className="head" data-status={sceneState}>
+    <div className="head" data-status={busy ? 'loading' : sceneState} data-switching={busy || undefined}>
       {/* Свой холст на каждый набор: dispose() прошлого движка теряет контекст (forceContextLoss),
           и новый WebGLRenderer на том же холсте получил бы потерянный контекст */}
       <canvas
@@ -310,9 +318,9 @@ export default function AvatarViewer({
         onLostPointerCapture={endDrag}
         onDoubleClick={() => onYaw(nearestDefaultYaw(yaw))}
       />
-      {(sceneState !== 'ready' || lost) && (
+      {(sceneState !== 'ready' || lost || busy) && (
         <div className="head-loading" role="status">
-          <span>{lost ? t.lost : t.loading}</span>
+          <span>{lost ? t.lost : busy ? t.switching : t.loading}</span>
           <i />
         </div>
       )}

@@ -7,6 +7,7 @@ import { AssetStore } from './assets';
 import { Character, isPartMissing } from './character';
 import type { AvatarLook, PackPart } from './look';
 import { Materials, texturesOf } from './materials';
+import { FirstShowGate } from './firstshow';
 import { FrameStats, initialPixelRatio, nextPixelRatio } from './perf';
 import { bodyModeFor, cameraShot, cameraSlotFor, type CameraSlot } from './slots';
 import { CameraRig, LightRig } from './stage';
@@ -59,6 +60,11 @@ export interface EngineEvents {
    */
   onShown?: () => void;
   /**
+   * Смена типа тела: true — новое тело готовится (на сцене пока прежнее), false — новое тело
+   * на сцене или смену отменили. Интерфейс показывает по нему загрузку поверх прежней V.
+   */
+  onSwitching?: (busy: boolean) => void;
+  /**
    * В наборе нет необязательной части (слои лица, бороды, нагота — набор собран старой версией):
    * её строки интерфейс помечает «не показано в 3D». Каждая часть сообщается один раз.
    */
@@ -73,11 +79,18 @@ export const IDLE_FPS_TOUCH = 30;
 export const IDLE_FPS = 60;
 /** Сколько видеопамяти под текстуры держать (МБ, RGBA8 с мипами): обычное устройство / мало памяти. */
 export const TEXTURE_BUDGET_MB = { normal: 192, low: 96 };
+export { FIRST_PARTS_WAIT_MS } from './firstshow';
 
 const lowMemory = () => ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) <= 4;
 const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 /** Сторона тени для карты глубины, как в WebGLShadowMap three.js. */
 const SHADOW_SIDE: Record<number, THREE.Side> = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
+/** Слой камеры для прогрева скрытого тела: на нём только прогреваемый меш и лампы. */
+const WARM_LAYER = 30;
+/** Сколько миллисекунд кадра отдавать прогреву (хотя бы один меш за кадр). */
+export const WARM_BUDGET_MS = 8;
+/** Дольше прогрева не ждём: цикл кадров может стоять (вкладка скрыта, драйвер собирает шейдеры). */
+export const WARM_LIMIT_MS = 4000;
 
 export class AvatarEngine {
   private renderer: THREE.WebGLRenderer;
@@ -93,7 +106,18 @@ export class AvatarEngine {
   /** чем запланирована сборка окружения: отменять надо тем же планировщиком */
   private envIdleKind: 'ric' | 'timeout' = 'timeout';
   private characters: Partial<Record<Gender, Promise<Character>>> = {};
+  /** тело последнего вида: на него надеваются вид, причёска и слои */
   private active: Character | null = null;
+  /**
+   * Тело на сцене (рисуется и анимируется). При первом показе и смене типа тела новое тело
+   * встаёт на сцену после причёски и слоёв (FirstShowGate), до этого на сцене прежнее.
+   */
+  private staged: Character | null = null;
+  private firstShow = new FirstShowGate<Character>();
+  /** геометрия, чьи текстуры морфов three уже собрал (прогрев не повторяем) */
+  private warmed = new WeakSet<THREE.BufferGeometry>();
+  private warmJob: { ch: Character; done: () => void; promise: Promise<void>; timer: number } | null = null;
+  private switching = false;
   private stageGroup = new THREE.Group();
   private token = 0;
   private hairToken = 0;
@@ -289,10 +313,21 @@ export class AvatarEngine {
    * Материалы, только что надетые на объект, собираются параллельно (KHR_parallel_shader_compile),
    * а не при первом кадре: иначе главный поток секундами ждёт драйвер (GetProgramiv).
    */
-  private async precompile(obj: THREE.Object3D) {
+  private async precompile(obj: THREE.Object3D, gender?: Gender) {
     this.compiling++;
     try {
-      await Promise.all([this.renderer.compileAsync(obj, this.rig.camera, this.scene), this.precompileShadows(obj)]);
+      // Параметры программ (число ламп) считаются синхронно при вызове compile: у тела, которое
+      // ещё не показано, — свет его типа тела (у мужского нет Main_Feet). Со светом прежнего тела
+      // первый кадр после показа собирал заново 14 программ (холодно — 5,7 с главного потока)
+      const shown = this.staged?.gender;
+      if (gender) this.lights.setGender(gender);
+      let compiled: Promise<unknown>;
+      try {
+        compiled = Promise.all([this.renderer.compileAsync(obj, this.rig.camera, this.scene), this.precompileShadows(obj)]);
+      } finally {
+        if (shown && shown !== gender) this.lights.setGender(shown);
+      }
+      await compiled;
       await this.uploadTextures(obj);
     } catch {
       /* не собралось заранее — соберётся при отрисовке */
@@ -393,7 +428,7 @@ export class AvatarEngine {
   }
 
   private adaptQuality(ms: number) {
-    if (!this.active || performance.now() < this.quietUntil) return;
+    if (!this.staged || performance.now() < this.quietUntil) return;
     this.frames.push(ms);
     if (!this.frames.full) return;
     const next = nextPixelRatio(this.dpr, this.frames.medianMs, window.devicePixelRatio, this.dprCeil);
@@ -437,7 +472,7 @@ export class AvatarEngine {
     // Поворот: Q/E держат постоянную скорость, цель отслеживается с инерцией (yawSpeed куклы)
     if (this.spin) this.yawTarget = spinYaw(this.spinFrom, this.spin, this.spinT0, performance.now());
     this.yaw += (this.yawTarget - this.yaw) * (1 - Math.exp(-dt * 8));
-    const ch = this.active;
+    const ch = this.staged;
     if (ch) {
       ch.root.rotation.y = THREE.MathUtils.degToRad(this.yaw);
       ch.root.updateMatrixWorld(true);
@@ -458,7 +493,119 @@ export class AvatarEngine {
       this.follow.lerp(this.drift, 1 - Math.exp(-dt / 0.18));
       this.rig.setFollow(this.follow);
     }
+    // в том же кадре, что и обычная отрисовка: она тут же перекрывает пиксель прогрева
+    this.warmStep();
     this.renderer.render(this.scene, this.rig.camera);
+  }
+
+  /**
+   * Прогрев скрытого тела до показа. Текстуры морфов (у мужского тела 24 меша, 317 морфов) и
+   * текстуры костей (26 скелетов) three строит синхронно при первой отрисовке меша — ни
+   * compileAsync, ни initTexture их не создают. Без прогрева первый кадр после смены типа
+   * тела стоял 1,25–1,55 с. Здесь меши скрытого тела рисуются по одному за раз, в пиксель
+   * 1×1 холста, в том же кадре до обычной отрисовки и не дольше WARM_BUDGET_MS за кадр.
+   * Холст, свет и тональная компрессия те же, что у кадра, поэтому программы шейдеров
+   * берутся готовые из кеша (precompile), новых не собирается.
+   */
+  private warmUp(ch: Character): Promise<void> {
+    if (this.disposed || !this.visible) return Promise.resolve();
+    if (this.warmJob?.ch === ch) return this.warmJob.promise;
+    this.finishWarm();
+    if (!this.warmCandidates(ch).length) return Promise.resolve();
+    let done!: () => void;
+    const promise = new Promise<void>((r) => (done = r));
+    const timer = window.setTimeout(() => this.finishWarm(), WARM_LIMIT_MS);
+    this.warmJob = { ch, done, promise, timer };
+    return promise;
+  }
+
+  private finishWarm() {
+    const job = this.warmJob;
+    if (!job) return;
+    this.warmJob = null;
+    window.clearTimeout(job.timer);
+    job.done();
+  }
+
+  /** Видимые меши тела (корень может быть скрыт), которым первая отрисовка что-то строит. */
+  private warmCandidates(ch: Character): THREE.Mesh[] {
+    const out: THREE.Mesh[] = [];
+    const walk = (o: THREE.Object3D) => {
+      for (const c of o.children) {
+        if (!c.visible) continue;
+        const m = c as THREE.Mesh;
+        if (m.isMesh && m.material) {
+          const g = m.geometry;
+          const morph = !!(g.morphAttributes.position?.length || g.morphAttributes.normal?.length);
+          const sk = (m as THREE.SkinnedMesh).isSkinnedMesh ? (m as THREE.SkinnedMesh).skeleton : null;
+          if ((morph && !this.warmed.has(g)) || (sk && sk.boneTexture === null)) out.push(m);
+        }
+        walk(c);
+      }
+    };
+    walk(ch.root);
+    return out;
+  }
+
+  private warmStep() {
+    const job = this.warmJob;
+    if (!job) return;
+    const ch = job.ch;
+    // тело уже показано или снято со сцены (тип тела переключили обратно)
+    if (ch === this.staged || ch.root.parent !== this.stageGroup) return this.finishWarm();
+    const list = this.warmCandidates(ch);
+    if (!list.length) return this.finishWarm();
+    const r = this.renderer;
+    const cam = this.rig.camera;
+    const sm = r.shadowMap;
+    const mask = cam.layers.mask;
+    const auto = sm.autoUpdate;
+    const needs = sm.needsUpdate;
+    const shown = this.staged?.gender;
+    const lamps: THREE.Object3D[] = [];
+    this.scene.traverse((o) => {
+      if ((o as THREE.Light).isLight && !o.layers.isEnabled(WARM_LAYER)) lamps.push(o);
+    });
+    // Свет — типа тела прогреваемого (иначе другое число ламп и новая программа); тени не
+    // пересчитываются: карта глубины для них собрана заранее (precompileShadows)
+    this.lights.setGender(ch.gender);
+    for (const l of lamps) l.layers.enable(WARM_LAYER);
+    cam.layers.set(WARM_LAYER);
+    sm.autoUpdate = false;
+    sm.needsUpdate = false;
+    r.setScissorTest(true);
+    r.setScissor(0, 0, 1, 1);
+    ch.root.visible = true;
+    const t0 = performance.now();
+    try {
+      for (const m of list) {
+        const culled = m.frustumCulled;
+        m.frustumCulled = false;
+        m.layers.enable(WARM_LAYER);
+        try {
+          r.render(this.scene, cam);
+        } finally {
+          m.layers.disable(WARM_LAYER);
+          m.frustumCulled = culled;
+        }
+        this.warmed.add(m.geometry);
+        if (performance.now() - t0 > WARM_BUDGET_MS) break;
+      }
+    } finally {
+      ch.root.visible = false;
+      r.setScissorTest(false);
+      cam.layers.mask = mask;
+      sm.autoUpdate = auto;
+      sm.needsUpdate = needs;
+      for (const l of lamps) l.layers.disable(WARM_LAYER);
+      if (shown && shown !== ch.gender) this.lights.setGender(shown);
+    }
+  }
+
+  private setSwitching(busy: boolean) {
+    if (this.switching === busy) return;
+    this.switching = busy;
+    this.events.onSwitching?.(busy);
   }
 
   private characterFor(g: Gender): Promise<Character> {
@@ -477,7 +624,7 @@ export class AvatarEngine {
     window.clearTimeout(this.bodyTimers[g]);
     const release = () => {
       const p = this.characters[g];
-      if (!p || this.active?.gender === g || this.lastLook?.gender === g) return;
+      if (!p || this.active?.gender === g || this.staged?.gender === g || this.lastLook?.gender === g) return;
       delete this.characters[g];
       p.then((c) => {
         c.dispose();
@@ -497,6 +644,8 @@ export class AvatarEngine {
     const my = ++this.token;
     this.lastLook = look;
     this.hold(4000);
+    // сразу, ещё до загрузки тела: карточка типа тела уже выбрана, а на сцене прежняя V
+    if (this.staged && this.staged.gender !== look.gender) this.setSwitching(true);
     const ch = await this.characterFor(look.gender);
     if (this.disposed || my !== this.token) return false;
     const apply = await ch.prepare(look);
@@ -506,35 +655,69 @@ export class AvatarEngine {
     try {
       if (this.active !== ch) {
         const prev = this.active;
-        if (prev) this.stageGroup.remove(prev.root);
-        this.stageGroup.add(ch.root);
         this.active = ch;
-        this.lights.setGender(look.gender);
-        this.applySlot(true);
-        if (prev && prev !== ch) this.scheduleRelease(prev.gender);
+        // Тело ещё не показано (холодная загрузка, смена типа тела): покажется вместе с
+        // причёской и слоями. Ожидание живёт на движке: вытеснивший вызов ждёт остаток срока.
+        // В сцену тело входит сразу, но скрытым: шейдеры собираются для него в той же сцене и
+        // со светом его типа тела (precompile), а прежнее тело до показа остаётся в кадре
+        if (this.staged !== ch) {
+          this.firstShow.open(ch);
+          ch.root.visible = false;
+          if (ch.root.parent !== this.stageGroup) this.stageGroup.add(ch.root);
+          // на сцене прежняя V: интерфейс показывает, что новое тело готовится
+          if (this.staged) this.setSwitching(true);
+        }
+        // тело, которое так и не показалось (тип тела переключили обратно во время ожидания)
+        if (prev && prev !== this.staged) {
+          this.firstShow.close(prev);
+          this.stageGroup.remove(prev.root);
+          this.scheduleRelease(prev.gender);
+        }
       }
       apply();
-      await this.precompile(ch.root);
+      await this.precompile(ch.root, ch.gender);
     } finally {
       this.compiling--;
     }
     if (this.disposed || my !== this.token) return false;
-    this.updateHair(look);
-    this.updateBeard(look);
-    this.updateDecals(look);
-    this.updateIntimate(look);
+    const parts = [this.updateHair(look), this.updateBeard(look), this.updateDecals(look), this.updateIntimate(look)];
     this.scheduleTrim();
     // Зубы, ногти и клипы тела — фоном; когда придут, вид надевается ещё раз
     ch.loadExtras(() => {
       if (!this.disposed && this.active === ch && this.lastLook) void this.setLook(this.lastLook).catch((e) => this.events.onError?.(e));
     });
+    if (this.staged !== ch) {
+      // Пока грузятся причёска и слои, скрытое тело прогревается; что пришло позже (причёска,
+      // борода) — догревается вторым проходом
+      await Promise.all([this.firstShow.wait(ch, parts), this.warmUp(ch)]);
+      if (this.disposed || my !== this.token) return false;
+      await this.warmUp(ch);
+      if (this.disposed || my !== this.token) return false;
+    }
+    this.stage(ch);
     // «Готово» — когда V действительно нарисована, а не когда собраны данные
     await this.nextFrame();
     const shown = !this.disposed && my === this.token;
     // Повторный setLook из loadExtras вытесняет вызов, который ждёт интерфейс, — событие
-    // приходит от того вызова, что дошёл до конца
+    // приходит от того вызова, что дошёл до конца (и он тоже дождался частей первого показа)
     if (shown) this.events.onShown?.();
     return shown;
+  }
+
+  /** Тело показать вместо прежнего: свет, кадр камеры и поза — по нему. */
+  private stage(ch: Character) {
+    this.firstShow.close(ch);
+    if (this.warmJob?.ch === ch) this.finishWarm();
+    this.setSwitching(false);
+    if (this.staged === ch) return;
+    const prev = this.staged;
+    if (prev) this.stageGroup.remove(prev.root);
+    if (ch.root.parent !== this.stageGroup) this.stageGroup.add(ch.root);
+    ch.root.visible = true;
+    this.staged = ch;
+    this.lights.setGender(ch.gender);
+    this.applySlot(true);
+    if (prev) this.scheduleRelease(prev.gender);
   }
 
   /**
@@ -580,7 +763,7 @@ export class AvatarEngine {
     this.compiling++;
     try {
       apply();
-      await this.precompile(ch.root);
+      await this.precompile(ch.root, ch.gender);
     } finally {
       this.compiling--;
     }
@@ -657,7 +840,7 @@ export class AvatarEngine {
   }
 
   private applySlot(immediate: boolean) {
-    const ch = this.active;
+    const ch = this.staged;
     if (!ch) return;
     this.rig.setShot(cameraShot(this.slot, ch.gender), immediate);
     ch.anim.request(bodyModeFor(this.slot));
@@ -726,6 +909,7 @@ export class AvatarEngine {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.finishWarm();
     this.token++;
     this.hairToken++;
     this.beardToken++;

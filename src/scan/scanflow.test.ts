@@ -10,7 +10,7 @@ import { applySuggestions, beardStyleKey, colorKey, mergeSuggestions } from './m
 const KEANU = {
   bodyType: 'male',
   slots: {
-    hairstyle: { n: 37, conf: 0.6, why: 'medium length, swept back' },
+    hairstyle: { n: 37, conf: 0.6, why: 'medium length, ends at the collar' },
     hair_color: { n: 1, conf: 0.5, why: 'very dark brown' },
     eyebrows: { n: 1, conf: 0.5 },
     beard: { n: 6, conf: 0.7, why: 'medium full beard' },
@@ -32,6 +32,7 @@ const ZENDAYA = {
     hairstyle: { n: 32, conf: 0.6 },
     hair_color: { n: 3, conf: 0.6, why: 'deep red-burgundy' },
     skin_color: { n: 7, conf: 0.45 },
+    skin_type_switcher: { n: 4, conf: 0.5, why: 'smooth clear skin' },
     eyes: { n: 3, conf: 0.45 },
     makeupLips_type: { n: 3, conf: 0.6 },
     makeupLips_color: { n: 14, conf: 0.5 },
@@ -73,7 +74,7 @@ describe('скан с моделью: промпт → fetch → разбор �
     expect(res.bodyType).toBe('male');
 
     expect(pos(st, 'hairstyle')).toBe(37);
-    expect(hairDescription('male', slotValue(st, 'hairstyle')!.option!).en).toMatch(/medium length, swept back/);
+    expect(hairDescription('male', slotValue(st, 'hairstyle')!.option!).en).toMatch(/medium length, tousled/);
     expect(key(st, 'hair_color')).toBe('brown_liquorice');
     expect(key(st, 'eyebrows_color')).toBe('brown_liquorice');
     expect(key(st, 'eyelash_color')).toBe('brown_liquorice');
@@ -89,13 +90,15 @@ describe('скан с моделью: промпт → fetch → разбор �
     const hs = slotValue(st, 'hairstyle')!.option!;
     expect(pos(st, 'hairstyle')).not.toBe(32);
     expect(isTwoTone('female', hs, 'red_merlot')).toBe(false);
-    expect(hairDescription('female', hs).en).toMatch(/long straight/);
+    expect(hairDescription('female', hs).en).toMatch(/^straight, shoulder length/);
     expect(res.hints?.some((h) => /switch back to 32/.test(h.en))).toBe(true);
     expect(key(st, 'hair_color')).toBe('red_merlot');
     // брови модель не назвала — естественный тёмный тон, а не красное дерево
     expect(key(st, 'eyebrows_color')).toBe('brown_liquorice');
     expect(key(st, 'eyelash_color')).toBe('brown_liquorice');
     expect(pos(st, 'skin_color')).toBe(7);
+    // чистая кожа — тип 04, а не тип 01 по умолчанию с порами и пятнами
+    expect(pos(st, 'skin_type_switcher')).toBe(4);
     expect(pos(st, 'makeupLips_type')).toBe(3);
     expect(slotValue(st, 'makeupLips_color')!.option!.label.en).toBe('Pastel Pink');
     // макияж виден, стиль не назван — тонкая подводка (подпись 08) цвета из ответа

@@ -10,9 +10,16 @@ describe('cameraSlotFor', () => {
     expect(cameraSlotFor('eyes_color')).toBe('UI_Eyes');
     expect(cameraSlotFor('teeth')).toBe('UI_Teeth');
     expect(cameraSlotFor('hair_color')).toBe('UI_Hairs');
-    expect(cameraSlotFor('beard')).toBe('UI_Jaw');
-    expect(cameraSlotFor('beard_part')).toBe('UI_Jaw');
-    expect(cameraSlotFor('beard_color')).toBe('UI_Jaw');
+    expect(cameraSlotFor('beard')).toBe('UI_Beard');
+    expect(cameraSlotFor('beard_part')).toBe('UI_Beard');
+    expect(cameraSlotFor('beard_color')).toBe('UI_Beard');
+    // кадр бороды — крупный план головы, но ниже и чуть дальше челюсти (длинные бороды целиком)
+    const jaw = cameraShot('UI_Jaw', 'male');
+    const beard = cameraShot('UI_Beard', 'male');
+    expect(beard.target[1]).toBeLessThan(jaw.target[1]);
+    expect(beard.distance).toBeGreaterThan(jaw.distance);
+    expect(beard.distance).toBeLessThan(1.5);
+    expect(bodyModeFor('UI_Beard')).toBe('closeup');
     expect(cameraSlotFor('nails_color')).toBe('UI_FingerNails');
   });
 
