@@ -8,7 +8,8 @@
 // must be given explicitly (VITE_BASE or --base): with the default '/' every URL passes.
 //
 // And the repository: files git would commit (tracked and not ignored) must not carry game
-// renders or texture dumps: images only in public/ (favicon, og, portraits), nothing over
+// renders or texture dumps: images only in public/ (favicon, og, portraits) plus the README
+// screenshot docs/screenshot.webp, nothing over
 // 1 MB except the generated catalogs.
 //
 //   node tools/audit-dist.mjs [distDir] [--pack tools/local] [--base /v-mirror/]
@@ -62,7 +63,11 @@ const sha1 = (f) => {
 };
 
 /** Images the repository may hold (repo-relative paths). */
-export const REPO_IMAGE_OK = [/^public\/(favicon|icon|apple-touch-icon|og)[^/]*\.(png|svg|ico|webp)$/, /^public\/portraits\/v_p[mw]a\.webp$/];
+export const REPO_IMAGE_OK = [
+  /^public\/(favicon|icon|apple-touch-icon|og)[^/]*\.(png|svg|ico|webp)$/,
+  /^public\/portraits\/v_p[mw]a\.webp$/,
+  /^docs\/screenshot\.webp$/, // the README screenshot of the app
+];
 /** Files allowed above REPO_MAX_FILE. */
 export const REPO_BIG_OK = [/^src\/data\/catalog\.(male|female)\.json$/];
 export const REPO_MAX_FILE = 1024 * 1024;
