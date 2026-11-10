@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { auditBaseGiven, auditDist, auditIndex, auditRepo, normalizeBase } from './audit-dist.mjs';
+import { auditBaseGiven, auditDist, auditIndex, auditPackScript, auditRepo, normalizeBase } from './audit-dist.mjs';
 import { fnv1a64 } from './extract/pack.mjs';
 
 const dirs = [];
@@ -116,6 +116,27 @@ describe('audit: repository files', () => {
       { path: 'src/data/huge.json', size: 2_000_000 },
     ]);
     expect(p).toHaveLength(4);
+  });
+});
+
+describe('audit: pack.ps1 in the build', () => {
+  const stamped = "$commit = '" + 'c'.repeat(40) + "'\n$repo = 'KROU4/v-mirror'\n$site = 'https://krou4.github.io/v-mirror/'\n";
+  it('is allowed in dist when the build stamped it', () => {
+    const dist = tree({
+      'index.html': '<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src x"><script src="/assets/a.js"></script>',
+      'assets/a.js': 'x',
+      'pack.ps1': stamped,
+    });
+    expect(auditDist(dist, { ci: true })).toEqual([]);
+  });
+
+  it('reports placeholders, a missing commit in CI and non-ASCII text', () => {
+    expect(auditPackScript("$commit = '__VMIRROR_COMMIT__'")).toHaveLength(1);
+    expect(auditPackScript("$commit = 'main'", { ci: true })).toHaveLength(1);
+    expect(auditPackScript("$commit = 'main'")).toEqual([]);
+    expect(auditPackScript(stamped + "Write-Host 'Привет'")).toHaveLength(1);
+    const dist = tree({ 'pack.ps1': "$commit = '__VMIRROR_COMMIT__'" });
+    expect(auditDist(dist).some((p) => /placeholder/.test(p))).toBe(true);
   });
 });
 

@@ -46,17 +46,27 @@ any multimodal chat model, and paste its JSON reply back.
 
 The 3D model uses Cyberpunk 2077's own assets. They belong to CD PROJEKT RED, so they are
 **not** in this repository and **not** on the public site. You build an asset pack once from
-your own copy of the game (Windows, about 5 minutes, about 560 MB) and connect the folder in
+your own copy of the game (Windows, 5–10 minutes, 560–800 MB) and connect the folder in
 the browser. The page reads it straight from disk; nothing is uploaded.
 
-```sh
-npm install
-npm run pack -- --game "D:\Games\Cyberpunk 2077" --out "D:\v-mirror-pack"
+**One command.** Open PowerShell and run:
+
+```powershell
+irm https://krou4.github.io/v-mirror/pack.ps1 | iex
 ```
 
-Then press **3D** in the header, then **Choose pack folder**, and select the pack. The browser
-remembers it. Full guide, requirements and
-troubleshooting: [docs/ASSET_PACK.md](docs/ASSET_PACK.md).
+It finds the game (GOG, Steam, Epic or a scan of your drives; the game folder is only read),
+installs Node.js and Python with winget if they are missing (Python for your user; the Node.js
+installer is machine-wide, so Windows asks for permission once), downloads the V-Mirror source
+of the commit the site was built from, builds the pack into `Documents\V-Mirror pack` (or
+`%LOCALAPPDATA%\v-mirror\pack` when there is no Documents folder) and opens
+V-Mirror with the pack panel ready. Press **Choose pack folder** and select that folder (its
+path is on the clipboard). The browser remembers it.
+
+**Manual build** (from a clone): `npm install`, then `npm run pack` (or
+`npm run pack -- --game "D:\Games\Cyberpunk 2077" --out "D:\v-mirror-pack"`), or double-click
+`tools\pack-windows.cmd`. Options, troubleshooting (execution policy, no winget, antivirus,
+disk space): [docs/ASSET_PACK.md](docs/ASSET_PACK.md).
 
 Without a pack, everything except the live 3D works: the catalog, the photo scan, the
 settings list, swatches and V portraits.
@@ -104,7 +114,8 @@ npm run pack -- --game "D:\Games\Cyberpunk 2077" --out tools/local
 | `src/assets/pack.ts` | asset pack loading (dev folder or a folder picked in the browser) |
 | `src/i18n/` | Russian and English strings |
 | `src/data/` | catalog and swatch colour data derived from the game (no meshes or textures) |
-| `tools/extract/` | asset pack builder and catalog/swatch extraction from a game install |
+| `tools/extract/` | asset pack builder (`pack.mjs`, game lookup `findgame.mjs`) and catalog/swatch extraction from a game install |
+| `public/pack.ps1` | the one-liner bootstrap (`irm …/pack.ps1 \| iex`); the build stamps the commit into `dist/pack.ps1` |
 | `tools/calibrate/` | morph and hairstyle calibration pages (local, need the pack) |
 | `DESIGN.md` | design system of the UI |
 

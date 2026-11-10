@@ -1,20 +1,21 @@
 // Asset pack UX: the hero shown instead of the 3D scene while no pack is connected, and the
 // connect panel (also in the header dialog). The site never ships game files; the user builds
-// a pack from their own install (npm run pack) and opens its folder here.
-import { useState } from 'react';
+// a pack from their own install with the PowerShell one-liner (public/pack.ps1) and opens its
+// folder here.
+import { useEffect, useRef, useState } from 'react';
 import { connectPackDirectory, disconnectPack, restorePack, type PackState } from '../assets/pack';
-import { PACK_GUIDE_URL, publicUrl } from '../config';
+import { PACK_ALT_DIR, PACK_GUIDE_URL, PACK_ONE_LINER, publicUrl } from '../config';
 import { useI18n, type T } from '../i18n';
 import type { Gender } from '../model/catalog';
 import type { CharacterState } from '../model/state';
-import { IconExternal, IconFolder } from './Icons';
+import { IconCheck, IconCopy, IconExternal, IconFolder } from './Icons';
 import Portrait from './Portrait';
 import { usePackState } from './SwatchChip';
 
 /** pack.ts reports errors in English: show the known ones in the UI language. */
 export function packErrorText(msg: string | undefined, t: T): string {
   const m = msg ?? '';
-  if (/pack\.json is missing/.test(m)) return t('pack.err.missing');
+  if (/pack\.json is missing/.test(m)) return t('pack.err.missing', packDirs(t));
   if (/pack\.json is not valid/.test(m)) return t('pack.err.json');
   if (/Unsupported asset pack format/.test(m)) return t('pack.err.format');
   if (/incomplete/.test(m)) return t('pack.err.incomplete');
@@ -25,6 +26,20 @@ export function packErrorText(msg: string | undefined, t: T): string {
   return t('pack.err.generic', { msg: m });
 }
 
+/** The two default pack folders (pack.mjs defaultOutDir), for the {dir} and {alt} placeholders. */
+function packDirs(t: T) {
+  return { dir: t('pack.defaultDir'), alt: PACK_ALT_DIR };
+}
+
+/** The default pack folders inside a sentence stay on one line ("Documents\V-" | "Mirror pack" reads badly). */
+function withPath(text: string, t: T) {
+  const paths = Object.values(packDirs(t));
+  const rx = new RegExp(`(${paths.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`);
+  const parts = text.split(rx);
+  if (parts.length === 1) return text;
+  return parts.map((p, i) => (i % 2 ? <span key={i} className="pack-path">{p}</span> : p));
+}
+
 export function canPickFolders(): boolean {
   if (typeof window === 'undefined') return false;
   if (typeof (window as { showDirectoryPicker?: unknown }).showDirectoryPicker === 'function') return true;
@@ -33,8 +48,12 @@ export function canPickFolders(): boolean {
 
 export const portraitUrl = (g: Gender) => publicUrl(`portraits/${g === 'male' ? 'v_pma' : 'v_pwa'}.webp`);
 
-/** Status line, buttons and how-to of the asset pack. */
-export function PackConnect({ steps = true }: { steps?: boolean }) {
+/**
+ * Status line, buttons and how-to of the asset pack. `highlight` (the page was opened by the
+ * one-liner with ?pack=1): the pack was just built, so the folder button is marked and the
+ * default folder is named.
+ */
+export function PackConnect({ steps = true, highlight = false }: { steps?: boolean; highlight?: boolean }) {
   const { t } = useI18n();
   const pack = usePackState();
   const supported = canPickFolders();
@@ -53,22 +72,26 @@ export function PackConnect({ steps = true }: { steps?: boolean }) {
         (pack.manifest?.gameVersion ? ` ${t('pack.version', { v: pack.manifest.gameVersion, files: pack.manifest.files ?? '—' })}` : ''),
     };
   else if (!supported) line = { cls: 'warn', text: t('pack.unsupported') };
+  // a hint, not a success: nothing is connected yet
+  else if (highlight) line = { cls: 'hint', text: t('pack.built', packDirs(t)) };
+  const mark = highlight && pack.status !== 'ready' ? ' attn' : '';
 
   return (
     <div className="packconnect">
       {line && (
         <p className={`status ${line.cls}`} role="status" aria-live="polite">
           {busy && <i className="spin" aria-hidden="true" />}
-          {line.text}
+          <span>{withPath(line.text, t)}</span>
         </p>
       )}
       {pack.status !== 'ready' && steps && (
-        <ol className="steps">
-          <li>{t('pack.step1')}</li>
+        <ol className="steps pack-steps">
           <li>
-            <PackCommand text={t('pack.step2')} />
+            {t('pack.step1')}
+            <PackCommand />
+            <span className="pack-note">{t('pack.step1note')}</span>
           </li>
-          <li>{t('pack.step3')}</li>
+          <li>{withPath(t('pack.step2', packDirs(t)), t)}</li>
         </ol>
       )}
       <div className="row">
@@ -88,12 +111,18 @@ export function PackConnect({ steps = true }: { steps?: boolean }) {
                 <IconFolder /> {t('pack.reconnect', { name: pack.remembered })}
               </button>
             )}
-            <button type="button" className={`btn ${pack.remembered ? '' : 'primary'}`} onClick={connect} disabled={busy || !supported}>
-              <IconFolder /> {pack.remembered ? t('pack.another') : t('pack.connect')}
+            <button
+              type="button"
+              className={`btn ${pack.remembered && !highlight ? '' : 'primary'}${mark}`}
+              onClick={connect}
+              disabled={busy || !supported}
+              data-attn={mark ? 'true' : undefined}
+            >
+              <IconFolder /> {pack.remembered && !highlight ? t('pack.another') : t('pack.connect')}
             </button>
           </>
         ) : null}
-        <a className="btn ghost" href={PACK_GUIDE_URL} target="_blank" rel="noopener noreferrer">
+        <a className="btn ghost pack-guide" href={PACK_GUIDE_URL} target="_blank" rel="noopener noreferrer">
           {t('pack.guide')} <IconExternal />
         </a>
       </div>
@@ -101,17 +130,48 @@ export function PackConnect({ steps = true }: { steps?: boolean }) {
   );
 }
 
-/** «npm run pack …» inside a step: the command is set as code so it can be copied as is. */
-function PackCommand({ text }: { text: string }) {
-  const m = /(npm run pack[^:：]*)/.exec(text);
-  if (!m) return <>{text}</>;
-  const [before, after] = [text.slice(0, m.index), text.slice(m.index + m[1].length)];
+/** The one-liner as code with a Copy button (the command must be pasted exactly as is). */
+function PackCommand() {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
+  const code = useRef<HTMLElement>(null);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const copy = async () => {
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(PACK_ONE_LINER);
+      ok = true;
+    } catch {
+      // no clipboard access (insecure context, permission): select the text for Ctrl+C
+      const el = code.current;
+      const sel = window.getSelection();
+      if (el && sel) {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
+    }
+    setCopied(ok ? 'ok' : 'fail');
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setCopied('idle'), ok ? 2000 : 6000);
+  };
   return (
-    <>
-      {before}
-      <code>{m[1].trim()}</code>
-      {after}
-    </>
+    <span className="pack-cmd" role="group" aria-label={t('pack.cmdAria')}>
+      <code ref={code} className="pack-cmd-text" translate="no">
+        {PACK_ONE_LINER}
+      </code>
+      <button type="button" className={`btn pack-copy${copied === 'ok' ? ' done' : ''}`} onClick={() => void copy()}>
+        {copied === 'ok' ? <IconCheck /> : <IconCopy />}
+        <span aria-live="polite">{copied === 'ok' ? t('pack.copied') : t('pack.copy')}</span>
+      </button>
+      {copied === 'fail' && (
+        <span className="pack-copyfail" role="status">
+          {t('pack.copyFail')}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -124,11 +184,13 @@ export function PackHero({
   state,
   webglError,
   onMore,
+  highlight = false,
 }: {
   gender: Gender;
   state: CharacterState;
   webglError: boolean;
   onMore: () => void;
+  highlight?: boolean;
 }) {
   const { t } = useI18n();
   const pack = usePackState();
@@ -164,7 +226,7 @@ export function PackHero({
           </>
         )}
         <div className="hero-full">
-          <PackConnect />
+          <PackConnect highlight={highlight} />
         </div>
         <button type="button" className="btn hero-more" onClick={onMore}>
           {t('pack.more')}

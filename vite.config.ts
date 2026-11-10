@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -248,13 +249,91 @@ function staticSite(site: string): Plugin {
   };
 }
 
+/**
+ * Commit the site is built from: GITHUB_SHA in Actions, else `git rev-parse HEAD` when that
+ * commit is pushed, else 'main' (pack.ps1 then downloads the main branch). Only a full 40-hex
+ * SHA counts.
+ */
+export function resolveCommit(env: Record<string, string | undefined>, git: () => string | undefined = () => pushedHead()): string {
+  for (const c of [env.GITHUB_SHA, git()]) {
+    const v = (c ?? '').trim().toLowerCase();
+    if (/^[0-9a-f]{40}$/.test(v)) return v;
+  }
+  return 'main';
+}
+
+function runGit(args: string[]): string | undefined {
+  try {
+    return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * HEAD, but only when a remote branch contains it: a local commit that was never pushed cannot
+ * be downloaded from GitHub (codeload answers 404), so a local build falls back to 'main'.
+ */
+export function pushedHead(git: (args: string[]) => string | undefined = runGit): string | undefined {
+  const sha = (git(['rev-parse', 'HEAD']) ?? '').trim();
+  if (!sha) return undefined;
+  return (git(['branch', '-r', '--contains', sha]) ?? '').trim() ? sha : undefined;
+}
+
+/**
+ * Site address stamped into pack.ps1 (the page it opens after a build): VITE_SITE_URL, else
+ * the GitHub Pages address of a project base (/v-mirror/), else the public site. A local build
+ * with base '/' must not send people to https://krou4.github.io/.
+ */
+export function packSiteUrl(raw: string | undefined, base: string): string {
+  if (/^https?:\/\//.test((raw ?? '').trim()) || base !== '/') return siteUrl(raw, base);
+  return 'https://krou4.github.io/v-mirror/';
+}
+
+/** owner/repo from VITE_REPO_URL (https://github.com/owner/repo), default KROU4/v-mirror. */
+export function repoSlug(raw: string | undefined): string {
+  const m = /github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?\/?$/.exec((raw ?? '').trim());
+  return m ? m[1] : 'KROU4/v-mirror';
+}
+
+/**
+ * public/pack.ps1 with the build's commit, repository and site URL in place of the
+ * __VMIRROR_*__ placeholders. The values go into single-quoted PowerShell strings, so anything
+ * that could break out of one is refused.
+ */
+export function stampPackScript(text: string, v: { commit: string; repo: string; site: string }): string {
+  if (!/^([0-9a-f]{40}|main)$/.test(v.commit)) throw new Error(`pack.ps1: bad commit ${v.commit}`);
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(v.repo)) throw new Error(`pack.ps1: bad repository ${v.repo}`);
+  if (!/^https?:\/\/[^'"`$\s]+\/$/.test(v.site)) throw new Error(`pack.ps1: bad site URL ${v.site}`);
+  for (const p of ['__VMIRROR_COMMIT__', '__VMIRROR_REPO__', '__VMIRROR_SITE__'])
+    if (!text.includes(`'${p}'`)) throw new Error(`pack.ps1: placeholder ${p} is missing`);
+  return text.replace("'__VMIRROR_COMMIT__'", `'${v.commit}'`).replace("'__VMIRROR_REPO__'", `'${v.repo}'`).replace("'__VMIRROR_SITE__'", `'${v.site}'`);
+}
+
+/** Build only: dist/pack.ps1 = public/pack.ps1 stamped with the commit the site is built from. */
+function packScript(site: string): Plugin {
+  return {
+    name: 'pack-script',
+    apply: 'build',
+    writeBundle(options) {
+      const src = path.join(root, 'public', 'pack.ps1');
+      if (!options.dir || !fs.existsSync(src)) return;
+      const commit = resolveCommit(process.env);
+      const out = stampPackScript(fs.readFileSync(src, 'utf8'), { commit, repo: repoSlug(process.env.VITE_REPO_URL), site });
+      fs.writeFileSync(path.join(options.dir, 'pack.ps1'), out);
+      console.log(`pack.ps1 stamped with commit ${commit}`);
+    },
+  };
+}
+
 export default defineConfig(({ command }) => {
   // dev with local assets: pack.ts uses the /game route instead of asking for a folder
   const devPack = command === 'serve' && fs.existsSync(path.resolve(root, LOCAL_PACK, 'body', 'manifest.json'));
   const base = basePath(process.env.VITE_BASE);
+  const site = siteUrl(process.env.VITE_SITE_URL, base);
   return {
     base,
-    plugins: [react(), devSave(), gameAssets(), staticSite(siteUrl(process.env.VITE_SITE_URL, base))],
+    plugins: [react(), devSave(), gameAssets(), staticSite(site), packScript(packSiteUrl(process.env.VITE_SITE_URL, base))],
     define: { 'import.meta.env.VITE_DEV_PACK': JSON.stringify(devPack ? 'true' : 'false') },
     server: { port: 5177, strictPort: true },
     // the catalog (~2.6 MB of data) as JSON.parse('…'): V8 parses that much faster than a literal

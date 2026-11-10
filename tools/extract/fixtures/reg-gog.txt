@@ -1,0 +1,12 @@
+
+HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\GOG.com\Games\1423049311
+    buildId    REG_SZ    58125498316413289
+    exe    REG_SZ    F:\GOG Games\Cyberpunk 2077\bin\x64\Cyberpunk2077.exe
+    gameID    REG_SZ    1423049311
+    gameName    REG_SZ    Cyberpunk 2077
+    launchCommand    REG_SZ    "F:\GOG Games\Cyberpunk 2077\REDprelauncher.exe"
+    path    REG_SZ    F:\GOG Games\Cyberpunk 2077
+    ver    REG_SZ    2.3
+    dependsOn    REG_SZ
+    (Default)    REG_SZ    (value not set)
+

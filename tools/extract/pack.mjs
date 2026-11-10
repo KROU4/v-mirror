@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 // Builds the V-Mirror asset pack from a local Cyberpunk 2077 install (read-only).
 //
+//   npm run pack                      (finds the game, writes Documents\V-Mirror pack)
 //   npm run pack -- --game "D:\Games\Cyberpunk 2077" --out D:\v-mirror-pack
 //
 // Options:
-//   --game <dir>        game install folder (has archive\pc\content)            required
-//   --out <dir>         pack folder to create (must be empty or an older pack)  required
+//   --game <dir>        game install folder (has archive\pc\content); default: found via GOG,
+//                       Steam, Epic or a scan of the fixed drives
+//   --out <dir>         pack folder (empty or an older pack); default Documents\V-Mirror pack
+//                       (%LOCALAPPDATA%\v-mirror\pack when there is no Documents folder)
+//   --force             rebuild even when --out already holds a complete pack of this version
 //   --wolvenkit <exe>   WolvenKit.CLI.exe; default: $WOLVENKIT, else downloaded from the
 //                       official GitHub release into the user cache folder
 //   --work <dir>        work folder (default <out>.work); removed at the end unless --keep-work
@@ -23,6 +27,7 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import { findGame } from './findgame.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -36,7 +41,7 @@ const PHASES = ['extract', 'export', 'inputs', 'meshes', 'build', 'swatches', 'o
 
 // ------------------------------------------------------------------ args
 function parseArgs(argv) {
-  const o = { webp: true, keepWork: false, skipExtract: false };
+  const o = { webp: true, keepWork: false, skipExtract: false, force: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => {
@@ -53,16 +58,21 @@ function parseArgs(argv) {
     else if (a === '--keep-work') o.keepWork = true;
     else if (a === '--skip-extract') o.skipExtract = true;
     else if (a === '--no-webp') o.webp = false;
+    else if (a === '--force') o.force = true;
     else if (a === '-h' || a === '--help') {
-      process.stdout.write(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 18).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n');
+      const head = fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1);
+      const end = head.findIndex((l) => !l.startsWith('//'));
+      process.stdout.write(head.slice(0, end).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n');
       process.exit(0);
-    } else die(`unknown option ${a} (see --help)`);
+    } else die(`unknown option ${a} (see --help)`, `неизвестный параметр ${a} (см. --help)`);
   }
   return o;
 }
 
-function die(msg) {
+/** Stops with an error; `ru` is the same message in Russian (the likely first-run failures have one). */
+function die(msg, ru) {
   console.error(`\npack: ${msg}`);
+  if (ru) console.error(`pack: ${ru}`);
   process.exit(1);
 }
 
@@ -125,14 +135,23 @@ const depotRel = (depot) => depot.replace(/\\/g, '/');
 const stripExt = (p) => p.replace(/\.[^./\\]+$/, '');
 
 // ------------------------------------------------------------------ prerequisites
+/**
+ * Python 3.10+ with numpy and Pillow. `flags` are the isolation flags the builders run with:
+ * -E -s -B normally; without -s when numpy/Pillow live in the user site-packages
+ * (pip install --user), which -s would hide.
+ */
 function findPython(pref) {
   const cands = pref ? [pref] : [process.env.PYTHON, 'python', 'python3', 'py -3'].filter(Boolean);
+  const probe = 'import sys, numpy, PIL; print(sys.version_info[:2] >= (3, 10))';
   for (const c of cands) {
-    const [cmd, ...pre] = c.split(' ');
-    const r = spawnSync(cmd, [...pre, '-c', 'import sys, numpy, PIL; print(sys.version_info[:2] >= (3, 10))'], { encoding: 'utf8', windowsHide: true });
-    if (r.status === 0 && r.stdout.trim() === 'True') return { cmd, pre };
+    // a full path may contain spaces ("C:\Program Files\Python312\python.exe")
+    const [cmd, ...pre] = fs.existsSync(c) ? [c] : c.split(' ');
+    for (const flags of [['-E', '-s', '-B'], ['-E', '-B']]) {
+      const r = spawnSync(cmd, [...pre, ...flags, '-c', probe], { encoding: 'utf8', windowsHide: true });
+      if (r.status === 0 && r.stdout.trim() === 'True') return { cmd, pre, flags };
+    }
   }
-  die('Python 3.10+ with numpy and Pillow is required (pip install numpy pillow), or pass --python');
+  die('Python 3.10+ with numpy and Pillow is required (pip install numpy pillow), or pass --python', 'нужен Python 3.10+ с numpy и Pillow (pip install numpy pillow) или параметр --python');
 }
 
 function cacheDir() {
@@ -269,7 +288,11 @@ function phaseExtract(ctx) {
   }
   const idx = indexTree(raw);
   const missing = depots.filter((d) => !idx.has(depotRel(d).toLowerCase()));
-  if (missing.length) die(`${missing.length} game files not found (other game version?):\n  ${missing.slice(0, 20).join('\n  ')}`);
+  if (missing.length)
+    die(
+      `${missing.length} game files not found (other game version?):\n  ${missing.slice(0, 20).join('\n  ')}`,
+      `в игре не найдено файлов: ${missing.length} (другая версия игры? набор рассчитан на патч 2.x)`,
+    );
 }
 
 const KIND = (depot) => {
@@ -431,7 +454,7 @@ function phaseBuild(ctx) {
   const env = { ...process.env, VM_WORK: work, VM_OUT: out, VM_REPO: REPO, PYTHONIOENCODING: 'utf-8', PYTHONDONTWRITEBYTECODE: '1' };
   for (const s of recipe.steps) {
     step(`builder ${s}`);
-    const r = spawnSync(py.cmd, [...py.pre, '-E', '-s', '-B',path.join(BUILDERS, s)], { env, cwd: work, encoding: 'utf8', maxBuffer: 1 << 28, windowsHide: true });
+    const r = spawnSync(py.cmd, [...py.pre, ...py.flags,path.join(BUILDERS, s)], { env, cwd: work, encoding: 'utf8', maxBuffer: 1 << 28, windowsHide: true });
     fs.appendFileSync(path.join(work, 'builders.log'), `\n===== ${s}\n${r.stdout}\n${r.stderr}`);
     if (r.status !== 0) die(`builder ${s} failed (log: ${path.join(work, 'builders.log')}):\n${(r.stderr || '').slice(-3000)}`);
   }
@@ -455,7 +478,7 @@ function phaseSwatches(ctx) {
   // the colour facts (swatches.{male,female}.json) are committed in src/data; the pack run
   // writes its own copy into the work folder so the repository is never touched
   fs.mkdirSync(path.join(sw, 'data'), { recursive: true });
-  const r = spawnSync(py.cmd, [...py.pre, '-E', '-s', '-B',script, '--game', game, '--work', sw, '--pack', out, '--data', path.join(sw, 'data')], { encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true });
+  const r = spawnSync(py.cmd, [...py.pre, ...py.flags,script, '--game', game, '--work', sw, '--pack', out, '--data', path.join(sw, 'data')], { encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true });
   fs.appendFileSync(path.join(work, 'builders.log'), `\n===== swatches\n${r.stdout}\n${r.stderr}`);
   if (r.status !== 0) die(`build_swatches.py failed:\n${(r.stderr || '').slice(-2000)}`);
 }
@@ -464,16 +487,22 @@ function phaseOptimize(ctx) {
   const { py, out } = ctx;
   if (!ctx.opt.webp) return step('optimize: skipped (--no-webp)');
   step('optimize: large PNG textures -> lossless WebP, manifests updated');
-  const r = spawnSync(py.cmd, [...py.pre, '-E', '-s', '-B',path.join(PACK_DIR, 'optimize.py'), out], { encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true });
+  const r = spawnSync(py.cmd, [...py.pre, ...py.flags,path.join(PACK_DIR, 'optimize.py'), out], { encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true });
   process.stdout.write(r.stdout);
   if (r.status !== 0) die(`optimize failed:\n${r.stderr}`);
+}
+
+/** Expected pack files (recipe.expect) that `files` (pack-relative, '/') lacks; .png may be .webp. */
+export function lackingFiles(files, expect) {
+  const all = new Set(files);
+  const have = new Set(files.map((f) => f.replace(/\.webp$/, '')));
+  return expect.filter((f) => !have.has(f.replace(/\.(png|webp)$/, '')) && !all.has(f));
 }
 
 function phaseIndex(ctx) {
   const { recipe, out } = ctx;
   const files = walk(out).map((f) => toPosix(path.relative(out, f))).filter((f) => f !== 'pack.json');
-  const have = new Set(files.map((f) => f.replace(/\.webp$/, '')));
-  const lacking = recipe.expect.filter((f) => !have.has(f.replace(/\.(png|webp)$/, '')) && !files.includes(f));
+  const lacking = lackingFiles(files, recipe.expect);
   const bytes = walk(out).reduce((s, f) => s + fs.statSync(f).size, 0);
   // a re-index without --game (e.g. `npm run pack:optimize`) keeps what the full build recorded
   let prev = {};
@@ -489,7 +518,9 @@ function phaseIndex(ctx) {
     createdAt: new Date().toISOString(),
     files: files.length,
     bytes,
-    tool: `v-mirror ${JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version} (WolvenKit ${ctx.W?.version ?? wkPrev ?? 'n/a'})`,
+    tool: `${toolName()} (WolvenKit ${ctx.W?.version ?? wkPrev ?? 'n/a'})`,
+    // which recipe built it: a later run of the same version skips a complete pack
+    recipe: recipeId(),
   };
   fs.writeFileSync(path.join(out, 'pack.json'), JSON.stringify(manifest, null, 1) + '\n');
   step(`pack.json: ${files.length} files, ${(bytes / 1e6).toFixed(0)} MB`);
@@ -499,18 +530,127 @@ function phaseIndex(ctx) {
   }
 }
 
+// ------------------------------------------------------------------ defaults and re-runs
+/** "v-mirror <package version>": the tool part of pack.json without the WolvenKit version. */
+export function toolName() {
+  return `v-mirror ${JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version}`;
+}
+
+/** Short hash of the recipe and builder data: packs built from the same inputs share it. */
+export function recipeId() {
+  const h = crypto.createHash('sha256');
+  h.update(fs.readFileSync(path.join(PACK_DIR, 'recipe.json')));
+  for (const f of [...walk(BUILDERS), ...walk(path.join(PACK_DIR, 'data')), path.join(PACK_DIR, 'optimize.py'), path.join(HERE, 'build_swatches.py')].sort()) {
+    if (!fs.existsSync(f) || /__pycache__|\.pyc$/.test(f)) continue;
+    h.update(toPosix(path.relative(PACK_DIR, f)));
+    h.update(fs.readFileSync(f));
+  }
+  return h.digest('hex').slice(0, 16);
+}
+
+/**
+ * Default pack folder: %USERPROFILE%\Documents\V-Mirror pack, or %LOCALAPPDATA%\v-mirror\pack
+ * when that Documents folder does not exist (OneDrive's folder backup moves Documents into
+ * %USERPROFILE%\OneDrive) or is a link into OneDrive (the pack is ~600 MB of game files: they
+ * must not be uploaded anywhere). The site names both (src/config.ts PACK_ALT_DIR).
+ */
+export function defaultOutDir({ env = process.env, platform = process.platform, exists = fs.existsSync, realpath = (p) => fs.realpathSync.native(p), home = os.homedir() } = {}) {
+  const P = platform === 'win32' ? path.win32 : path.posix;
+  const profile = env.USERPROFILE || home;
+  const docs = P.join(profile, 'Documents');
+  let real = docs;
+  try {
+    real = realpath(docs);
+  } catch {
+    /* keep the plain path */
+  }
+  if (exists(docs) && !/[\\/]OneDrive/i.test(real)) return P.join(docs, 'V-Mirror pack');
+  const local = platform === 'win32' ? env.LOCALAPPDATA || P.join(profile, 'AppData', 'Local') : env.XDG_DATA_HOME || P.join(profile, '.local', 'share');
+  return P.join(local, 'v-mirror', 'pack');
+}
+
+/**
+ * Whether `manifest` (pack.json) + `files` (pack-relative) is a complete pack built by this
+ * tool version from this recipe (and, when both are known, the same game version).
+ */
+export function packCompleteness(manifest, files, { tool, recipe, expect, gameVersion }) {
+  if (!manifest || typeof manifest !== 'object' || manifest.format !== 1) return { complete: false, reason: 'no valid pack.json' };
+  if (typeof manifest.tool !== 'string' || !(manifest.tool === tool || manifest.tool.startsWith(tool + ' '))) return { complete: false, reason: `built by ${manifest.tool ?? 'an unknown tool'}, this is ${tool}` };
+  if (manifest.recipe !== recipe) return { complete: false, reason: 'built from another recipe' };
+  if (gameVersion && gameVersion !== 'unknown' && manifest.gameVersion && manifest.gameVersion !== 'unknown' && manifest.gameVersion !== gameVersion)
+    return { complete: false, reason: `built from game ${manifest.gameVersion}, the game is now ${gameVersion}` };
+  const lacking = lackingFiles(files, expect);
+  if (lacking.length) return { complete: false, reason: `${lacking.length} files are missing` };
+  return { complete: true };
+}
+
+function readPackState(out, ctx) {
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(path.join(out, 'pack.json'), 'utf8'));
+  } catch {
+    return { complete: false, reason: 'no valid pack.json' };
+  }
+  const files = walk(out).map((f) => toPosix(path.relative(out, f))).filter((f) => f !== 'pack.json');
+  return packCompleteness(manifest, files, { tool: toolName(), recipe: recipeId(), expect: ctx.recipe.expect, gameVersion: ctx.gameVersion });
+}
+
+/** pack.ps1 reads the finished pack folder from here (VMIRROR_RESULT_FILE), UTF-8. */
+function writeResult(out) {
+  const f = process.env.VMIRROR_RESULT_FILE;
+  if (f) fs.writeFileSync(f, out, 'utf8');
+}
+
+function finish(out) {
+  writeResult(out);
+  console.log(`\nPack folder: ${out}`);
+  // run by pack.ps1 (it prints the instruction in both languages and opens the site)
+  if (!process.env.VMIRROR_RESULT_FILE) console.log('Open V-Mirror, press "Choose pack folder" and select this folder.');
+}
+
+const GAME_NOT_FOUND = [
+  [
+    'Cyberpunk 2077 was not found. Name the game folder (the one with archive\\pc\\content) and run again:',
+    "  PowerShell one-liner:  $env:VMIRROR_GAME = 'D:\\Games\\Cyberpunk 2077'   then paste the command again",
+    '  pack.ps1 -Game "D:\\Games\\Cyberpunk 2077"   or   npm run pack -- --game "D:\\Games\\Cyberpunk 2077"',
+  ].join('\n'),
+  [
+    'Cyberpunk 2077 не найдена. Укажите папку игры (ту, где есть archive\\pc\\content) и запустите снова:',
+    "  для команды PowerShell:  $env:VMIRROR_GAME = 'D:\\Games\\Cyberpunk 2077'   затем вставьте команду ещё раз",
+  ].join('\n'),
+];
+
 // ------------------------------------------------------------------ main
 async function main() {
   const opt = parseArgs(process.argv.slice(2));
-  if (!opt.out) die('--out is required (see --help)');
-  const out = path.resolve(opt.out);
+  const out = path.resolve(opt.out ?? defaultOutDir());
+  if (!opt.out) console.log(`pack folder (default): ${out}`);
   const only = opt.only ?? PHASES;
   for (const p of only) if (!PHASES.includes(p)) die(`unknown phase ${p}`);
   const need = (p) => only.includes(p) && !(p === 'extract' && opt.skipExtract);
   const gamePhases = ['extract', 'export', 'inputs', 'meshes', 'build', 'swatches'].some((p) => need(p));
-  if (gamePhases && !opt.game) die('--game is required (see --help)');
+  const recipe = JSON.parse(fs.readFileSync(path.join(PACK_DIR, 'recipe.json'), 'utf8'));
+  // a second run (the one-liner pasted again) does not rebuild a finished pack
+  const mayKeep = !opt.force && !opt.only && fs.existsSync(path.join(out, 'pack.json'));
+  if (gamePhases && !opt.game) {
+    if (process.platform !== 'win32') die('--game is required outside Windows (see --help)');
+    console.log('looking for Cyberpunk 2077 (GOG, Steam, Epic, then the fixed drives)...');
+    const { best, all } = findGame();
+    if (!best) {
+      // the game was moved or uninstalled after a complete build: the pack itself still works
+      if (mayKeep && readPackState(out, { recipe }).complete) {
+        step(`Cyberpunk 2077 was not found, but the pack in ${out} is complete (${toolName()}; its game version was not checked): nothing to rebuild`);
+        return finish(out);
+      }
+      die(...GAME_NOT_FOUND);
+    }
+    for (const g of all) console.log(`  ${g === best ? '*' : ' '} ${g.dir}  (${g.source}${g.version ? `, version ${g.version}` : ''})`);
+    if (all.length > 1) console.log('  using the one marked *; pass --game to choose another');
+    opt.game = best.dir;
+  }
   const game = opt.game ? path.resolve(opt.game) : undefined;
-  if (game && !fs.existsSync(path.join(game, 'archive', 'pc', 'content'))) die(`not a Cyberpunk 2077 folder (no archive\\pc\\content): ${game}`);
+  if (game && !fs.existsSync(path.join(game, 'archive', 'pc', 'content')))
+    die(`not a Cyberpunk 2077 folder (no archive\\pc\\content): ${game}`, `это не папка Cyberpunk 2077 (нет archive\\pc\\content): ${game}`);
   const inGame = (p) => {
     const r = path.relative(game, p);
     return !r || (!r.startsWith('..') && !path.isAbsolute(r));
@@ -520,35 +660,43 @@ async function main() {
   const PACK_ENTRIES = new Set(['pack.json', 'glb', 'hair', 'tex', 'body', 'swatches', 'renders']);
   const looksLikePack = (d) => fs.existsSync(path.join(d, 'pack.json')) || fs.readdirSync(d).every((n) => PACK_ENTRIES.has(n));
   if (gamePhases && fs.existsSync(out) && fs.readdirSync(out).length && !looksLikePack(out) && path.resolve(out) !== path.join(REPO, 'tools', 'local'))
-    die(`--out is not empty and is not an asset pack: ${out}`);
+    die(`--out is not empty and is not an asset pack: ${out}`, `папка набора не пуста и не похожа на набор ассетов: ${out}`);
   const work = path.resolve(opt.work ?? out + '.work');
-  mkdirp(out);
-  mkdirp(work);
-
-  const recipe = JSON.parse(fs.readFileSync(path.join(PACK_DIR, 'recipe.json'), 'utf8'));
   const ctx = { opt, out, work, game, recipe };
   t0 = Date.now();
+  if (game) ctx.gameVersion = gameVersion(game);
+
+  if (mayKeep) {
+    const st = readPackState(out, ctx);
+    if (st.complete) {
+      step(`the pack in ${out} is already complete (${toolName()}, game ${ctx.gameVersion ?? 'unknown'}): nothing to rebuild (--force rebuilds it)`);
+      return finish(out);
+    }
+    step(`rebuilding the pack in ${out}: ${st.reason}`);
+  }
+  if (!opt.only) step('building the pack: usually 5-10 minutes (the first run also downloads WolvenKit CLI)');
+
+  mkdirp(out);
+  mkdirp(work);
   if (gamePhases || need('optimize')) ctx.py = findPython(opt.python);
   if (['extract', 'export'].some((p) => need(p))) {
     ctx.W = await getWolvenKit(opt);
     ctx.W.log = path.join(work, 'wolvenkit.log');
   }
-  if (game) ctx.gameVersion = gameVersion(game);
-  step(`game ${ctx.gameVersion ?? '-'}; pack ${out}; work ${work}`);
+  step(`game ${ctx.gameVersion ?? '-'}${game ? ` (${game}, read-only)` : ''}; pack ${out}; work ${work}`);
 
-  if (need('extract')) phaseExtract(ctx);
-  if (need('export')) phaseExport(ctx);
-  if (need('inputs')) phaseInputs(ctx);
-  if (need('meshes')) phaseMeshes(ctx);
-  if (need('build')) phaseBuild(ctx);
-  if (need('swatches')) phaseSwatches(ctx);
-  if (need('optimize')) phaseOptimize(ctx);
-  if (need('index')) phaseIndex(ctx);
+  const phases = { extract: phaseExtract, export: phaseExport, inputs: phaseInputs, meshes: phaseMeshes, build: phaseBuild, swatches: phaseSwatches, optimize: phaseOptimize, index: phaseIndex };
+  const todo = PHASES.filter((p) => need(p));
+  todo.forEach((p, k) => {
+    console.log(`== ${k + 1}/${todo.length} ${p}`);
+    phases[p](ctx);
+  });
   if (!opt.keepWork && !opt.only) {
     step('removing the work folder');
     fs.rmSync(work, { recursive: true, force: true });
   }
-  step(`done: connect ${out} in V-Mirror ("Connect asset pack")`);
+  step(`done in ${((Date.now() - t0) / 60000).toFixed(1)} min`);
+  if (!process.exitCode) finish(out);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

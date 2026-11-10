@@ -3,6 +3,9 @@
 // game texture formats, asset-pack folders, or a byte copy of a file of the local pack.
 // The public site ships only the app, MediaPipe, fonts and the V portrait illustrations.
 //
+// pack.ps1 (the bootstrap of the one-liner `irm <site>/pack.ps1 | iex`) is allowed: it holds no
+// game data, only the commit it downloads; the audit checks that the build stamped it.
+//
 // It also checks index.html: every local src/href starts with the expected base path
 // (VITE_BASE, default '/'), and the Content-Security-Policy meta tag is there. In CI the base
 // must be given explicitly (VITE_BASE or --base): with the default '/' every URL passes.
@@ -124,12 +127,27 @@ export function auditIndex(html, base = '/') {
   return problems;
 }
 
+/**
+ * pack.ps1 (the one-liner's bootstrap, not a game file): stamped by the build with the commit
+ * it downloads, plain ASCII. In CI the commit must be a full SHA, not the 'main' fallback.
+ */
+export function auditPackScript(text, { ci = false } = {}) {
+  const problems = [];
+  if (/__VMIRROR_(COMMIT|REPO|SITE)__/.test(text)) problems.push('pack.ps1: a __VMIRROR_*__ placeholder was not stamped by the build');
+  const commit = /\$commit = '([^']*)'/.exec(text)?.[1];
+  if (ci && !/^[0-9a-f]{40}$/.test(commit ?? '')) problems.push(`pack.ps1: the commit is ${commit ?? 'missing'}, expected the 40-hex SHA of the build`);
+  if (/[^\x00-\x7e]/.test(text)) problems.push('pack.ps1: non-ASCII characters (PowerShell 5.1 and irm may read it as Latin-1)');
+  return problems;
+}
+
 /** Returns the list of problems (empty = clean). */
-export function auditDist(dist, { pack, base } = {}) {
+export function auditDist(dist, { pack, base, ci = false } = {}) {
   const problems = [];
   if (!fs.existsSync(dist)) return [`${dist} does not exist (run the build first)`];
   const index = path.join(dist, 'index.html');
   if (fs.existsSync(index)) problems.push(...auditIndex(fs.readFileSync(index, 'utf8'), base ?? '/'));
+  const ps1 = path.join(dist, 'pack.ps1');
+  if (fs.existsSync(ps1)) problems.push(...auditPackScript(fs.readFileSync(ps1, 'utf8'), { ci }));
   const files = walk(dist);
   // pack files by size, to find byte copies cheaply
   const packBySize = new Map();
@@ -179,7 +197,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.error(`audit:dist: ${e.message}`);
     process.exit(2);
   }
-  const problems = [...auditBaseGiven(process.env, baseArg), ...auditDist(dist, { pack, base })];
+  const problems = [...auditBaseGiven(process.env, baseArg), ...auditDist(dist, { pack, base, ci: !!process.env.GITHUB_ACTIONS })];
   const repo = repoFiles();
   if (repo) problems.push(...auditRepo(repo));
   else console.warn('audit:dist: git is not available, repository files not checked');

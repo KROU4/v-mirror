@@ -1,5 +1,5 @@
 // Asset pack: meshes, textures and manifests that the user generates from their own
-// game install (npm run pack) and connects in the browser. Nothing from the game ships
+// game install (irm <site>/pack.ps1 | iex, or npm run pack) and connects in the browser. Nothing from the game ships
 // with the site. In dev, tools/local is served by Vite at /game/... and used directly.
 //
 // Every load of a game asset goes through gameAssetUrl / fetchGameJson / hasGameAsset.
@@ -280,7 +280,7 @@ async function readManifest(r: PackReader): Promise<PackManifest> {
     throw new Error('pack.json is not valid JSON');
   }
   if (!m || typeof m !== 'object' || m.format !== PACK_FORMAT)
-    throw new Error(`Unsupported asset pack format ${String((m as { format?: unknown })?.format)} (expected ${PACK_FORMAT}); rebuild it with npm run pack`);
+    throw new Error(`Unsupported asset pack format ${String((m as { format?: unknown })?.format)} (expected ${PACK_FORMAT}); rebuild the pack (irm <site>/pack.ps1 | iex)`);
   if (!(await r.file(REQUIRED))) throw new Error(`The asset pack is incomplete: ${REQUIRED} is missing`);
   return m;
 }

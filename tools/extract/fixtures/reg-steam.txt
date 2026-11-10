@@ -1,0 +1,7 @@
+
+HKEY_CURRENT_USER\Software\Valve\Steam
+    SteamExe    REG_SZ    c:/program files (x86)/steam/steam.exe
+    SteamPath    REG_SZ    c:/program files (x86)/steam
+    Language    REG_SZ    russian
+    RunningAppID    REG_DWORD    0x0
+

@@ -98,6 +98,10 @@ export default function App() {
   /** Q/E: V вращается, пока клавиша зажата (как в игре), без ограничения угла */
   const [spin, setSpin] = useState(0);
   const [dialog, setDialog] = useState<Dialog>(null);
+  // ?pack=1: opened by the PowerShell one-liner right after it built the pack
+  const [packAsk, setPackAsk] = useState(() => new URLSearchParams(window.location.search).get('pack') === '1');
+  const packAutoOpened = useRef(false);
+  const packNow = usePackState();
   const [avatar, setAvatar] = useState<AvatarStatus>('no-pack');
   // Части набора, которых в нём нет (набор собран старой версией): их строки помечаются «не в 3D»
   const [missing3d, setMissing3d] = useState<ReadonlySet<PackPart>>(() => new Set());
@@ -149,6 +153,25 @@ export default function App() {
       history.replaceState(null, '', location.pathname + location.search);
     }
   }, []);
+
+  // ?pack=1 and no pack yet: open the pack panel with the folder button marked. Once a pack is
+  // connected the parameter is dropped (a reload does not reopen it) and the panel closes.
+  useEffect(() => {
+    if (!packAsk || packNow.status === 'connecting' || packNow.busy) return;
+    if (packNow.status === 'ready') {
+      if (packAutoOpened.current) setDialog((d) => (d === 'pack' ? null : d));
+      const q = new URLSearchParams(location.search);
+      q.delete('pack');
+      const qs = q.toString();
+      history.replaceState(history.state, '', location.pathname + (qs ? `?${qs}` : '') + location.hash);
+      setPackAsk(false);
+      return;
+    }
+    if (!packAutoOpened.current) {
+      packAutoOpened.current = true;
+      setDialog('pack');
+    }
+  }, [packAsk, packNow.status, packNow.busy]);
 
   useEffect(() => store.set('vm.states', states), [states]);
   useEffect(() => store.set('vm.gender', gender), [gender]);
@@ -452,7 +475,7 @@ export default function App() {
           lang={lang}
           onStatus={setAvatar}
           onMissing={onMissing}
-          fallback={<PackHero gender={gender} state={state} webglError={avatar === 'error'} onMore={() => setDialog('pack')} />}
+          fallback={<PackHero gender={gender} state={state} webglError={avatar === 'error'} onMore={() => setDialog('pack')} highlight={packAsk} />}
         />
         {scanMounted && (
           <section className="scan-wrap" aria-label={t('scan.aria')} hidden={mode !== 'scan'}>
@@ -595,7 +618,7 @@ export default function App() {
 
       <Modal open={dialog === 'pack'} title={t('pack.title')} closeLabel={t('or.close')} onClose={closeDialog}>
         <p className="kp-lead">{t('pack.lead')}</p>
-        <PackConnect />
+        <PackConnect highlight={packAsk} />
       </Modal>
       <Modal open={dialog === 'key'} title={t('or.title')} closeLabel={t('or.close')} onClose={closeDialog}>
         <KeyPanel />
